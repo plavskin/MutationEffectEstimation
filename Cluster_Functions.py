@@ -21,7 +21,7 @@ class JobStatus(object):
 	ABORTED_FOREVER = 4
 	ABORTED_TO_RESTART = 5
 
-class JobList(object):
+class JobManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
 	def __init__(self, jobs, name):
@@ -47,7 +47,7 @@ class JobList(object):
 		for num in self.jobs:
 			if self.jobs[num].status == status:
 				job_subset_list.append(num)
-
+		return job_subset_list
 	def batch_status_change(self, number_list, new_status):
 		# changes the status of al jobs in number_list to new_status
 		for num in number_list:
