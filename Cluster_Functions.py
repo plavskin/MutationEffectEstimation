@@ -3,6 +3,75 @@
 # Contains objects needed for running jobs on cluster and keeping track
 	# of their progress
 
+from enum import Enum
+
+class Job(object):
+	# job object that stores properties of individual jobs in queue
+	def __init__(self, number, status):
+		self.number = number
+		self.status = status
+	def change_status(self,new_status):
+		self.status = new_status
+
+class JobStatus(object):
+	# enum for job status
+	TO_PROCESS = 1
+	PROCESSING = 2
+	COMPLETED = 3
+	ABORTED_FOREVER = 4
+	ABORTED_TO_RESTART = 5
+
+class JobList(object):
+	# holds list of jobs corresponding to a single 'name'
+	# updates current job status
+	def __init__(self, jobs, name):
+		self.jobs = {}
+		for j in jobs:
+			self.jobs[j.number] = j
+		self.name = name
+	def _get_status(self, number):
+		# gets status of individual job
+		# ??? Do I need this function? ???
+		if number in self.jobs:
+			return self.jobs[number].status
+		else:
+			raise ValueError("Invalid job : " + number)
+	def _get_status_list(self):
+		# gets current status of every job
+		# ??? Do I need this function? ???
+		status_list=[self.jobs[num].status for num in self.jobs]
+		return status_list
+	def get_jobs_by_status(self,status):
+		# gets list of jobs with a specific status
+		job_subset_list = []
+		for num in self.jobs:
+			if self.jobs[num].status == status:
+				job_subset_list.append(num)
+
+	def batch_status_change(self, number_list, new_status):
+		# changes the status of al jobs in number_list to new_status
+		for num in number_list:
+			self.jobs[num].change_status(new_status)
+
+
+def create_job_list(name,numbers):
+	# create a list of jobs sharing name, and number from 'numbers' list
+	# all new jobs will have 'TO_PROCESS' status
+	current_job_list = []
+	for n in numbers:
+		if type(n) is not int:
+			raise TypeError("numbers contains non-integers: " + l)
+		current_job = Job(n,JobStatus.TO_PROCESS)
+		current_job_list.append(current_job)
+	return JobList(current_job_list,name)
+
+
+test_list.jobs[1].change_status(JobStatus.COMPLETED)
+
+
+
+
+
 def Free_Job_Calculator(username):
 	# gets the number of jobs that can still be submitted to
 		# the routing queue
@@ -29,7 +98,7 @@ def Free_Job_Calculator(username):
 	max_allowed_jobs = min(max_array_size,max_submit)
 
 #	# at the request of hpc staff, don't use all available queue space
-#	max_allowed_jobs = round(max_allowed_jobs*.9)
+	max_allowed_jobs = round(max_allowed_jobs*.9)
 
 	# find max amount of jobs that can be added to queue without
 		# making it overflow
@@ -278,11 +347,6 @@ def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_comple
 			jobs_aborted_to_restart_updated.extend(jobs_aborted_to_restart_new)
 			jobs_aborted_newtimes_updated.extend(jobs_aborted_newtimes_new)
 			jobs_aborted_newmems_updated.extend(jobs_aborted_newmems_new)
-	# convert all lists to sets and back to ensure you have unique values
-#	jobs_to_process_updated = list(sorted(set(jobs_to_process_updated)))
-#	jobs_processing_updated = list(sorted(set(jobs_processing_updated)))
-#	jobs_completed_updated = list(sorted(set(jobs_completed_updated)))
-#	jobs_with_errors_updated = list(sorted(set(jobs_with_errors_updated)))
 
 	aborted_jobs_to_submit = []
 	aborted_newtimes_to_submit = []
@@ -700,4 +764,7 @@ def Job_List_Submitter(new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtime
 		# Run .q file for sim
 
 		subprocess.call('sbatch '+current_sbatch_filename,shell=True)
+
+
+
 	return None
