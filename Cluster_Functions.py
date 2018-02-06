@@ -7,11 +7,17 @@ from enum import Enum
 
 class Job(object):
 	# job object that stores properties of individual jobs in queue
-	def __init__(self, number, status):
+	def __init__(self, number, status, time, mem):
 		self.number = number
 		self.status = status
+		self.time = time
+		self.mem = mem
 	def change_status(self,new_status):
 		self.status = new_status
+	def change_mem(self,new_mem):
+		self.mem = new_mem
+	def change_time(self,new_time):
+		self.time = new_time
 
 class JobStatus(object):
 	# enum for job status
@@ -20,22 +26,16 @@ class JobStatus(object):
 	COMPLETED = 3
 	ABORTED_FOREVER = 4
 	ABORTED_TO_RESTART = 5
+	ERROR = 6
 
 class JobManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
-	def __init__(self, jobs, name):
+	def __init__(self, jobs, job_parameters):
 		self.jobs = {}
 		for j in jobs:
 			self.jobs[j.number] = j
-		self.name = name
-	def _get_status(self, number):
-		# gets status of individual job
-		# ??? Do I need this function? ???
-		if number in self.jobs:
-			return self.jobs[number].status
-		else:
-			raise ValueError("Invalid job : " + number)
+		self.job_parameters = job_parameters
 	def _get_status_list(self):
 		# gets current status of every job
 		# ??? Do I need this function? ???
@@ -46,24 +46,197 @@ class JobManager(object):
 		job_subset_list = []
 		for num in self.jobs:
 			if self.jobs[num].status == status:
-				job_subset_list.append(num)
+				job_subset_list.extend(num)
 		return job_subset_list
 	def batch_status_change(self, number_list, new_status):
-		# changes the status of al jobs in number_list to new_status
+		# changes the status of all jobs in number_list to new_status
 		for num in number_list:
 			self.jobs[num].change_status(new_status)
+	def _batch_mem_change(self, number_list, new_mem):
+		# changes the mem of all jobs in number_list to new_mem
+		for num in number_list:
+			self.jobs[num].change_mem(new_mem)
+	def _batch_time_change(self, number_list, new_time):
+		# changes the time of all jobs in number_list to new_time
+		for num in number_list:
+			self.jobs[num].change_time(new_time)
+	def _job_process_finder(job_parameters):
+		# Identify jobs that are still being run by SLURM
+		# Return list of jobs currently being processed
+		try:
+			qstat_output = subprocess.check_output('squeue -u ' + job_parameters.username + ' -r -n '
+				+ job_parameters.current_job_name + ' | egrep " PD | CG | R " ',shell=True)
+		except subprocess.CalledProcessError:
+			qstat_output = ''
+		jobs_still_in_processing = re.findall('^\s+\d+_(\d+)\s',qstat_output,re.MULTILINE)
+		return(jobs_still_in_processing)
+	def _just_completed_finder(job_parameters,jobs_just_finished):
+		# Identify which jobs from a list have been successfully completed
+		try:
+			completed_files = subprocess.check_output('ls -lrt '
+				+ job_parameters.output_folder,shell=True)
+		except subprocess.CalledProcessError:
+			completed_files = ''
+		completed_job_list = re.findall(' ' + job_parameters.output_filename + '_(\d+?)\.'
+			+ job_parameters.output_extension,completed_files,re.DOTALL)
+		jobs_just_completed = list(set(completed_job_list) & set(jobs_just_finished))
+		return(jobs_just_completed)
+	def _parse_sbatch_output(slurm_folder):
+		# gets list of files in slurm output folder
+		try:
+			sbatch_run_output_list = subprocess.check_output('ls -lrt ' + self.job_parameters.slurm_folder,shell=True)
+		except subprocess.CalledProcessError:
+			sbatch_run_output_list = ''
+		return(sbatch_run_output_list)
+	def _extract_latest_errorfile(slurm_folder,sbatch_run_output_list,job_name,job_num):
+		# identifies the latest error file associated with a job,
+			# if one exists, and extracts its contents
+		missing_job_codes = re.findall(job_name + '.e(\d+?)-' + job_num + '$',
+			sbatch_run_output_list, re.MULTILINE)
+		if missing_job_codes:
+			job_code = str(max(map(int,missing_job_codes)))
+				# jobs are assigned consecutive code numbers on cluster,
+					# so since we want to look at the error file associated
+					# with the most recent run of current_missing_job,
+					# look for max code
+			latest_errorfile = slurm_folder + '/' + job_name + '.e' + job_code \
+				+ '-' + job_num
+			if os.path.isfile(latest_errorfile):
+				latest_errorfile_contents = open(latest_errorfile).read()
+			else:
+				latest_errorfile_contents = ''
+		else:
+			latest_errorfile_contents = ''
+		return(latest_errorfile_contents.lower())
+	def _aborted_job_processor(self, max_mem, max_time, time_multiplier,
+		mem_multiplier, job_num):
+		# For aborted jobs, update job memory or time, and change job status
+		current_job = self.jobs[job_num]
+		most_recent_time = current_job.time
+		most_recent_mem = current_job.mem
+		if most_recent_time == max_time or most_recent_mem == max_mem:
+			self.batch_status_change([job_num],JobStatus.ABORTED_FOREVER)
+		else:
+			self.batch_status_change([job_num],JobStatus.ABORTED_TO_RESTART)
+			current_updated_mem = min(most_recent_mem*mem_multiplier,max_mem)
+			current_updated_time = min(most_recent_time*time_multiplier,max_time)
+			self._batch_mem_change([job_num],current_updated_mem)
+			self._batch_time_change([job_num],current_updated_time)
+	def _missing_job_processor(self,missing_jobs):
+		# Looks through any jobs that are no longer processing but have
+			# not been successfully completed
+		# Checks for error files associated with these jobs, and updates
+			# their status to ABORTED_FOREVER, ABORTED_TO_RESTART, or
+			# TO_PROCESS
+		# if error file exists:
+			#	1. check whether it contains info on exceeded time or
+			#		mem limits; if so, resubmit with max time and memory
+			#	2. Otherwise, check whether error file empty
+			#		if not, add field to error list
+			#		if so, restart field
+		sbatch_run_output_list = \
+			_parse_sbatch_output(self.job_parameters.slurm_folder)
+		for current_missing_job in missing_jobs:
+			latest_errorfile_contents = _extract_latest_errorfile( \
+				self.job_parameters.slurm_folder,sbatch_run_output_list, \
+				self.job_parameters.name,current_missing_job)
+			# If errorfile is missing or empty; or if a cluster
+				# error has occurred; but job is listed as
+				# having started, return job to list of jobs
+				# to process
+			# If errorfile contains a time limit error or a
+				# memory limit error, process as an aborted
+				# job
+			# If errorfile contains something else, report
+				# as an error
+			if latest_errorfile_contents:
+				time_limit_check = 'time limit' in latest_errorfile_contents
+				memory_limit_check = 'memory limit' in latest_errorfile_contents
+				cluster_error_check = 'bus error' in latest_errorfile_contents \
+					or 'fatal error on startup' in latest_errorfile_contents \
+					or 'reload' in latest_errorfile_contents \
+					or 'MatlabException' in latest_errorfile_contents
+				if cluster_error_check:
+					self.batch_status_change([current_missing_job], \
+						JobStatus.TO_PROCESS)
+				elif memory_limit_check:
+					# updated memory should be 1.5x times previous memory
+						# allotment
+					# If previous memory allotment was the max allowed memory,
+						# abort job forever
+					time_multiplier = 1
+					mem_multiplier = 1.5
+					self._aborted_job_processor(self.job_parameters.max_mem, \
+						self.job_parameters.max_time, time_multiplier, \
+						mem_multiplier, job_num)
+				elif time_limit_check:
+					# updated time should be 2x times previous time
+						# allotment
+					# If previous time allotment was the max allowed time,
+						# abort job forever
+					time_multiplier = 2
+					mem_multiplier = 1
+					self._aborted_job_processor(self.job_parameters.max_mem, \
+						self.job_parameters.max_time, time_multiplier, \
+						mem_multiplier, job_num)
+				else:
+					self.batch_status_change([current_missing_job], \
+						JobStatus.ERROR)
+			else:
+				self.batch_status_change([current_missing_job], \
+					JobStatus.TO_PROCESS)
+	def autoupdate_job_status(self):
+		# update the status of any jobs that were in the 'PROCESSING'
+			# status based on their current status on the cluster
+		# check for jobs that are still processing
+		# among the rest, look for errors, completed
+			# parse errors, move jobs among 'PROCESSING', 'ABORTED_FOREVER', 'ABORTED_TO_RESTART' statuses
+			# look for lost jobs and move those to 'TO_PROCESS' list
+		# get list of jobs that should be processing
+		prev_processing_list = self.get_jobs_by_status(JobStatus.PROCESSING)
+		current_processing_list = _job_process_finder(self.job_parameters)
+		# identify jobs that no longer have 'PROCESSING' status
+		jobs_just_finished = list(set(prev_processing_list)-set(current_processing_list))
+		# identify jobs that no longer have 'PROCESSING' status because
+			# they've just been completed, and change their status
+		jobs_just_completed = _just_completed_finder(job_parameters,jobs_just_finished)
+		self.batch_status_change(jobs_just_completed,JobStatus.COMPLETED)
+		missing_jobs = list(set(jobs_just_finished)-set(jobs_just_completed))
+		if missing_jobs:
+			self._missing_job_processor(missing_jobs)
+
+class JobParameters(object):
+	# holds parameters of the job currently being run
+	def __init__(self, name, username, output_folder, output_extension,
+		output_filename, slurm_folder, max_mem, max_time):
+		self.name = name
+		self.username = username
+		self.output_folder = output_folder
+		self.output_extension = output_extension
+		self.output_filename = output_filename
+		self.slurm_folder = slurm_folder
+		self.max_mem = max_mem
+		self.max_time = max_time
+
+# NEED:
+# - function to read/write trackfiles
 
 
-def create_job_list(name,numbers):
+#######################################################
+
+def create_job_list(name, username, numbers, initial_time, initial_mem):
 	# create a list of jobs sharing name, and number from 'numbers' list
 	# all new jobs will have 'TO_PROCESS' status
 	current_job_list = []
 	for n in numbers:
 		if type(n) is not int:
 			raise TypeError("numbers contains non-integers: " + l)
-		current_job = Job(n,JobStatus.TO_PROCESS)
-		current_job_list.append(current_job)
-	return JobList(current_job_list,name)
+		current_job = Job(n,JobStatus.TO_PROCESS,initial_time,initial_mem)
+		current_job_list.extend(current_job)
+	current_job_parameters = JobParameters(current_job_name, username, \
+		current_output_folder, current_output_extension, current_output_filename, \
+		slurm_folder)
+	return JobManager(current_job_list,current_job_parameters)
 
 
 test_list.jobs[1].change_status(JobStatus.COMPLETED)
@@ -105,56 +278,6 @@ def Free_Job_Calculator(username):
 	space_in_queue = max_allowed_jobs-jobs_in_queue
 
 	return(space_in_queue)
-
-
-def Aborted_Job_Processor(jobs_aborted_to_restart,jobs_aborted_newmems,
-	jobs_aborted_newtimes,jobs_aborted_forever,jobs_aborted_to_restart_new,
-	jobs_aborted_newtimes_new,jobs_aborted_newmems_new,max_memory,max_time,
-	time_multiplier,memory_multiplier,current_missing_job,default_memory,
-	default_time):
-	
-	# find indices of current_missing_job in jobs_aborted_to_restart
-	indices_in_old_restart_list = [i for i, x in \
-		enumerate(jobs_aborted_to_restart) if x == current_missing_job]
-	if indices_in_old_restart_list:
-		# use info from most recent job abort
-		most_recent_restart_idx = max(indices_in_old_restart_list)
-		most_recent_time = float(jobs_aborted_newtimes[most_recent_restart_idx])
-		most_recent_mem = float(jobs_aborted_newmems[most_recent_restart_idx])
-		del jobs_aborted_to_restart[most_recent_restart_idx]
-		del jobs_aborted_newtimes[most_recent_restart_idx]
-		del jobs_aborted_newmems[most_recent_restart_idx]
-	else:
-		most_recent_time = default_time
-		most_recent_mem = default_memory
-
-	current_updated_memory = min(most_recent_mem*memory_multiplier,max_memory)
-	current_updated_time = min(most_recent_time*time_multiplier,max_time)
-
-	if most_recent_time == max_time or most_recent_mem == max_memory:
-		jobs_aborted_forever.extend([current_missing_job])
-	else:
-		jobs_aborted_to_restart_new.extend([current_missing_job])
-		jobs_aborted_newtimes_new.extend([current_updated_time])
-		jobs_aborted_newmems_new.extend([current_updated_memory])
-
-	return(jobs_aborted_forever,jobs_aborted_to_restart_new,
-		jobs_aborted_newtimes_new,jobs_aborted_newmems_new,
-		jobs_aborted_to_restart,jobs_aborted_newtimes,jobs_aborted_newmems)
-
-def Job_Process_Finder(username,current_job_name):
-	# Identify jobs that are still being run by SLURM
-
-	# count jobs currently being processed
-	try:
-		qstat_output = subprocess.check_output('squeue -u ' + username + ' -r -n '
-			+ current_job_name + ' | egrep " PD | CG | R " ',shell=True)
-	except subprocess.CalledProcessError:
-		qstat_output = ''
-
-	jobs_still_in_processing = re.findall('^\s+\d+_(\d+)\s',qstat_output,re.MULTILINE)
-
-	return(jobs_still_in_processing)
 
 def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_completefile,username,current_job_name,
 	slurm_folder,current_output_folder,current_output_filename,current_output_extension,output_dir_name,
@@ -213,11 +336,11 @@ def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_comple
 	jobs_aborted_newtimes_new = []
 	jobs_aborted_newmems_new = []
 
-	jobs_still_in_processing = Job_Process_Finder(username,current_job_name)
-	jobs_processing_updated.extend(jobs_still_in_processing)
+###	jobs_still_in_processing = Job_Process_Finder(username,current_job_name)
+###	jobs_processing_updated.extend(jobs_still_in_processing)
 
-	# move jobs that are not still in processing into 'jobs_completed_updated'
-	jobs_just_finished = list(set(jobs_processing)-set(jobs_still_in_processing))
+###	# move jobs that are not still in processing into 'jobs_completed_updated'
+###	jobs_just_finished = list(set(jobs_processing)-set(jobs_still_in_processing))
 
 	# In jobs that have just been finished, look for jobs that never
 		# completed, and sort those into jobs that just need to be
@@ -225,128 +348,19 @@ def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_comple
 
 	if jobs_just_finished:
 		
-		try:
-			completed_files = subprocess.check_output('ls -lrt '
-				+ current_output_folder,shell=True)
-		except subprocess.CalledProcessError:
-			completed_files = ''
+###		try:
+###			completed_files = subprocess.check_output('ls -lrt '
+###				+ current_output_folder,shell=True)
+###		except subprocess.CalledProcessError:
+###			completed_files = ''
+###
+###		completed_job_list = re.findall(' ' + current_output_filename + '_(\d+?)\.'
+###			+ current_output_extension,completed_files,re.DOTALL)
+###
+###		true_jobs_just_finished = list(set(completed_job_list) & set(jobs_just_finished))
+###		jobs_completed_updated.extend(true_jobs_just_finished)
 
-		completed_job_list = re.findall(' ' + current_output_filename + '_(\d+?)\.'
-			+ current_output_extension,completed_files,re.DOTALL)
-
-		true_jobs_just_finished = list(set(completed_job_list) & set(jobs_just_finished))
-		jobs_completed_updated.extend(true_jobs_just_finished)
-
-		missing_jobs = list(set(jobs_just_finished)-set(true_jobs_just_finished))
-		if missing_jobs:
-
-			# if error file exists:
-				#	1. check whether it contains info on exceeded time or mem limits;
-				#		if so, resubmit with max time and memory
-				#	2. Otherwise, check whether error file empty
-				#		if not, add field to error list
-				#		if so, restart field
-
-			try:
-				sbatch_run_output_list = subprocess.check_output('ls -lrt ' + slurm_folder,shell=True)
-			except subprocess.CalledProcessError:
-				sbatch_run_output_list = ''
-			
-			for current_missing_job in missing_jobs:
-
-				current_missing_job_codes = re.findall(
-					current_job_name + '.e(\d+?)-' + current_missing_job + '$',
-					sbatch_run_output_list,re.MULTILINE)
-				if current_missing_job_codes:
-					current_job_code = str(max(map(int,current_missing_job_codes)))
-						# jobs are assigned consecutive code numbers on cluster,
-							# so since we want to look at the error file associated
-							# with the most recent run of current_missing_job,
-							# look for max code
-					current_errorfile = slurm_folder + '/' + current_job_name + '.e' + current_job_code \
-						+ '-' + current_missing_job
-
-					# If errorfile is missing or empty; or if a cluster
-						# error has occurred; but job is listed as
-						# having started, return job to list of jobs
-						# to process
-					# If errorfile contains a time limit error or a
-						# memory limit error, process as an aborted
-						# job
-					# If errorfile contains something else, report
-						# as an error
-					if os.path.isfile(current_errorfile):
-						current_errorfile_contents = open(current_errorfile).read()
-					else:
-						current_errorfile_contents = ''
-
-					if len(current_errorfile_contents) == 0:
-						jobs_to_process_updated.extend([current_missing_job])
-					else:
-						time_limit_check = 'time limit' in current_errorfile_contents.lower()
-						memory_limit_check = 'memory limit' in current_errorfile_contents.lower()
-						cluster_error_check = 'bus error' in current_errorfile_contents.lower() \
-							or 'fatal error on startup' in current_errorfile_contents.lower() \
-							or 'reload' in current_errorfile_contents.lower() \
-							or 'MatlabException' in current_errorfile_contents.lower()
-
-						if cluster_error_check:
-							jobs_to_process_updated.extend([current_missing_job])
-						elif memory_limit_check:
-							# check whether job had been restarted
-								# before; if so, updated memory should
-								# be 1.5x times previous memory allotment
-								# otherwise, it should be 1.5x the default
-								# mem allotment
-							# If previous mem allotment was the max
-								# allowed memory, abort job forever
-							time_multiplier = 1
-							memory_multiplier = 1.5
-
-							(jobs_aborted_forever_updated,jobs_aborted_to_restart_new,
-								jobs_aborted_newtimes_new,jobs_aborted_newmems_new,
-								jobs_aborted_to_restart_updated,
-								jobs_aborted_newtimes_updated,
-								jobs_aborted_newmems_updated) = \
-								Aborted_Job_Processor(jobs_aborted_to_restart_updated,
-									jobs_aborted_newmems_updated,jobs_aborted_newtimes_updated,
-									jobs_aborted_forever_updated,jobs_aborted_to_restart_new,
-									jobs_aborted_newtimes_new,jobs_aborted_newmems_new,
-									max_memory,max_time,time_multiplier,
-									memory_multiplier,current_missing_job,
-									default_memory,default_time)
-
-						elif time_limit_check:
-							# check whether job had been restarted
-								# before; if so, updated time should
-								# be 2x times previous time allotment;
-								# otherwise, it should be 2x the default
-								# time allotment
-							# If previous mem allotment was the max
-								# allowed memory, abort job forever
-							time_multiplier = 2
-							memory_multiplier = 1
-
-							(jobs_aborted_forever_updated,jobs_aborted_to_restart_new,
-								jobs_aborted_newtimes_new,jobs_aborted_newmems_new,
-								jobs_aborted_to_restart_updated,
-								jobs_aborted_newtimes_updated,
-								jobs_aborted_newmems_updated) = \
-								Aborted_Job_Processor(jobs_aborted_to_restart_updated,
-									jobs_aborted_newmems_updated,jobs_aborted_newtimes_updated,
-									jobs_aborted_forever_updated,jobs_aborted_to_restart_new,
-									jobs_aborted_newtimes_new,jobs_aborted_newmems_new,
-									max_memory,max_time,time_multiplier,
-									memory_multiplier,current_missing_job,
-									default_memory,default_time)
-						else:
-							jobs_with_errors_updated.extend([current_missing_job])
-				else:
-					jobs_to_process_updated.extend([current_missing_job])
-
-			jobs_aborted_to_restart_updated.extend(jobs_aborted_to_restart_new)
-			jobs_aborted_newtimes_updated.extend(jobs_aborted_newtimes_new)
-			jobs_aborted_newmems_updated.extend(jobs_aborted_newmems_new)
+		
 
 	aborted_jobs_to_submit = []
 	aborted_newtimes_to_submit = []
