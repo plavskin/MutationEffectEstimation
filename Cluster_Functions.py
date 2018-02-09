@@ -3,7 +3,9 @@
 # Contains objects needed for running jobs on cluster and keeping track
 	# of their progress
 
-from enum import Enum
+import os
+import csv
+import subprocess
 
 class Job(object):
 	# job object that stores properties of individual jobs in queue
@@ -18,6 +20,9 @@ class Job(object):
 		self.mem = new_mem
 	def change_time(self,new_time):
 		self.time = new_time
+	def extract_job_info(self):
+		info_list = [self.number,self.status,self.time,self.mem]
+		return(info_list)
 
 class JobStatus(object):
 	# enum for job status
@@ -28,6 +33,20 @@ class JobStatus(object):
 	ABORTED_TO_RESTART = 5
 	ERROR = 6
 
+class JobParameters(object):
+	# holds parameters of the job currently being run
+	def __init__(self, name, username, output_folder, output_extension,
+		output_filename, slurm_folder, max_mem, max_time, experiment_folder):
+		self.name = name
+		self.username = username
+		self.output_folder = output_folder
+		self.output_extension = output_extension
+		self.output_filename = output_filename
+		self.slurm_folder = slurm_folder
+		self.max_mem = max_mem
+		self.max_time = max_time
+		self.experiment_folder = experiment_folder
+
 class JobManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
@@ -36,6 +55,10 @@ class JobManager(object):
 		for j in jobs:
 			self.jobs[j.number] = j
 		self.job_parameters = job_parameters
+	def get_job_name(self):
+		# returns the name of the jobs
+		job_name = self.job_parameters.name
+		return(job_name)
 	def _get_status_list(self):
 		# gets current status of every job
 		# ??? Do I need this function? ???
@@ -52,6 +75,12 @@ class JobManager(object):
 		# changes the status of all jobs in number_list to new_status
 		for num in number_list:
 			self.jobs[num].change_status(new_status)
+	def extract_contents(self):
+		joblist_contents = []
+		for current_job in self.jobs:
+			current_job_extract = current_job.extract_job_info()
+			joblist_contents.extend(current_job_extract)
+		return(joblist_contents)
 	def _batch_mem_change(self, number_list, new_mem):
 		# changes the mem of all jobs in number_list to new_mem
 		for num in number_list:
@@ -201,22 +230,61 @@ class JobManager(object):
 			# they've just been completed, and change their status
 		jobs_just_completed = _just_completed_finder(job_parameters,jobs_just_finished)
 		self.batch_status_change(jobs_just_completed,JobStatus.COMPLETED)
+		# identify jobs that no longer have 'PROCESSING' status because
+			# they've been either dropped, aborted because of time/mem
+			# limites, or because they've encountered an error, and 
+			# change their status
 		missing_jobs = list(set(jobs_just_finished)-set(jobs_just_completed))
 		if missing_jobs:
 			self._missing_job_processor(missing_jobs)
 
-class JobParameters(object):
-	# holds parameters of the job currently being run
-	def __init__(self, name, username, output_folder, output_extension,
-		output_filename, slurm_folder, max_mem, max_time):
-		self.name = name
-		self.username = username
-		self.output_folder = output_folder
-		self.output_extension = output_extension
-		self.output_filename = output_filename
-		self.slurm_folder = slurm_folder
-		self.max_mem = max_mem
-		self.max_time = max_time
+class TrackfileManager(object):
+	# Handles writing and reading of trackfile
+	def __init__(self, job_parameters):
+		self.trackfile_path = os.path.join(job_parameters.experiment_folder, \
+			'trackfiles',('trackfile_'+job_parameters.name+'.csv'))
+		self.summaryfile_path = os.path.join(job_parameters.experiment_folder, \
+			'trackfiles',('summary_trackfile_'+job_parameters.name+'.csv'))
+		self.job_parameters = job_parameters
+	def get_summaryfile(self):
+		# returns summaryfile path
+		return(self.summaryfile_path)
+	def get_trackfile(self):
+		# returns trackfile path
+		return(self.trackfile_path)
+	def read_trackfile(self):
+		# reads a csv containing the status of each job in job_list,
+			# as well as the time and memory allocated to it, and 
+			# returns a JobManager object
+		current_job_list = []
+		with open(self.trackfile_path, 'rU') as trackfile_opened:
+			trackfile_contents = list(csv.reader(trackfile_opened))
+			for row in trackfile_contents[1:]:
+				current_job = Job(*row)
+				current_job_list.extend(current_job)
+		return JobManager(current_job_list,self.job_parameters)
+	def write_trackfile(self, job_list):
+		# writes a csv containing the status of each job in job_list,
+			# as well as the time and memory allocated to it
+		job_list_contents = job_list.extract_contents()
+		with open(self.trackfile_path, 'wb') as trackfile_opened:
+			trackfile_writer = csv.writer(trackfile_opened)
+			trackfile_writer.writerow(['Job Number','Job Status','Time Allocated to Job','Memory Allocated to Job'])
+			for current_job in job_list_contents:
+				trackfile_writer.writerow(current_job)
+	def write_summaryfile(self, job_list):
+		# writes a csv file counting the number of jobs of each status in job_list
+		with open(self.summaryfile_path, 'wb') as summaryfile_opened:
+			summaryfile_writer = csv.writer(summaryfile_opened)
+			summaryfile_writer.writerow(['Status','# of jobs','job indices'])
+			values = [getattr(JobStatus, attr) for attr in vars(JobStatus) \
+				if not attr.startswith("__")]
+			for status in vars(JobStatus):
+				if not status.startswith("__")
+					indices = job_list.get_jobs_by_status(getattr(JobStatus, status))
+					current_n = len(indices)
+					indices_concat = ';'.join(str(x) for x in indices)
+					summaryfile_writer.writerow([status,current_n,indices_concat]
 
 # NEED:
 # - function to read/write trackfiles
