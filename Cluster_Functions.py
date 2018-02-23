@@ -35,26 +35,34 @@ class JobStatus(object):
 
 class JobParameters(object):
 	# holds parameters of the job currently being run
-	def __init__(self, name, username, output_folder, output_extension,
-		output_filename, slurm_folder, max_mem, max_time, experiment_folder):
+	def __init__(self, name, output_folder, output_extension, output_filename, \
+		slurm_folder,experiment_folder, module):
 		self.name = name
-		self.username = username
 		self.output_folder = output_folder
 		self.output_extension = output_extension
 		self.output_filename = output_filename
 		self.slurm_folder = slurm_folder
+		self.experiment_folder = experiment_folder
+		self.module = module
+
+class GeneralParameters(object):
+	# holds parameters general to the system
+	def __init__(self,code_folder,max_mem,max_time,username,user_email):
+		self.code_folder = code_folder
 		self.max_mem = max_mem
 		self.max_time = max_time
-		self.experiment_folder = experiment_folder
+		self.username = username
+		self.user_email = user_email
 
 class JobManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
-	def __init__(self, jobs, job_parameters):
+	def __init__(self, jobs, job_parameters,general_parameters):
 		self.jobs = {}
 		for j in jobs:
 			self.jobs[j.number] = j
 		self.job_parameters = job_parameters
+		self.general_parameters = general_parameters
 	def get_job_name(self):
 		# returns the name of the jobs
 		job_name = self.job_parameters.name
@@ -113,7 +121,7 @@ class JobManager(object):
 	def _parse_sbatch_output(slurm_folder):
 		# gets list of files in slurm output folder
 		try:
-			sbatch_run_output_list = subprocess.check_output('ls -lrt ' + self.job_parameters.slurm_folder,shell=True)
+			sbatch_run_output_list = subprocess.check_output('ls -lrt ' + slurm_folder,shell=True)
 		except subprocess.CalledProcessError:
 			sbatch_run_output_list = ''
 		return(sbatch_run_output_list)
@@ -195,8 +203,8 @@ class JobManager(object):
 						# abort job forever
 					time_multiplier = 1
 					mem_multiplier = 1.5
-					self._aborted_job_processor(self.job_parameters.max_mem, \
-						self.job_parameters.max_time, time_multiplier, \
+					self._aborted_job_processor(self.general_parameters.max_mem, \
+						self.general_parameters.max_time, time_multiplier, \
 						mem_multiplier, job_num)
 				elif time_limit_check:
 					# updated time should be 2x times previous time
@@ -205,8 +213,8 @@ class JobManager(object):
 						# abort job forever
 					time_multiplier = 2
 					mem_multiplier = 1
-					self._aborted_job_processor(self.job_parameters.max_mem, \
-						self.job_parameters.max_time, time_multiplier, \
+					self._aborted_job_processor(self.general_parameters.max_mem, \
+						self.general_parameters.max_time, time_multiplier, \
 						mem_multiplier, job_num)
 				else:
 					self.batch_status_change([current_missing_job], \
@@ -246,6 +254,7 @@ class TrackfileManager(object):
 		self.summaryfile_path = os.path.join(job_parameters.experiment_folder, \
 			'trackfiles',('summary_trackfile_'+job_parameters.name+'.csv'))
 		self.job_parameters = job_parameters
+		self.general_parameters = general_parameters
 	def get_summaryfile(self):
 		# returns summaryfile path
 		return(self.summaryfile_path)
@@ -262,7 +271,7 @@ class TrackfileManager(object):
 			for row in trackfile_contents[1:]:
 				current_job = Job(*row)
 				current_job_list.extend(current_job)
-		return JobManager(current_job_list,self.job_parameters)
+		return JobManager(current_job_list,self.job_parameters,self.general_parameters)
 	def write_trackfile(self, job_list):
 		# writes a csv containing the status of each job in job_list,
 			# as well as the time and memory allocated to it
@@ -286,8 +295,113 @@ class TrackfileManager(object):
 					indices_concat = ';'.join(str(x) for x in indices)
 					summaryfile_writer.writerow([status,current_n,indices_concat]
 
-# NEED:
-# - function to read/write trackfiles
+class SlurmManager(object):
+	# Handles getting information from and passing information to the
+		# slurm cluster system
+	def __init__(self,job_parameters,general_parameters):
+		self.job_parameters = job_parameters
+		self.general_parameters = general_parameters
+		# at the request of hpc staff, don't use all available queue space
+		self.max_job_proportion = 0.95
+		self.sbatch_filename = os.path.join(self.job_parameters.slurm_folder,\
+			(self.job_parameters.name + '.q'))
+	def free_job_calculator(self):
+		# gets the number of jobs that can still be submitted to
+			# the routing queue
+		# Get max number of jobs in a single array submission
+		max_array_size_response_string = subprocess.check_output(
+			'scontrol show config | grep MaxArraySize',shell=True)
+		max_array_size_response_split = max_array_size_response_string.split(' = ')
+		max_array_size = int(max_array_size_response_split[1].rstrip())
+		# Get max number of jobs user can have in queue or running
+		max_submit_response_string = subprocess.check_output(
+			('sacctmgr list assoc format=user,maxsubmit where user='+self.general_parameters.username),
+			shell=True)
+		max_submit = int(re.findall((self.general_parameters.username+'\s+(\d+)'),max_submit_response_string)[0])
+		# how many jobs are currently in default_queue for this user?
+		jobs_in_queue = int(subprocess.check_output(
+			('squeue -u '+self.general_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
+			shell=True))
+		# find the max number of jobs you can run at one time
+		max_allowed_jobs = round(min(max_array_size,max_submit)*self.max_job_proportion)
+		# find max amount of jobs that can be added to queue without
+			# making it overflow
+		space_in_queue = max_allowed_jobs-jobs_in_queue
+		return(space_in_queue)
+	def create_slurm_job(self,parallel_processors,job_list_string,
+		code_run_string,additional_beginning_lines_in_sbatch,
+		additional_end_lines_in_sbatch):
+		# Writes .q files to submit to cluster queue
+
+		# convert single_job_time from minutes to hh:mm:ss	
+		single_job_hours = int(math.floor(float(single_job_time)/60))
+		if single_job_hours > 0:
+			single_job_minutes = int(float(single_job_time) % (float(single_job_hours)*60))
+		else:
+			single_job_minutes = int(float(single_job_time))
+		single_job_time_string = str(single_job_hours).zfill(2)+':'+ \
+			str(single_job_minutes).zfill(2)+':00'
+
+		# convert single_job_mem from # of Mb to memory string
+		# cluster only cares about units of GB
+		single_job_mem_GB = math.ceil(float(single_job_mem)/1024)
+		single_job_mem_string = str(int(single_job_mem_GB))+'GB'
+
+		with open(current_sbatch_filename,'w') as sbatch_job_file:
+			sbatch_job_file.write('#!/bin/bash\n')
+
+			sbatch_job_file.write('#SBATCH --job-name='+current_job_name+'\n')
+				# name of current job
+			sbatch_job_file.write('#SBATCH --output='+current_job_name+'.o%A-%a\n')
+			sbatch_job_file.write('#SBATCH --error='+current_job_name+'.e%A-%a\n')
+			sbatch_job_file.write('#SBATCH --time='+single_job_time_string+'\n')
+				# amount of time allowed per job
+			sbatch_job_file.write('#SBATCH --mem='+single_job_mem_string+'\n')
+				# memory allocated to each job
+			sbatch_job_file.write('#SBATCH --nodes=1\n')
+			sbatch_job_file.write('#SBATCH --cpus-per-task='+str(parallel_processors)+'\n')
+				# nodes and processors used per job
+			sbatch_job_file.write('#SBATCH --array='+job_list_string+'\n')
+				# list of job IDs to be submitted
+			sbatch_job_file.write('#SBATCH --mail-type=FAIL\n')
+				# only sends email if job array fails
+			sbatch_job_file.write('#SBATCH --mail-user='+user_email+'\n')
+				# email that gets notification about aborted job
+
+			if additional_beginning_lines_in_sbatch:
+				for additional_sbatch_beginning_row in additional_beginning_lines_in_sbatch:
+					sbatch_job_file.write(additional_sbatch_beginning_row+'\n')
+
+			sbatch_job_file.write('cd '+code_dir+'\n')
+			sbatch_job_file.write('module purge\n')
+				# cd into code directory
+			if module_to_use == 'matlab':
+				sbatch_job_file.write('module load matlab/2017a\n')
+					# load matlab module
+				#sbatch_job_file.write('matlab -nodisplay -nosplash -nodesktop -r '+
+				sbatch_job_file.write('matlab -nodisplay -r '+
+					code_run_string+'\n')
+					# write appropriate code-running line
+			elif module_to_use == 'R':
+				sbatch_job_file.write('module load r/intel/3.3.2\n')
+					# load R module
+				sbatch_job_file.write('R CMD BATCH --vanilla '+code_run_string+'\n')
+
+			if additional_end_lines_in_sbatch:
+				for additional_sbatch_end_row in additional_end_lines_in_sbatch:
+					sbatch_job_file.write(additional_sbatch_end_row+'\n')
+
+			sbatch_job_file.write('\n\n')
+				# need additional returns at end of shell scripts
+
+		return None
+
+class JobSubmitter(object):
+	# Handles selection of jobs to submit and job submission
+	def __init__(self,job_parameters):
+		self.job_parameters = job_parameters
+
+
 
 
 #######################################################
@@ -310,42 +424,6 @@ def create_job_list(name, username, numbers, initial_time, initial_mem):
 test_list.jobs[1].change_status(JobStatus.COMPLETED)
 
 
-
-
-
-def Free_Job_Calculator(username):
-	# gets the number of jobs that can still be submitted to
-		# the routing queue
-
-	# Get max number of jobs in a single array submission
-	max_array_size_response_string = subprocess.check_output(
-		'scontrol show config | grep MaxArraySize',shell=True)
-	max_array_size_response_split = max_array_size_response_string.split(' = ')
-	max_array_size = int(max_array_size_response_split[1].rstrip())
-
-	# Get max number of jobs user can have in queue or running
-	max_submit_response_string = subprocess.check_output(
-		('sacctmgr list assoc format=user,maxsubmit where user='+username),
-		shell=True)
-	max_submit = int(re.findall((username+'\s+(\d+)'),max_submit_response_string)[0])
-	#max_submit = 1
-
-	# how many jobs are currently in default_queue for this user?
-	jobs_in_queue = int(subprocess.check_output(
-		('squeue -u '+username+' -r | egrep " PD | R | CG  " | wc -l'),
-		shell=True))
-
-	# find the max number of jobs you can run at one time
-	max_allowed_jobs = min(max_array_size,max_submit)
-
-#	# at the request of hpc staff, don't use all available queue space
-	max_allowed_jobs = round(max_allowed_jobs*.9)
-
-	# find max amount of jobs that can be added to queue without
-		# making it overflow
-	space_in_queue = max_allowed_jobs-jobs_in_queue
-
-	return(space_in_queue)
 
 def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_completefile,username,current_job_name,
 	slurm_folder,current_output_folder,current_output_filename,current_output_extension,output_dir_name,
@@ -733,75 +811,6 @@ def Jobs_to_Run_Selector(username,list_of_job_property_lists,space_in_queue,
 			list_of_job_property_lists_for_later[sublist_idx].append(current_sublist[current_idx_for_later])
 
 	return([list_of_job_property_lists_to_submit,list_of_job_property_lists_for_later])
-
-def Create_Slurm_Job(single_job_time,single_job_mem,current_sbatch_filename,
-	parallel_processors,code_dir,job_list_string,user_email,module_to_use,
-	code_run_string,current_job_name,additional_beginning_lines_in_sbatch,
-	additional_end_lines_in_sbatch):
-	# Writes .q files to submit to cluster queue
-
-	# convert single_job_time from minutes to hh:mm:ss	
-	single_job_hours = int(math.floor(float(single_job_time)/60))
-	if single_job_hours > 0:
-		single_job_minutes = int(float(single_job_time) % (float(single_job_hours)*60))
-	else:
-		single_job_minutes = int(float(single_job_time))
-	single_job_time_string = str(single_job_hours).zfill(2)+':'+ \
-		str(single_job_minutes).zfill(2)+':00'
-
-	# convert single_job_mem from # of Mb to memory string
-	# cluster only cares about units of GB
-	single_job_mem_GB = math.ceil(float(single_job_mem)/1024)
-	single_job_mem_string = str(int(single_job_mem_GB))+'GB'
-
-	with open(current_sbatch_filename,'w') as sbatch_job_file:
-		sbatch_job_file.write('#!/bin/bash\n')
-
-		sbatch_job_file.write('#SBATCH --job-name='+current_job_name+'\n')
-			# name of current job
-		sbatch_job_file.write('#SBATCH --output='+current_job_name+'.o%A-%a\n')
-		sbatch_job_file.write('#SBATCH --error='+current_job_name+'.e%A-%a\n')
-		sbatch_job_file.write('#SBATCH --time='+single_job_time_string+'\n')
-			# amount of time allowed per job
-		sbatch_job_file.write('#SBATCH --mem='+single_job_mem_string+'\n')
-			# memory allocated to each job
-		sbatch_job_file.write('#SBATCH --nodes=1\n')
-		sbatch_job_file.write('#SBATCH --cpus-per-task='+str(parallel_processors)+'\n')
-			# nodes and processors used per job
-		sbatch_job_file.write('#SBATCH --array='+job_list_string+'\n')
-			# list of job IDs to be submitted
-		sbatch_job_file.write('#SBATCH --mail-type=FAIL\n')
-			# only sends email if job array fails
-		sbatch_job_file.write('#SBATCH --mail-user='+user_email+'\n')
-			# email that gets notification about aborted job
-
-		if additional_beginning_lines_in_sbatch:
-			for additional_sbatch_beginning_row in additional_beginning_lines_in_sbatch:
-				sbatch_job_file.write(additional_sbatch_beginning_row+'\n')
-
-		sbatch_job_file.write('cd '+code_dir+'\n')
-		sbatch_job_file.write('module purge\n')
-			# cd into code directory
-		if module_to_use == 'matlab':
-			sbatch_job_file.write('module load matlab/2017a\n')
-				# load matlab module
-			#sbatch_job_file.write('matlab -nodisplay -nosplash -nodesktop -r '+
-			sbatch_job_file.write('matlab -nodisplay -r '+
-				code_run_string+'\n')
-				# write appropriate code-running line
-		elif module_to_use == 'R':
-			sbatch_job_file.write('module load r/intel/3.3.2\n')
-				# load R module
-			sbatch_job_file.write('R CMD BATCH --vanilla '+code_run_string+'\n')
-
-		if additional_end_lines_in_sbatch:
-			for additional_sbatch_end_row in additional_end_lines_in_sbatch:
-				sbatch_job_file.write(additional_sbatch_end_row+'\n')
-
-		sbatch_job_file.write('\n\n')
-			# need additional returns at end of shell scripts
-
-	return None
 
 def Job_List_Submitter(new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtimes_to_submit,
 	aborted_newmems_to_submit,current_sbatch_filename,parallel_processors,
