@@ -33,6 +33,38 @@ class JobStatus(object):
 	ABORTED_TO_RESTART = 5
 	ERROR = 6
 
+class ClusterParameters(object):
+	# holds parameters general to the system
+	def __init__(self,parameter_list):
+		self.code_path = parameter_list["code_folder"]
+		self.home_path = parameter_list["home_folder"]
+		self.composite_data_path = parameter_list["composite_data_folder"]
+		self.max_mem = parameter_list["max_mem"]
+		self.max_time = parameter_list["max_time"]
+		self.username = parameter_list["username"]
+		self.user_email = parameter_list["user_email"]
+		self.starting_mem = parameter_list["starting_mem"]
+		self.starting_time = parameter_list["starting_time"]
+		self.temp_storage_path = parameter_list["temp_storage_folder"]
+
+class FolderManager(object):
+	def __init__(self,cluster_parameters,experiment_folder_name):
+		self.experiment_path = \
+			os.path.join(cluster_parameters.composite_data_folder,experiment_folder_name)
+		self.trackfile_path = os.path.join(self.experiment_path,'trackfiles')
+		self.completefile_path = os.path.join(self.experiment_path,'completefiles')
+		self.slurm_path = os.path.join(cluster_parameters.temp_storage_path, \
+			experiment_folder_name,'slurm_folder')
+		self._set_up_folders()
+	def _set_up_folders(self):
+		setup_complete_file = os.path.join(self.completefile_folder,'folder_setup_complete.txt')
+		if not os.path.isfile(setup_complete_file):
+			new_directory_list = (self.trackfile_path,self.completefile_path,self.slurm_path)
+			for current_new_directory in new_directory_list:
+				if not os.path.isdir(current_new_directory):
+					os.makedirs(current_new_directory)
+			open(setup_complete_file,'a').close()
+
 class JobParameters(object):
 	# holds parameters of the job currently being run
 	def __init__(self, name, output_folder, output_extension, output_filename, \
@@ -45,24 +77,15 @@ class JobParameters(object):
 		self.experiment_folder = experiment_folder
 		self.module = module
 
-class GeneralParameters(object):
-	# holds parameters general to the system
-	def __init__(self,code_folder,max_mem,max_time,username,user_email):
-		self.code_folder = code_folder
-		self.max_mem = max_mem
-		self.max_time = max_time
-		self.username = username
-		self.user_email = user_email
-
 class JobManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
-	def __init__(self, jobs, job_parameters,general_parameters):
+	def __init__(self, jobs, job_parameters,cluster_parameters):
 		self.jobs = {}
 		for j in jobs:
 			self.jobs[j.number] = j
 		self.job_parameters = job_parameters
-		self.general_parameters = general_parameters
+		self.cluster_parameters = cluster_parameters
 	def get_job_name(self):
 		# returns the name of the jobs
 		job_name = self.job_parameters.name
@@ -97,25 +120,25 @@ class JobManager(object):
 		# changes the time of all jobs in number_list to new_time
 		for num in number_list:
 			self.jobs[num].change_time(new_time)
-	def _job_process_finder(job_parameters):
+	def _job_process_finder(self):
 		# Identify jobs that are still being run by SLURM
 		# Return list of jobs currently being processed
 		try:
-			qstat_output = subprocess.check_output('squeue -u ' + job_parameters.username + ' -r -n '
-				+ job_parameters.current_job_name + ' | egrep " PD | CG | R " ',shell=True)
+			qstat_output = subprocess.check_output('squeue -u ' + self.cluster_parameters.username + ' -r -n '
+				+ self.job_parameters.current_job_name + ' | egrep " PD | CG | R " ',shell=True)
 		except subprocess.CalledProcessError:
 			qstat_output = ''
 		jobs_still_in_processing = re.findall('^\s+\d+_(\d+)\s',qstat_output,re.MULTILINE)
 		return(jobs_still_in_processing)
-	def _just_completed_finder(job_parameters,jobs_just_finished):
+	def _just_completed_finder(self,jobs_just_finished):
 		# Identify which jobs from a list have been successfully completed
 		try:
 			completed_files = subprocess.check_output('ls -lrt '
-				+ job_parameters.output_folder,shell=True)
+				+ self.job_parameters.output_folder,shell=True)
 		except subprocess.CalledProcessError:
 			completed_files = ''
-		completed_job_list = re.findall(' ' + job_parameters.output_filename + '_(\d+?)\.'
-			+ job_parameters.output_extension,completed_files,re.DOTALL)
+		completed_job_list = re.findall(' ' + self.job_parameters.output_filename + '_(\d+?)\.'
+			+ self.job_parameters.output_extension,completed_files,re.DOTALL)
 		jobs_just_completed = list(set(completed_job_list) & set(jobs_just_finished))
 		return(jobs_just_completed)
 	def _parse_sbatch_output(slurm_folder):
@@ -203,8 +226,8 @@ class JobManager(object):
 						# abort job forever
 					time_multiplier = 1
 					mem_multiplier = 1.5
-					self._aborted_job_processor(self.general_parameters.max_mem, \
-						self.general_parameters.max_time, time_multiplier, \
+					self._aborted_job_processor(self.cluster_parameters.max_mem, \
+						self.cluster_parameters.max_time, time_multiplier, \
 						mem_multiplier, job_num)
 				elif time_limit_check:
 					# updated time should be 2x times previous time
@@ -213,8 +236,8 @@ class JobManager(object):
 						# abort job forever
 					time_multiplier = 2
 					mem_multiplier = 1
-					self._aborted_job_processor(self.general_parameters.max_mem, \
-						self.general_parameters.max_time, time_multiplier, \
+					self._aborted_job_processor(self.cluster_parameters.max_mem, \
+						self.cluster_parameters.max_time, time_multiplier, \
 						mem_multiplier, job_num)
 				else:
 					self.batch_status_change([current_missing_job], \
@@ -231,12 +254,12 @@ class JobManager(object):
 			# look for lost jobs and move those to 'TO_PROCESS' list
 		# get list of jobs that should be processing
 		prev_processing_list = self.get_jobs_by_status(JobStatus.PROCESSING)
-		current_processing_list = _job_process_finder(self.job_parameters)
+		current_processing_list = _job_process_finder()
 		# identify jobs that no longer have 'PROCESSING' status
 		jobs_just_finished = list(set(prev_processing_list)-set(current_processing_list))
 		# identify jobs that no longer have 'PROCESSING' status because
 			# they've just been completed, and change their status
-		jobs_just_completed = _just_completed_finder(job_parameters,jobs_just_finished)
+		jobs_just_completed = _just_completed_finder(jobs_just_finished)
 		self.batch_status_change(jobs_just_completed,JobStatus.COMPLETED)
 		# identify jobs that no longer have 'PROCESSING' status because
 			# they've been either dropped, aborted because of time/mem
@@ -254,7 +277,7 @@ class TrackfileManager(object):
 		self.summaryfile_path = os.path.join(job_parameters.experiment_folder, \
 			'trackfiles',('summary_trackfile_'+job_parameters.name+'.csv'))
 		self.job_parameters = job_parameters
-		self.general_parameters = general_parameters
+		self.cluster_parameters = cluster_parameters
 	def get_summaryfile(self):
 		# returns summaryfile path
 		return(self.summaryfile_path)
@@ -271,7 +294,7 @@ class TrackfileManager(object):
 			for row in trackfile_contents[1:]:
 				current_job = Job(*row)
 				current_job_list.extend(current_job)
-		return JobManager(current_job_list,self.job_parameters,self.general_parameters)
+		return JobManager(current_job_list,self.job_parameters,self.cluster_parameters)
 	def write_trackfile(self, job_list):
 		# writes a csv containing the status of each job in job_list,
 			# as well as the time and memory allocated to it
@@ -298,9 +321,9 @@ class TrackfileManager(object):
 class SlurmManager(object):
 	# Handles getting information from and passing information to the
 		# slurm cluster system
-	def __init__(self,job_parameters,general_parameters):
+	def __init__(self,job_parameters,cluster_parameters):
 		self.job_parameters = job_parameters
-		self.general_parameters = general_parameters
+		self.cluster_parameters = cluster_parameters
 		# at the request of hpc staff, don't use all available queue space
 		self.max_job_proportion = 0.95
 		self.sbatch_filename = os.path.join(self.job_parameters.slurm_folder,\
@@ -315,12 +338,12 @@ class SlurmManager(object):
 		max_array_size = int(max_array_size_response_split[1].rstrip())
 		# Get max number of jobs user can have in queue or running
 		max_submit_response_string = subprocess.check_output(
-			('sacctmgr list assoc format=user,maxsubmit where user='+self.general_parameters.username),
+			('sacctmgr list assoc format=user,maxsubmit where user='+self.cluster_parameters.username),
 			shell=True)
-		max_submit = int(re.findall((self.general_parameters.username+'\s+(\d+)'),max_submit_response_string)[0])
+		max_submit = int(re.findall((self.cluster_parameters.username+'\s+(\d+)'),max_submit_response_string)[0])
 		# how many jobs are currently in default_queue for this user?
 		jobs_in_queue = int(subprocess.check_output(
-			('squeue -u '+self.general_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
+			('squeue -u '+self.cluster_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
 			shell=True))
 		# find the max number of jobs you can run at one time
 		max_allowed_jobs = round(min(max_array_size,max_submit)*self.max_job_proportion)
