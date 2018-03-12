@@ -46,6 +46,12 @@ class ClusterParameters(object):
 		self.starting_mem = parameter_list["starting_mem"]
 		self.starting_time = parameter_list["starting_time"]
 		self.temp_storage_path = parameter_list["temp_storage_folder"]
+		self.current_mem = self.starting_mem
+		self.current_time = self.starting_time
+	def set_current_time(self,new_time):
+		self.current_time = new_time
+	def set_current_mem(self,new_mem):
+		self.current_mem = new_mem
 
 class FolderManager(object):
 	def __init__(self,cluster_parameters,experiment_folder_name):
