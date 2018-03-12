@@ -25,3 +25,18 @@ class FolderManager(object):
 				if not os.path.isdir(current_new_directory):
 					os.makedirs(current_new_directory)
 			open(setup_complete_file,'a').close()
+
+class MLEParameters(object):
+	def __init__(self,parameter_list):
+		self.sim_repeats = parameter_list["sim_repeats"]
+		self.profile_points = parameter_list["profile_points"]
+		self.mode_list = parameter_list["mode_list"]
+		self.parameters_by_mode = parameter_list["parameters_by_mode"]
+		self.min_parameter_vals_by_mode = parameter_list["min_parameter_vals_by_mode"]
+		self.max_parameter_vals_by_mode = parameter_list["max_parameter_vals_by_mode"]
+	def set_mode(self,mode_idx):
+		self.current_mode = self.mode_list[mode_idx]
+		self.current_parameters = self.parameters_by_mode[mode_idx]
+		self.current_min_parameter_vals = self.min_parameter_vals_by_mode[mode_idx]
+		self.current_max_parameter_vals = self.max_parameter_vals_by_mode[mode_idx]
+
