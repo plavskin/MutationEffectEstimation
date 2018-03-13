@@ -32,7 +32,7 @@ class FolderManager(object):
 			current_subfolder)
 		if not os.path.isdir(self.current_output_subfolder):
 			os.makedirs(self.current_output_subfolder)
-	
+
 
 class MLEParameters(object):
 	def __init__(self,parameter_list):
@@ -81,7 +81,7 @@ class MLEParameters(object):
 			# i.e. fitted parameters that MLE needs to be performed on
 		# include 'unfixed' 'parameter', in which case no parameter is fixed
 		parameters_to_loop_over_bool = \
-			numpy.invert(self.pernamently_fixed_parameter_bool)* \
+			numpy.invert(self.current_permafixed_parameter_bool)* \
 			numpy.invert((self.current_profile_point_list < 1))
 		non_permafixed_parameters = [item for (item,bool_val) in \
 			zip(self.current_parameter_list,parameters_to_loop_over_bool) \
@@ -123,12 +123,14 @@ class MLEParameters(object):
 		self.current_profile_upper_limit_list = \
 			numpy.array(self._retrieve_current_values(profile_upper_limits_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
+		# identify list of parameters that are permanently fixed
+		self.current_permafixed_parameter_bool = \
+			self.current_max_parameter_val_list == self.current_min_parameter_val_list
 		# identify parameters MLE needs to be performed on
 		self._id_parameters_to_loop_over()
 		# set up a list of completefiles and the current summary file
 		self.current_completefile_list = []
-		# name current MLE summary file
-		self.current_MLE_summaryfile = 
+
 
 
 
