@@ -86,7 +86,7 @@ class MLEParameters(object):
 		non_permafixed_parameters = [item for (item,bool_val) in \
 			zip(self.current_parameter_list,parameters_to_loop_over_bool) \
 			if bool_val]
-		self.parameters_to_loop_over = ['unfixed'] + non_permafixed_parameters
+		self.current_parameters_to_loop_over = ['unfixed'] + non_permafixed_parameters
 		# include 1 profile point for 'unfixed' setting
 			# (i.e. only perform 'unfixed' MLE once, since no need to
 			# get likelihood profile)
