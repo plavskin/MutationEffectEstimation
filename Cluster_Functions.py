@@ -56,7 +56,7 @@ class ClusterParameters(object):
 class FolderManager(object):
 	def __init__(self,cluster_parameters,experiment_folder_name):
 		self.experiment_path = \
-			os.path.join(cluster_parameters.composite_data_folder,experiment_folder_name)
+			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
 		self.trackfile_path = os.path.join(self.experiment_path,'trackfiles')
 		self.completefile_path = os.path.join(self.experiment_path,'completefiles')
 		self.slurm_path = os.path.join(cluster_parameters.temp_storage_path, \
@@ -65,7 +65,8 @@ class FolderManager(object):
 	def _set_up_folders(self):
 		setup_complete_file = os.path.join(self.completefile_folder,'folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
-			new_directory_list = (self.trackfile_path,self.completefile_path,self.slurm_path)
+			new_directory_list = (self.trackfile_path,self.completefile_path, \
+				self.slurm_path)
 			for current_new_directory in new_directory_list:
 				if not os.path.isdir(current_new_directory):
 					os.makedirs(current_new_directory)
@@ -277,17 +278,17 @@ class JobManager(object):
 
 class TrackfileManager(object):
 	# Handles writing and reading of trackfile
-	def __init__(self, job_parameters):
+	def __init__(self, job_parameters, cluster_parameters):
 		self.trackfile_path = os.path.join(job_parameters.experiment_folder, \
 			'trackfiles',('trackfile_'+job_parameters.name+'.csv'))
 		self.summaryfile_path = os.path.join(job_parameters.experiment_folder, \
 			'trackfiles',('summary_trackfile_'+job_parameters.name+'.csv'))
 		self.job_parameters = job_parameters
 		self.cluster_parameters = cluster_parameters
-	def get_summaryfile(self):
+	def get_summaryfile_path(self):
 		# returns summaryfile path
 		return(self.summaryfile_path)
-	def get_trackfile(self):
+	def get_trackfile_path(self):
 		# returns trackfile path
 		return(self.trackfile_path)
 	def read_trackfile(self):
@@ -301,7 +302,12 @@ class TrackfileManager(object):
 				current_job = Job(*row)
 				current_job_list.extend(current_job)
 		return JobManager(current_job_list,self.job_parameters,self.cluster_parameters)
-	def write_trackfile(self, job_list):
+	def write_output_files(self,job_list):
+		# writes trackfile and summaryfile for current object for each
+			# job in job_list, which is a JobManager object
+		self._write_trackfile(job_list)
+		self._write_summaryfile(job_list)
+	def _write_trackfile(self, job_list):
 		# writes a csv containing the status of each job in job_list,
 			# as well as the time and memory allocated to it
 		job_list_contents = job_list.extract_contents()
@@ -310,7 +316,7 @@ class TrackfileManager(object):
 			trackfile_writer.writerow(['Job Number','Job Status','Time Allocated to Job','Memory Allocated to Job'])
 			for current_job in job_list_contents:
 				trackfile_writer.writerow(current_job)
-	def write_summaryfile(self, job_list):
+	def _write_summaryfile(self, job_list):
 		# writes a csv file counting the number of jobs of each status in job_list
 		with open(self.summaryfile_path, 'wb') as summaryfile_opened:
 			summaryfile_writer = csv.writer(summaryfile_opened)
@@ -322,7 +328,7 @@ class TrackfileManager(object):
 					indices = job_list.get_jobs_by_status(getattr(JobStatus, status))
 					current_n = len(indices)
 					indices_concat = ';'.join(str(x) for x in indices)
-					summaryfile_writer.writerow([status,current_n,indices_concat]
+					summaryfile_writer.writerow([status,current_n,indices_concat])
 
 class SlurmManager(object):
 	# Handles getting information from and passing information to the
@@ -427,15 +433,16 @@ class SlurmManager(object):
 
 class JobSubmitter(object):
 	# Handles selection of jobs to submit and job submission
-	def __init__(self,job_parameters):
+	def __init__(self,job_parameters,job_manager):
 		self.job_parameters = job_parameters
+		self.job_manager = job_manager
 
 
 
 
 #######################################################
 
-def create_job_list(name, username, numbers, initial_time, initial_mem):
+def _create_job_list(name, username, numbers, initial_time, initial_mem):
 	# create a list of jobs sharing name, and number from 'numbers' list
 	# all new jobs will have 'TO_PROCESS' status
 	current_job_list = []
@@ -448,6 +455,31 @@ def create_job_list(name, username, numbers, initial_time, initial_mem):
 		current_output_folder, current_output_extension, current_output_filename, \
 		slurm_folder)
 	return JobManager(current_job_list,current_job_parameters)
+
+def job_flow_handler(name, username, numbers, initial_time, initial_mem, cluster_parameters, job_parameters):
+	# Handles entire flow of job, from creation of new trackfile to
+		# submission of jobs to updating trackfile
+	current_trackfile = TrackfileManager(job_parameters, cluster_parameters)
+
+	# check whether trackfile exists; if so, use it to get job data and
+		# update statuses; otherwise, create new trackfile
+	current_trackfile_path = current_trackfile.get_trackfile_path()
+	if os.path.isfile(current_trackfile_path):
+		# retrieve job list, update it, submit jobs
+		#################################################
+		# WORK HERE
+		#################################################
+
+	else:
+		# create job list (JobManager object)
+		job_list = _create_job_list(name,username,numbers,initial_time,initial_mem)
+
+	# update trackfile and summaryfile
+	current_trackfile.write_output_files(job_list)
+
+
+
+
 
 
 test_list.jobs[1].change_status(JobStatus.COMPLETED)
