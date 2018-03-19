@@ -16,6 +16,8 @@ class Job(object):
 		self.mem = mem
 	def change_status(self,new_status):
 		self.status = new_status
+	def get_status(self):
+		return(self.status)
 	def change_mem(self,new_mem):
 		self.mem = new_mem
 	def change_time(self,new_time):
@@ -75,7 +77,7 @@ class FolderManager(object):
 class JobParameters(object):
 	# holds parameters of the job currently being run
 	def __init__(self, name, output_folder, output_extension, output_filename, \
-		slurm_folder,experiment_folder, module):
+		slurm_folder,experiment_folder, module, code_run_string):
 		self.name = name
 		self.output_folder = output_folder
 		self.output_extension = output_extension
@@ -83,8 +85,9 @@ class JobParameters(object):
 		self.slurm_folder = slurm_folder
 		self.experiment_folder = experiment_folder
 		self.module = module
+		self.code_run_string = code_run_string
 
-class JobManager(object):
+class JobListManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
 	def __init__(self, jobs, job_parameters,cluster_parameters):
@@ -113,11 +116,13 @@ class JobManager(object):
 		# changes the status of all jobs in number_list to new_status
 		for num in number_list:
 			self.jobs[num].change_status(new_status)
-	def extract_contents(self):
+	def extract_contents(self, required_status_list):
 		joblist_contents = []
 		for current_job in self.jobs:
-			current_job_extract = current_job.extract_job_info()
-			joblist_contents.extend(current_job_extract)
+			current_status = curent_job.get_status()
+			if current_status in required_status_list:
+				current_job_extract = current_job.extract_job_info()
+				joblist_contents.extend(current_job_extract)
 		return(joblist_contents)
 	def _batch_mem_change(self, number_list, new_mem):
 		# changes the mem of all jobs in number_list to new_mem
@@ -294,41 +299,45 @@ class TrackfileManager(object):
 	def read_trackfile(self):
 		# reads a csv containing the status of each job in job_list,
 			# as well as the time and memory allocated to it, and 
-			# returns a JobManager object
+			# returns a JobListManager object
 		current_job_list = []
 		with open(self.trackfile_path, 'rU') as trackfile_opened:
 			trackfile_contents = list(csv.reader(trackfile_opened))
 			for row in trackfile_contents[1:]:
 				current_job = Job(*row)
 				current_job_list.extend(current_job)
-		return JobManager(current_job_list,self.job_parameters,self.cluster_parameters)
-	def write_output_files(self,job_list):
+		return JobListManager(current_job_list,self.job_parameters,self.cluster_parameters)
+	def write_output_files(self,job_list_manager):
 		# writes trackfile and summaryfile for current object for each
-			# job in job_list, which is a JobManager object
-		self._write_trackfile(job_list)
-		self._write_summaryfile(job_list)
-	def _write_trackfile(self, job_list):
-		# writes a csv containing the status of each job in job_list,
+			# job in job_list_manager, which is a JobListManager object
+		self._write_trackfile(job_list_manager)
+		self._write_summaryfile(job_list_manager)
+	def _get_complete_status_list():
+		# gets entire list of possible statuses from JobStatus class
+		status_list = [getattr(JobStatus, attr) for attr in vars(JobStatus) \
+			if not attr.startswith("__")]
+		return(status_list)
+	def _write_trackfile(self, job_list_manager):
+		# writes a csv containing the status of each job in job_list_manager,
 			# as well as the time and memory allocated to it
-		job_list_contents = job_list.extract_contents()
+		complete_status_list = _get_complete_status_list()
+		job_list_contents = job_list_manager.extract_contents(complete_status_list)
 		with open(self.trackfile_path, 'wb') as trackfile_opened:
 			trackfile_writer = csv.writer(trackfile_opened)
 			trackfile_writer.writerow(['Job Number','Job Status','Time Allocated to Job','Memory Allocated to Job'])
 			for current_job in job_list_contents:
 				trackfile_writer.writerow(current_job)
-	def _write_summaryfile(self, job_list):
-		# writes a csv file counting the number of jobs of each status in job_list
+	def _write_summaryfile(self, job_list_manager):
+		# writes a csv file counting the number of jobs of each status in job_list_manager
 		with open(self.summaryfile_path, 'wb') as summaryfile_opened:
 			summaryfile_writer = csv.writer(summaryfile_opened)
 			summaryfile_writer.writerow(['Status','# of jobs','job indices'])
-			values = [getattr(JobStatus, attr) for attr in vars(JobStatus) \
-				if not attr.startswith("__")]
-			for status in vars(JobStatus):
-				if not status.startswith("__")
-					indices = job_list.get_jobs_by_status(getattr(JobStatus, status))
-					current_n = len(indices)
-					indices_concat = ';'.join(str(x) for x in indices)
-					summaryfile_writer.writerow([status,current_n,indices_concat])
+			complete_status_list = _get_complete_status_list()
+			for status in complete_status_list:
+				indices = job_list_manager.get_jobs_by_status(status)
+				current_n = len(indices)
+				indices_concat = ';'.join(str(x) for x in indices)
+				summaryfile_writer.writerow([status,current_n,indices_concat])
 
 class SlurmManager(object):
 	# Handles getting information from and passing information to the
@@ -433,10 +442,16 @@ class SlurmManager(object):
 
 class JobSubmitter(object):
 	# Handles selection of jobs to submit and job submission
-	def __init__(self,job_parameters,job_manager):
+	def __init__(self,job_parameters,job_list_manager):
 		self.job_parameters = job_parameters
-		self.job_manager = job_manager
+		self.job_list_manager = job_list_manager
+	def _order_jobs(self,job_number_list):
 
+	def _group_jobs(self):
+
+	# first, submit aborted jobs, starting with the one requiring the most time
+	# sort jobs by time/memory and submit in batches that way
+	# update job_list_manager along the way
 
 
 
@@ -454,7 +469,7 @@ def _create_job_list(name, username, numbers, initial_time, initial_mem):
 	current_job_parameters = JobParameters(current_job_name, username, \
 		current_output_folder, current_output_extension, current_output_filename, \
 		slurm_folder)
-	return JobManager(current_job_list,current_job_parameters)
+	return JobListManager(current_job_list,current_job_parameters)
 
 def job_flow_handler(name, username, numbers, initial_time, initial_mem, cluster_parameters, job_parameters):
 	# Handles entire flow of job, from creation of new trackfile to
@@ -466,16 +481,20 @@ def job_flow_handler(name, username, numbers, initial_time, initial_mem, cluster
 	current_trackfile_path = current_trackfile.get_trackfile_path()
 	if os.path.isfile(current_trackfile_path):
 		# retrieve job list, update it, submit jobs
+		# job_list_manager is a JobListManager object
+		job_list_manager = current_trackfile.read_trackfile()
+		# update status of all jobs in job_list_manager
+		job_list_manager.autoupdate_job_status()
 		#################################################
 		# WORK HERE
 		#################################################
 
 	else:
-		# create job list (JobManager object)
-		job_list = _create_job_list(name,username,numbers,initial_time,initial_mem)
+		# create job list (JobListManager object)
+		job_list_manager = _create_job_list(name,username,numbers,initial_time,initial_mem)
 
 	# update trackfile and summaryfile
-	current_trackfile.write_output_files(job_list)
+	current_trackfile.write_output_files(job_list_manager)
 
 
 
@@ -492,82 +511,6 @@ def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_comple
 	# Creates and updates trackfiles, which keep track of jobs to be completed
 	# writes separate trackfile for every mode, growth condition, rep, parameter
 
-	# Check if trackfile exists, and if not, create it
-	if not os.path.isfile(current_trackfile):
-		# generate a string of numbers from 1 to max_repeat
-		all_jobs_to_process = ';'.join(str(x) for x in range(1,max_repeat+1))
-
-		# write trackfile:
-			# rows 1-4: 'knownmuts','poissonmut','lambdafit','SSR_mixed';
-			# cols 1-4: 'to process', 'processing', 'completed'
-		with open(current_trackfile, 'wb') as csvfile:
-			trackfile_writer = csv.writer(csvfile)
-			trackfile_writer.writerow(['mode','to process','processing','completed','errors','aborted forever','aborted to restart','aborted restart times','aborted restart memory'])
-			trackfile_writer.writerow([current_mode,all_jobs_to_process,'','','','','','',''])
-			trackfile_writer.writerow(['# jobs','','','','','','','',''])
-
-	# Read trackfile for current mode
-	with open(current_trackfile, 'rU') as trackfile_opened:
-		trackfile_contents = list(csv.reader(trackfile_opened))
-
-	jobs_to_process_string = trackfile_contents[1][1]
-	jobs_processing_string = trackfile_contents[1][2]
-	jobs_completed_string = trackfile_contents[1][3]
-	jobs_with_errors_string = trackfile_contents[1][4]
-	jobs_aborted_forever_string = trackfile_contents[1][5]
-	jobs_aborted_to_restart_string = trackfile_contents[1][6]
-	jobs_aborted_newtimes_string = trackfile_contents[1][7]
-	jobs_aborted_newmems_string = trackfile_contents[1][8]
-
-	jobs_to_process = filter(None,jobs_to_process_string.split(';'))
-	jobs_processing = filter(None,jobs_processing_string.split(';'))
-	jobs_completed = filter(None,jobs_completed_string.split(';'))
-	jobs_with_errors = filter(None,jobs_with_errors_string.split(';'))
-	jobs_aborted_forever = filter(None,jobs_aborted_forever_string.split(';'))
-	jobs_aborted_to_restart = filter(None,jobs_aborted_to_restart_string.split(';'))
-	jobs_aborted_newtimes = filter(None,jobs_aborted_newtimes_string.split(';'))
-	jobs_aborted_newmems = filter(None,jobs_aborted_newmems_string.split(';'))
-		# 'filter' removes empty strings
-
-	jobs_to_process_updated = jobs_to_process[:]
-	jobs_processing_updated = []
-	jobs_completed_updated = jobs_completed[:]
-	jobs_with_errors_updated = jobs_with_errors[:]
-	jobs_aborted_forever_updated = jobs_aborted_forever[:]
-	jobs_aborted_to_restart_updated = jobs_aborted_to_restart[:]
-	jobs_aborted_newtimes_updated = jobs_aborted_newtimes[:]
-	jobs_aborted_newmems_updated = jobs_aborted_newmems[:]
-	# make sure there are any jobs being processed right now
-
-	jobs_aborted_to_restart_new = []
-	jobs_aborted_newtimes_new = []
-	jobs_aborted_newmems_new = []
-
-###	jobs_still_in_processing = Job_Process_Finder(username,current_job_name)
-###	jobs_processing_updated.extend(jobs_still_in_processing)
-
-###	# move jobs that are not still in processing into 'jobs_completed_updated'
-###	jobs_just_finished = list(set(jobs_processing)-set(jobs_still_in_processing))
-
-	# In jobs that have just been finished, look for jobs that never
-		# completed, and sort those into jobs that just need to be
-		# restarted and error jobs
-
-	if jobs_just_finished:
-		
-###		try:
-###			completed_files = subprocess.check_output('ls -lrt '
-###				+ current_output_folder,shell=True)
-###		except subprocess.CalledProcessError:
-###			completed_files = ''
-###
-###		completed_job_list = re.findall(' ' + current_output_filename + '_(\d+?)\.'
-###			+ current_output_extension,completed_files,re.DOTALL)
-###
-###		true_jobs_just_finished = list(set(completed_job_list) & set(jobs_just_finished))
-###		jobs_completed_updated.extend(true_jobs_just_finished)
-
-		
 
 	aborted_jobs_to_submit = []
 	aborted_newtimes_to_submit = []
