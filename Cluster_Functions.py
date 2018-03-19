@@ -6,6 +6,7 @@
 import os
 import csv
 import subprocess
+import numpy
 
 class Job(object):
 	# job object that stores properties of individual jobs in queue
@@ -18,6 +19,10 @@ class Job(object):
 		self.status = new_status
 	def get_status(self):
 		return(self.status)
+	def get_time(self):
+		return(self.time)
+	def get_mem(self):
+		return(self.mem)
 	def change_mem(self,new_mem):
 		self.mem = new_mem
 	def change_time(self,new_time):
@@ -96,6 +101,8 @@ class JobListManager(object):
 			self.jobs[j.number] = j
 		self.job_parameters = job_parameters
 		self.cluster_parameters = cluster_parameters
+	def subset(self,job_number_list):
+
 	def get_job_name(self):
 		# returns the name of the jobs
 		job_name = self.job_parameters.name
@@ -112,6 +119,18 @@ class JobListManager(object):
 			if self.jobs[num].status == status:
 				job_subset_list.extend(num)
 		return job_subset_list
+	def get_job_times(self,number_list):
+		# gets list of job times for all jobs in number_list
+		job_time_list = []
+		for num in number_list:
+			job_time_list.extend(self.jobs[num].get_time())
+		return(job_time_list)
+	def get_job_mems(self,number_list):
+		# gets list of job memories for all jobs in number_list
+		job_mem_list = []
+		for num in number_list:
+			job_mem_list.extend(self.jobs[num].get_mem())
+		return(job_mem_list)
 	def batch_status_change(self, number_list, new_status):
 		# changes the status of all jobs in number_list to new_status
 		for num in number_list:
@@ -280,6 +299,56 @@ class JobListManager(object):
 		missing_jobs = list(set(jobs_just_finished)-set(jobs_just_completed))
 		if missing_jobs:
 			self._missing_job_processor(missing_jobs)
+	def _get_jobs_to_submit(self):
+		# get list of job numbers that have to_process or
+			# aborted_to_restart status
+		jobs_aborted_to_restart = \
+			self.get_jobs_by_status(JobStatus.ABORTED_TO_RESTART)
+		jobs_to_process = \
+			self.get_jobs_by_status(JobStatus.TO_PROCESS)
+		job_candidate_numbers = jobs_aborted_to_restart + jobs_to_process
+		return(job_candidate_numbers)
+	def _group_jobs_by_time_and_mem(times,mems,order):
+		# Group jobs based on common time and mem requirement
+			# times, mems, order must all by numpy.arrays
+		# reorder job_candidate_times and job_candidate_mems
+		times_sorted = times[order]
+		mems_sorted = mems[order]
+		# identify positions where time and mem don't change from previous position
+		time_unchanged = numpy.diff(times_sorted) == 0
+		mem_unchanged = numpy.diff(mems_sorted) == 0
+		properties_unchanged = time_unchanged*mem_unchanged
+		split_indices = numpy.where(numpy.logical_not(properties_unchanged))[0]+1
+		# Split data at split_indices
+		split_order = numpy.split(order,split_indices)
+		return(split_order)
+	def _group_jobs_for_sub(self,job_num_list):
+		# Get the order in which jobs should be considered for submission
+			# Then group jobs based on common mem and time requirement
+		# get times  and memory amts for jobs that have to_process or
+			# aborted_to_restart status
+		job_candidate_times = \
+			numpy.array(self.get_job_times(job_num_list))
+		job_candidate_mems = \
+			numpy.array(self.get_job_mems(job_num_list))
+		# sort first by job times, then by memory
+			# (lexsort input looks backwards)
+		new_job_order_indices = numpy.lexsort((job_candidate_mems,job_candidate_times))[::-1]
+		# group sorted jobs by common memory and time
+		grouped_job_order_indices = \
+			_group_jobs_by_time_and_mem(job_candidate_times,job_candidate_mems, \
+				new_job_order_indices)
+		job_num_list_grouped = [[job_num_list[j] for j in i] for i in \
+			grouped_job_order_indices]
+		return(job_num_list_grouped)
+	def submit_jobs(self):
+		job_submission_candidate_nums = self._get_jobs_to_submit()
+		job_submission_candidate_nums_grouped = \
+			self._group_jobs_for_sub(job_submission_candidate_nums)
+
+	# first, submit aborted jobs, starting with the one requiring the most time
+	# sort jobs by time/memory and submit in batches that way
+	# update job_list_manager along the way
 
 class TrackfileManager(object):
 	# Handles writing and reading of trackfile
@@ -439,19 +508,6 @@ class SlurmManager(object):
 				# need additional returns at end of shell scripts
 
 		return None
-
-class JobSubmitter(object):
-	# Handles selection of jobs to submit and job submission
-	def __init__(self,job_parameters,job_list_manager):
-		self.job_parameters = job_parameters
-		self.job_list_manager = job_list_manager
-	def _order_jobs(self,job_number_list):
-
-	def _group_jobs(self):
-
-	# first, submit aborted jobs, starting with the one requiring the most time
-	# sort jobs by time/memory and submit in batches that way
-	# update job_list_manager along the way
 
 
 
