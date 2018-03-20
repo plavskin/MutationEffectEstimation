@@ -53,6 +53,7 @@ class ClusterParameters(object):
 		self.starting_mem = parameter_list["starting_mem"]
 		self.starting_time = parameter_list["starting_time"]
 		self.temp_storage_path = parameter_list["temp_storage_folder"]
+		self.max_char_num = parameter_list["max_char_num"]
 		self.current_mem = self.starting_mem
 		self.current_time = self.starting_time
 	def set_current_time(self,new_time):
@@ -92,6 +93,134 @@ class JobParameters(object):
 		self.module = module
 		self.code_run_string = code_run_string
 
+class BatchSubmissionManager(object):
+	# Holds parameters for current job submission session, and manages
+		# which jobs from current batch are submitted
+	# Algorithm here assumes space_in_queue is typically more limiting
+		# than max_char_num and batches_remaining
+	def __init__(self,job_list,max_char_num,space_in_queue,batches_remaining):
+		self.space_in_queue = space_in_queue
+		self.batches_remaining = batches_remaining
+		self.job_list = job_list
+		self.jobs_to_submit = []
+		self.job_submission_string_list = ['']
+		self.max_char_num = max_char_num
+		self.remaining_chars = max_char_num
+		self.jobs_to_error = []
+	def get_error_jobs(self):
+		# returns jobs whose corresponding strings (for the job alone
+			# plus a comma) are longer than max_char_num
+		return(self.jobs_to_error)
+	def get_submission_string_list(self):
+		return(self.job_submission_string_list)
+	def get_submitted_jobs(self):
+		return(self.jobs_to_submit)
+	def get_batches_remaining(self):
+		return(self.batches_remaining)
+	def get_space_left_in_queue(self):
+		return(self.space_in_queue)
+	def _update_space_in_queue(self,job_number):
+		self.space_in_queue = self.space_in_queue - job_number
+	def _update_batches_remaining(self,batch_number):
+		self.batches_remaining = batches_remaining - batch_number
+	def _update_remaining_chars(self,char_number):
+		self.remaining_chars = self.remaining_chars - char_number
+	def _add_to_submission_string(self,new_string):
+		self.job_submission_string_list[-1] = self.job_submission_string_list[-1]+new_string
+	def _add_jobs_to_submission_list(self,job_sublist,job_string):
+		self._add_to_submission_string(job_string)
+		self.jobs_to_submit.extend(job_sublist)
+		self._update_space_in_queue(len(job_sublist))
+		self._update_remaining_chars(len(job_string))
+	def _reset_batch(self):
+		self.remaining_chars = max_char_num
+		self.job_submission_string_list.append('')
+	def _consecutive_parser(job_list, stepsize = 1):
+		# Splits list of integers into list of lists of consecutive nums
+		# Returns the list of consecutive integer lists, as well as a
+			# list of lists of the indices of each member of each
+			# consecutive integer lists in the original job_list
+		np_job_list = numpy.array(job_list)
+		sorted_indices = numpy.argsort(np_job_list)
+		sorted_job_list = np_job_list[sorted_indices]
+		# Find position of indices where the number is higher than
+			# previous number + stepsize
+		split_indices = numpy.where(numpy.diff(sorted_job_list) != stepsize)[0]+1
+		# Split data at split_indices
+		split_job_list = numpy.split(sorted_job_list,split_indices)
+		return(split_job_list)
+	def _job_list_string_converter(self,consecutive_job_list):
+		# Converts a consecutive list of job numbers into a job
+			# submission string for SLURM
+		# test that consecutive_job_list is actually consecutive
+		test_list = _consecutive_parser(consecutive_job_list)
+		if len(test_list) > 1:
+			print('Error! BatchSubmissionManager._job_list_string_converter provided unparsed list')
+		# Denote consecutive job sublists by dashes between the min
+			# and max of the sublist; separate job sublists by commas
+		current_job_num = len(consecutive_job_list)
+		if current_job_num==1:
+			current_job_string = (str(consecutive_job_list[0])+',')
+		else:
+			current_job_string = (str(min(consecutive_job_list))+'-'+
+				str(max(consecutive_job_list))+',')
+		return(current_job_string)
+	def _job_list_parser(self,job_sublist):
+		# Taking in a list of jobs, reorganize them so that consecutive
+			# jobs can be called as intervals (e.g. '5-8' for
+			# '5,6,7,8'), and find the optimal arrangement that
+			# maximizes job number so that the character count for the
+			# list of jobs doesn't exceed max_char_num
+		# Assumes that max_char_num is sufficiently large
+			# i.e. >(2*(max number of digits in a job number)+2)
+		if self.space_in_queue < len(job_sublist):
+			# reorder job_sublist and truncate
+			job_sublist = numpy.sort(job_sublist)[0:self.space_in_queue]
+		# create a string that can be used to submit those jobs
+			# to SLURM, and count the number of characters in that string
+		current_jobs_string = _job_list_string_converter(job_sublist)
+		if len(current_jobs_string) < self.remaining_chars:
+			self._add_jobs_to_submission_list(job_sublist,current_job_string)
+		else:
+			# start new batch, try adding jobs to list again
+			self._update_batches_remaining(1)
+			if self.batches_remaining > 0:
+				self._reset_batch()
+				if len(current_jobs_string) < self.remaining_chars:
+					self._add_jobs_to_submission_list(job_sublist,current_job_string)
+				else:
+					# try splitting up job_list one-by-one
+					for current_job in job_sublist:
+						current_jobs_string = _job_list_string_converter([current_job])
+						if len(current_jobs_string) < self.remaining_chars:
+							self._add_jobs_to_submission_list(job_sublist,current_job_string)
+						else:
+							self.jobs_to_error.extend(current_job)
+	def select_jobs_to_sub(self):
+		# Based on the amount of space available in the queue, splits jobs
+			# into ones that can be run now vs those that have to be run
+			# later
+		#################
+		# SLURM-based cluster doesn't appear to slow down as a penalty for
+			# submitting jobs one-by-one so don't reset
+			# max_sbatches_in_one_run if submitting jobs one-by-one
+		#################
+		# Take the maximum number of jobs that can be submitted from
+			# initial_job_list, and parse them to ensure that
+			#	1. they're listed in the most efficient SLURM-readable
+			#		format
+			#	2. this list doesn't exceed the max number of chars
+			#		allowed by SLURM
+		################# maybe correct? #################	
+		job_list_split = self._consecutive_parser(self.job_list)
+		job_number_list = [len(i) for i in job_list_split]
+		order_by_job_num = numpy.argsort(job_number_list)
+		job_list_split_sorted = job_list_split[order_by_job_num]
+		for current_job_list in job_list_split_sorted:
+			if self.space_in_queue > 0 and self.batches_remaining > 0:
+				self._job_list_parser(current_job_list)
+		self._update_batches_remaining(1)
+
 class JobListManager(object):
 	# holds list of jobs corresponding to a single 'name'
 	# updates current job status
@@ -101,8 +230,6 @@ class JobListManager(object):
 			self.jobs[j.number] = j
 		self.job_parameters = job_parameters
 		self.cluster_parameters = cluster_parameters
-	def subset(self,job_number_list):
-
 	def get_job_name(self):
 		# returns the name of the jobs
 		job_name = self.job_parameters.name
@@ -341,14 +468,41 @@ class JobListManager(object):
 		job_num_list_grouped = [[job_num_list[j] for j in i] for i in \
 			grouped_job_order_indices]
 		return(job_num_list_grouped)
-	def submit_jobs(self):
-		job_submission_candidate_nums = self._get_jobs_to_submit()
-		job_submission_candidate_nums_grouped = \
-			self._group_jobs_for_sub(job_submission_candidate_nums)
+	def submit_jobs(self,slurm_manager):
+		# Submits jobs and updates job statuses accordingly
+		job_sub_candidate_nums = self._get_jobs_to_submit()
+		job_sub_candidate_nums_grouped = \
+			self._group_jobs_for_sub(job_sub_candidate_nums)
+		# while there is still space in the cluster queue and while the
+			# max number of consecutive batch submissions has not been
+			# surpassed, submit jobs in batches, starting with the
+			# batches requiring the most time and memory
+		batch_number_remaining = self.max_sub_batches_in_one_run
+		# get amount of space available in queue
+		space_in_queue = slurm_manager.free_job_calculator()
+		jobs_to_submit = []
+		submission_string_list = []
+		for current_batch in job_sub_candidate_nums_grouped:
+			# initialize batch submission manager
+			submission_manager = BatchSubmissionManager(current_batch, \
+				self.max_char_num, space_in_queue, batch_number_remaining)
+			submission_manager.select_jobs_to_sub()
+			# update batch_number_remaining and space_in_queue
+			batch_number_remaining = submission_manager.get_batches_remaining()
+			space_in_queue = submission_manager.get_space_left_in_queue()
+			# get list of jobs whose corresponding strings (for the job
+				# alone plus a comma) are longer than max_char_num, and
+				# give these 'ERROR' status
+			jobs_exceeding_max_char_num = submission_manager.get_error_jobs()
+			self.batch_status_change(jobs_exceeding_max_char_num,JobStatus.ERROR)
+			# get list of jobs which can be submitted for this batch
+			current_jobs_to_submit = submission_manager.get_submitted_jobs()
+			jobs_to_submit.extend(current_jobs_to_submit)
+			current_job_submission_strings = submission_manager.get_submission_string_list()
+			submission_string_list.append(current_job_submission_strings)
 
-	# first, submit aborted jobs, starting with the one requiring the most time
-	# sort jobs by time/memory and submit in batches that way
-	# update job_list_manager along the way
+		
+	
 
 class TrackfileManager(object):
 	# Handles writing and reading of trackfile
@@ -639,238 +793,13 @@ def Trackfile_Processor(max_repeat,current_mode,current_trackfile,current_comple
 			# the associated jobs_aborted_newtimes_updated and
 			# jobs_aborted_newmems_updated
 
-	# update trackfile
-	jobs_to_process_updated_string = ';'.join(str(x) for x in
-		jobs_to_process_updated)
-	jobs_processing_updated_string = ';'.join(str(x) for x in
-		jobs_processing_updated)
-	jobs_completed_updated_string = ';'.join(str(x) for x in
-		jobs_completed_updated)
-	jobs_with_errors_updated_string = ';'.join(str(x) for x in
-		jobs_with_errors_updated)
-	jobs_aborted_forever_updated_string = ';'.join(str(x) for x in
-		jobs_aborted_forever_updated)
-	jobs_aborted_to_restart_updated_string = ';'.join(str(x) for x in
-		jobs_aborted_to_restart_updated)
-	jobs_aborted_newtimes_updated_string = ';'.join(str(x) for x in
-		jobs_aborted_newtimes_updated)
-	jobs_aborted_newmems_updated_string = ';'.join(str(x) for x in
-		jobs_aborted_newmems_updated)
-	
-	trackfile_contents[1][1] = \
-		jobs_to_process_updated_string
-	trackfile_contents[2][1] = \
-		len(jobs_to_process_updated)
-	trackfile_contents[1][2] = \
-		jobs_processing_updated_string
-	trackfile_contents[2][2] = \
-		len(jobs_processing_updated)
-	trackfile_contents[1][3] = \
-		jobs_completed_updated_string
-	trackfile_contents[2][3] = \
-		len(jobs_completed_updated)
-	trackfile_contents[1][4] = \
-		jobs_with_errors_updated_string
-	trackfile_contents[2][4] = \
-		len(jobs_with_errors_updated)
-	trackfile_contents[1][5] = \
-		jobs_aborted_forever_updated_string
-	trackfile_contents[2][5] = \
-		len(jobs_aborted_forever_updated)
-	trackfile_contents[1][6] = \
-		jobs_aborted_to_restart_updated_string
-	trackfile_contents[2][6] = \
-		len(jobs_aborted_to_restart_updated)
-	trackfile_contents[1][7] = \
-		jobs_aborted_newtimes_updated_string
-	trackfile_contents[2][7] = ''
-	trackfile_contents[1][8] = \
-		jobs_aborted_newmems_updated_string
-	trackfile_contents[2][8] = ''	
-	with open(current_trackfile, 'w') as csvfile:
-		trackfile_writer = csv.writer(csvfile)
-		for trackfile_row in trackfile_contents:
-			trackfile_writer.writerow(trackfile_row[:])
 
 	return [new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtimes_to_submit,\
 		aborted_newmems_to_submit]
 
-def Consecutive_Parser(data, stepsize = 1):
-	# Splits list of integers into list of lists of consecutive numbers
-	# Returns the list of consecutive integer lists, as well as a list
-		# of lists of the indices of each member of each consecutive
-		# integer lists in the original data
-	np_data = numpy.array(data)
 
-	sorted_indices = numpy.argsort(np_data)
-	sorted_data = np_data[sorted_indices]
 
-	# Find position of indices where the number is higher than previous
-		# number + stepsize
-	split_indices = numpy.where(numpy.diff(sorted_data) != stepsize)[0]+1
 
-	# Split data at split_indices
-	split_data = numpy.split(sorted_data,split_indices)
-	# Create list of lists of indices from original data corresponding
-		# to every list of values in split_data
-	split_sorted_indices = numpy.split(sorted_indices,split_indices)
-
-	return([split_data,split_sorted_indices])
-
-def Job_List_String_Converter(job_list):
-	# Converts a list of job numbers into a job submission string for
-		# SLURM
-
-	# Split job_list into lists of consecutive jobs that can be
-		# submitted in one group to SLURM
-	# Consecutive_Parser takes a list of integers, returns numpy
-		# array of numpy arrays
-	[split_job_list,_] = Consecutive_Parser(map(int,job_list))
-	job_string = ''
-
-	# Denote consecutive job sublists by dashes between the min
-		# and max of the sublist; separate job sublists by commas
-	for current_job_sublist in split_job_list:
-		current_job_num = len(current_job_sublist)
-		if current_job_num==1:
-			current_job_string = (str(current_job_sublist[0])+',')
-		else:
-			current_job_string = (str(min(current_job_sublist))+'-'+
-				str(max(current_job_sublist))+',')
-		job_string = job_string + current_job_string
-
-	return(job_string)
-
-def Job_List_Parser(job_list,max_char_num=4096):
-	# Taking in a list of jobs, reorganize them so that consecutive jobs
-		# can be called as intervals (e.g. '5-8' for '5,6,7,8', and find
-		# the optimal arrangement that maximized job number so that the
-		# character count for the list of jobs doesn't exceed max_char_num
-	# Assumes that max_char_num is sufficiently large
-		# i.e. >(2*(max number of digits in a job number)+2)
-
-	# Split job_list into lists of consecutive jobs that can be
-		# submitted in one group to SLURM
-	# Consecutive_Parser takes a list of integers, returns numpy
-		# array of numpy arrays
-	[split_job_list,split_index_list] = Consecutive_Parser(map(int,job_list))
-
-	job_group_number = len(split_job_list)
-	#string_job_list = []
-	char_count_list = numpy.empty(job_group_number)
-	job_number_list = numpy.empty(job_group_number)
-
-	# For each set of consecutive jobs in split_job_list, create a
-		# string that can be used to submit those jobs to SLURM,
-		# and count the number of characters in that string
-	# Keep track of the job submission strings (string_job_list),
-		# character counts (char_count_list), and number of jobs
-		# (job_number_list) in each consecutive list of jobs
-	for counter,current_job_sublist in enumerate(split_job_list):
-		current_jobs_string = Job_List_String_Converter(current_job_sublist)
-		current_job_num = len(current_job_sublist)
-		current_char_count = len(current_jobs_string)
-		char_count_list[counter] = current_char_count
-		job_number_list[counter] = current_job_num
-		#string_job_list.append(current_jobs_string)
-
-	# sort character_count_list based on job number submitted in
-		# descending order
-	order_by_job_num = numpy.argsort(-job_number_list)
-	char_count_list_sorted = char_count_list[order_by_job_num]
-
-	# maximize the number of jobs that can be submitted without
-		# exceeding max_char_num
-	jobs_submitted = []
-	jobs_submitted_indices = []
-	submission_string = ''
-	additional_jobs_possible = True
-	remaining_chars = max_char_num-1
-	used_positions = numpy.array([False]*job_group_number)
-	unused_char_count_list_sorted = char_count_list_sorted[:]
-
-	while additional_jobs_possible:
-		# One set at a time, submit sets of jobs that would not equal
-			# max_char_num when submitted
-		# find the number of characters that will be incurred for every n if n
-			# sets of jobs from string_job_list are submitted
-		unused_char_count_list_sorted[used_positions] = max_char_num+1
-			# eliminate used positions from following rounds of job
-				# set selection
-		allowed_for_submission = unused_char_count_list_sorted <= remaining_chars
-		allowed_indices = numpy.where(allowed_for_submission)[0] # need [0] since numpy.where returns a tuple
-		number_submittable_job_lists = sum(allowed_for_submission)
-		if number_submittable_job_lists > 0:
-			current_sorted_index_to_use = allowed_indices[0]
-			current_original_index_to_use = order_by_job_num[current_sorted_index_to_use]
-			current_sublist = split_job_list[current_original_index_to_use]
-			current_index_sublist = split_index_list[current_original_index_to_use]
-			jobs_submitted.extend(current_index_sublist)
-			jobs_submitted_indices.extend(current_index_sublist)
-			#submission_string = submission_string+string_job_list[current_original_index_to_use]
-			remaining_chars = remaining_chars-char_count_list[current_original_index_to_use]
-			used_positions[current_sorted_index_to_use] = True
-		else:
-			additional_jobs_possible = False
-
-	#return([jobs_submitted, jobs_submitted_indices, submission_string])
-	return(jobs_submitted_indices)
-
-def Jobs_to_Run_Selector(username,list_of_job_property_lists,space_in_queue,
-	max_sbatches_in_one_run = float('Inf')):
-	# Based on the amount of space available in the queue, splits jobs
-		# into ones that can be run now vs those that have to be run
-		# later
-
-	#################
-	# SLURM-based cluster doesn't appear to slow down as a penalty for
-		# submitting jobs one-by-one so don't reset
-		# max_sbatches_in_one_run if submitting jobs one-by-one
-
-	#if len(list_of_job_property_lists) > 1:
-	#	max_sbatches_in_one_run = 25
-			# if more than ~25 jobs are submitted in a row, submission
-				# slows down very significantly, at least on PBS
-			# Not sure this is true on slurm, but keep this for now
-	#################
-
-	# list_of_job_property_lists contains 1 or more lists, where the
-		# first is a list of jobs and the latter are properties of each
-		# of the job (e.g. runtime) that need to be retained
-	initial_job_list = list_of_job_property_lists[0]
-
-	list_number = len(list_of_job_property_lists)
-
-	# Take the maximum number of jobs that can be submitted from
-		# initial_job_list, and parse them to ensure that
-		#	1. they're listed in the most efficient SLURM-readable
-		#		format
-		#	2. this list doesn't exceed the max number of chars
-		#		allowed by SLURM
-	num_jobs_to_start = min(len(initial_job_list),space_in_queue,max_sbatches_in_one_run)
-	initial_truncated_job_list = initial_job_list[0:num_jobs_to_start]
-	#[jobs_submitted, jobs_submitted_indices, submission_string] = Job_List_Parser(initial_truncated_job_list)
-	if num_jobs_to_start > 0:
-		jobs_submitted_indices = Job_List_Parser(initial_truncated_job_list)
-	else:
-		jobs_submitted_indices = []
-
-	list_of_job_property_lists_to_submit = []
-	list_of_job_property_lists_for_later = []
-
-	# Make list of indices that aren't being submitted in this round
-	indices_for_later = numpy.setdiff1d(numpy.array(range(0,len(initial_job_list))),
-		jobs_submitted_indices)
-
-	for sublist_idx,current_sublist in enumerate(list_of_job_property_lists):
-		list_of_job_property_lists_to_submit.append([])
-		list_of_job_property_lists_for_later.append([])
-		for current_idx_to_submit in jobs_submitted_indices:
-			list_of_job_property_lists_to_submit[sublist_idx].append(current_sublist[current_idx_to_submit])
-		for current_idx_for_later in indices_for_later:
-			list_of_job_property_lists_for_later[sublist_idx].append(current_sublist[current_idx_for_later])
-
-	return([list_of_job_property_lists_to_submit,list_of_job_property_lists_for_later])
 
 def Job_List_Submitter(new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtimes_to_submit,
 	aborted_newmems_to_submit,current_sbatch_filename,parallel_processors,
