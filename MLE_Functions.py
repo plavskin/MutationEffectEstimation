@@ -5,6 +5,7 @@
 import os
 import numpy
 import Cluster_Functions
+import copy
 
 class FolderManager(object):
 	def __init__(self,cluster_parameters,experiment_folder_name):
@@ -88,7 +89,7 @@ class MLEParameters(object):
 	def _id_parameters_to_loop_over(self):
 		# identify which parameters need to be looped through in MLE
 			# i.e. fitted parameters that MLE needs to be performed on
-		# include 'unfixed' 'parameter', in which case no parameter is fixed
+		# include 'unfixed' parameter, in which case no parameter is fixed
 		parameters_to_loop_over_bool = \
 			numpy.invert(self.current_permafixed_parameter_bool)* \
 			numpy.invert((self.current_profile_point_list < 1))
@@ -171,19 +172,116 @@ class MLEParameters(object):
 		self.current_parallel_processors = min(self.parallel_processors,
 			self.current_ms_positions**self.current_ms_grid_dimensions)
 
+class SubmissionStringProcessor(object):
+	# creates a code submission string appropriate to the programming
+		# environment (module) being used
+	def __init__(self,module,key_list,value_list, code_name):
+		self._submission_string_generator(key_list,value_list,module,code_name)
+	def get_code_run_string(self):
+		return(self.code_run_string)
+	def _convert_mixed_list(self,current_list, module):
+		# checks type of every element of current_list and converts it
+			# to a string
+		# joins elements into single string
+		converted_by_part_list = []
+		for current_value in value_list:
+			current_val_converted = self._convert_val(current_value)
+			converted_by_part_list.append(current_val_converted)
+		converted_list = self._convert_str_list(converted_by_part_list, module)
+		return(converted_list)
+	def _convert_str_list(current_list, module):
+		if module == 'matlab':
+			converted_list = '{\'' + '\',\''.join(current_list) + '\'}'
+		else:
+			print('Error! unrecognized module.')
+		return(converted_list)
+	def _convert_int_list(current_list, module):
+		if module == 'matlab':
+			converted_list = '[' + ','.join(current_list) + ']'
+		else:
+			print('Error! unrecognized module.')
+		return(converted_list)
+	def _convert_str(current_str, module):
+		if module == 'matlab':
+			converted_str = '\'' + current_str + '\''
+		else:
+			print('Error! unrecognized module.')
+		return(converted_str)
+	def _convert_int(current_int, module):
+		if module == 'matlab':
+			converted_int = str(current_int)
+		else:
+			print('Error! unrecognized module.')
+		return(converted_int)
+	def _convert_val(self,current_value, module):
+		if isinstance(current_value, list):
+			if all(isinstance(temp_val,int) for temp_val in current_value):
+				converted_value = self._convert_int_list(current_value, module)
+			elif all(isinstance(temp_val,str) for temp_val in current_value):
+				converted_value = self._convert_str_list(current_value, module)
+			else:
+				converted_value = self._convert_mixed_list(current_value, module)
+		elif isinstance(current_value, int):
+			converted_value = self._convert_int(current_value, module)
+		elif isinstance(current_value, basestring):
+			converted_value = self._convert_str(current_value, module)
+		else:
+			print('Error! Trying to convert list element of unrecognized type in submission string conversion:')
+			print(current_value)
+		return(converted_value)
+	def _submission_string_generator(self,key_list,value_list,module,code_name):
+		converted_key_string = self._convert_mixed_list(key_list, module)
+		converted_value_string = self._convert_mixed_list(value_list, module)
+		matlab_input_list = [converted_key_string, converted_value_string]
+		if module == 'matlab':
+			code_run_string = ('\'' + code_name + '(\'\"'
+				+ '\"\",\"\"'.join(matlab_input_list) + '\"\");exit\"')
+		self.code_run_string = code_run_string
+
 class MLEstimation(object):
-	def __init__(self,mle_parameters,cluster_folders,mle_folders,input_data_list):
-		self.mle_parameters = mle_parameters
-		self.cluster_folders = cluster_folders
-		self.mle_folders = mle_folders
+	def __init__(self,mle_parameters,cluster_parameters,cluster_folders,mle_folders,input_data_prefix):
+		self.mle_parameters = copy.deepcopy(mle_parameters)
+		self.cluster_parameters = copy.deepcopy(cluster_parameters)
+		self.cluster_folders = copy.deepcopy(cluster_folders)
+		self.mle_folders = copy.deepcopy(mle_folders)
 		self.completefile = os.path.join(cluster_folders.completefile_path, \
 			('MLE_' + mle_parameters.output_identifier + '_completefile.txt'))
 		self.job_name = mle_folders.experiment_folder_name + '-MLE-' + \
 			mle_parameters.output_id_parameter
-		self.input_data_list = input_data_list
+		self.input_data_prefix = input_data_prefix
+		self._process_input_data_dict()
 		self.output_filename = 'data_'+mle_parameters.output_id_parameter
 		self.output_extension = 'csv'
 		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
+		self.module = 'matlab'
+		self.code_name = 'MLE_' + mle_parameters.current_mode
+	def _create_code_run_string(self):
+		key_list = ['external_counter','combined_fixed_parameter_array', \
+			'combined_min_array','combined_max_array','combined_length_array', \
+			'combined_position_array','combined_start_values_array', \
+			'parameter_list','csv_output_prename','output_folder', \
+			'input_data_prefix','parallel_processors','ms_positions', \
+			'combined_profile_ub_array','combined_profile_lb_array']
+		value_list = [self.cluster_parameters.within_batch_counter, \
+			self.mle_parameters.current_tempfixed_parameter_bool, \
+			self.mle_parameters.current_min_parameter_val_list, \
+			self.mle_parameters.current_max_parameter_val_list, \
+			self.mle_parameters.current_profile_point_num, \
+			[self.cluster_parameters.within_batch_counter], \
+				# if combined_position_array has length=1, MLE programs
+					# interpret it as an array of the correct length
+					# with the same value repeated
+			self.mle_parameters.current_start_parameter_val_list, \
+			self.mle_parameters.current_parameter_list, \
+			self.output_filename, self.output_path, \
+			self.input_data_prefix, self.mle_parameters.parallel_processors, \
+			self.mle_parameters.current_ms_positions, \
+			self.mle_parameters.current_profile_upper_limit_list, \
+			self.mle_parameters.current_profile_lower_limit_list]
+		submission_string_processor = \
+			SubmissionStringProcessor(self.module, key_list, value_list, \
+				self.code_name)
+		code_run_string = submission_string_processor.get_code_run_string()
 
 
 ########################################################################
