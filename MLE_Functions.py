@@ -58,7 +58,7 @@ class MLEParameters(object):
 		self.profile_upper_limits_by_mode = \
 			parameter_list["profile_upper_limits_by_mode"].split('|')
 		self.ms_positions = parameter_list["multistart_positions"].split('|')
-		self.ms_grid_dimensions = parameter_list["multistart_grid_dimensions"].split('|')
+		self.ms_grid_dimensions = parameter_list["multistart_grid_parameters"].split('|')
 		self.parallel_processors = int(parameter_list["parallel_processors"])
 	def _retrieve_current_values(list_by_mode,mode_idx,current_mode,param_num):
 		# retrieves the appropriate list from a list of parameter lists
@@ -110,7 +110,7 @@ class MLEParameters(object):
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_sim_repeats = self.sim_repeats_by_mode[mode_idx]
 		self.current_ms_positions = int(self.ms_positions[mode_idx])
-		self.mode_ms_grid_dimensions = int(self.ms_grid_dimensions[mode_idx])
+		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx].split(';')
 		self.current_parameter_list = self.parameters_by_mode[mode_idx].split(';')
 		# find the total number of parameters, including fixed ones
 		self.total_param_num = len(self.current_parameter_list)
@@ -156,7 +156,6 @@ class MLEParameters(object):
 			self.current_tempfixed_parameter_bool = \
 				self.current_permafixed_parameter_bool
 			# other properties need to be NaN
-			self.current_ms_grid_dimensions = self.mode_ms_grid_dimensions
 		else:
 			# find index of current_fixed_parameter in parameter list
 			current_fixed_parameter_idx = self.current_parameter_list.index(parameter_name)
@@ -167,8 +166,9 @@ class MLEParameters(object):
 				True
 			self.current_profile_point_num = \
 				self.current_profile_points_list[current_fixed_parameter_idx]
-			self.current_ms_grid_dimensions = self.mode_ms_grid_dimensions-1
 		self.output_id_parameter = self.output_identifier + '_' self.current_fixed_parameter
+		# identify how many dimensions are being used in multistart
+		self.current_ms_grid_dimensions = sum([x == current_fixed_parameter for x in self.current_ms_grid_parameters])
 		self.current_parallel_processors = min(self.parallel_processors,
 			self.current_ms_positions**self.current_ms_grid_dimensions)
 
@@ -255,13 +255,15 @@ class MLEstimation(object):
 		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
 		self.module = 'matlab'
 		self.code_name = 'MLE_' + mle_parameters.current_mode
+		self._create_code_run_string()
 	def _create_code_run_string(self):
 		key_list = ['external_counter','combined_fixed_parameter_array', \
 			'combined_min_array','combined_max_array','combined_length_array', \
 			'combined_position_array','combined_start_values_array', \
 			'parameter_list','csv_output_prename','output_folder', \
 			'input_data_prefix','parallel_processors','ms_positions', \
-			'combined_profile_ub_array','combined_profile_lb_array']
+			'combined_profile_ub_array','combined_profile_lb_array', \
+			'ms_grid_parameter_array']
 		value_list = [self.cluster_parameters.within_batch_counter, \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
@@ -274,14 +276,17 @@ class MLEstimation(object):
 			self.mle_parameters.current_start_parameter_val_list, \
 			self.mle_parameters.current_parameter_list, \
 			self.output_filename, self.output_path, \
-			self.input_data_prefix, self.mle_parameters.parallel_processors, \
+			self.input_data_prefix, \
+			self.mle_parameters.current_parallel_processors, \
 			self.mle_parameters.current_ms_positions, \
 			self.mle_parameters.current_profile_upper_limit_list, \
-			self.mle_parameters.current_profile_lower_limit_list]
+			self.mle_parameters.current_profile_lower_limit_list,
+			self.current_ms_grid_parameters]
+		############## MISSING MS GRID POSITIONS
 		submission_string_processor = \
 			SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
-		code_run_string = submission_string_processor.get_code_run_string()
+		self.code_run_string = submission_string_processor.get_code_run_string()
 
 
 ########################################################################
