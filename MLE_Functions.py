@@ -239,7 +239,8 @@ class SubmissionStringProcessor(object):
 		self.code_run_string = code_run_string
 
 class MLEstimation(object):
-	def __init__(self,mle_parameters,cluster_parameters,cluster_folders,mle_folders,input_data_prefix):
+	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
+		mle_folders, additional_code_run_keys, additional_code_run_values):
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
@@ -248,22 +249,25 @@ class MLEstimation(object):
 			('MLE_' + mle_parameters.output_identifier + '_completefile.txt'))
 		self.job_name = mle_folders.experiment_folder_name + '-MLE-' + \
 			mle_parameters.output_id_parameter
-		self.input_data_prefix = input_data_prefix
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
 		self._process_input_data_dict()
 		self.output_filename = 'data_'+mle_parameters.output_id_parameter
 		self.output_extension = 'csv'
 		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
 		self.module = 'matlab'
 		self.code_name = 'MLE_' + mle_parameters.current_mode
+		self.additional_beginning_lines_in_sbatch = []
+		self.additional_end_lines_in_sbatch = []
+			# don't include lines specific to matlab parallelization here
 		self._create_code_run_string()
 	def _create_code_run_string(self):
 		key_list = ['external_counter','combined_fixed_parameter_array', \
 			'combined_min_array','combined_max_array','combined_length_array', \
 			'combined_position_array','combined_start_values_array', \
 			'parameter_list','csv_output_prename','output_folder', \
-			'input_data_prefix','parallel_processors','ms_positions', \
-			'combined_profile_ub_array','combined_profile_lb_array', \
-			'ms_grid_parameter_array']
+			'parallel_processors','ms_positions','combined_profile_ub_array', \
+			'combined_profile_lb_array','ms_grid_parameter_array']
 		value_list = [self.cluster_parameters.within_batch_counter, \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
@@ -276,18 +280,50 @@ class MLEstimation(object):
 			self.mle_parameters.current_start_parameter_val_list, \
 			self.mle_parameters.current_parameter_list, \
 			self.output_filename, self.output_path, \
-			self.input_data_prefix, \
 			self.mle_parameters.current_parallel_processors, \
 			self.mle_parameters.current_ms_positions, \
 			self.mle_parameters.current_profile_upper_limit_list, \
 			self.mle_parameters.current_profile_lower_limit_list,
 			self.current_ms_grid_parameters]
-		############## MISSING MS GRID POSITIONS
+		# take values from self.additional_code_run_keys and
+			# self.additional_code_run_values where
+			# self.additional_code_run_keys isn't already in key_list,
+			# and add remaining values to key_list and value_list
+		for current_key, current_val in \
+			zip(self.additional_code_run_keys,self.additional_code_run_values):
+			if not current_key in key_list:
+				key_list.append(current_key)
+				value_list.append(current_val)
+		# process key_list and value_list into a submission string
 		submission_string_processor = \
 			SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
 		self.code_run_string = submission_string_processor.get_code_run_string()
-
+	def run_job_submission(self):
+		# handles submission of the job
+		job_name = self.job_name
+		job_numbers = [x + 1 for x in \
+			list(range(self.mle_parameters.current_profile_point_num))]
+		initial_time = self.cluster_parameters.current_time
+		initiral_mem = self.cluster_parameters.current_mem * \
+			self.mle_parameters.current_parallel_processors
+		cluster_parameters = self.cluster_parameters
+		output_folder = self.output_path
+		output_extension = self.output_extension
+		output_filename = self.output_filename
+		cluster_job_submission_folder = self.cluster_folders.cluster_job_submission_path
+		experiment_folder = self.mle_folders.experiment_path
+		module = self.module
+		code_run_string = self.code_run_string
+		additional_beginning_lines_in_sbatch = self.additional_beginning_lines_in_sbatch
+		additional_end_lines_in_sbatch = self.additional_end_lines_in_sbatch
+		completefile_path = self.completefile
+		
+		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
+			initial_mem, cluster_parameters, output_folder, output_extension, \
+			output_filename, cluster_job_submission_folder, experiment_folder, \
+			module, code_run_string, additional_beginning_lines_in_sbatch, \
+			additional_end_lines_in_sbatch, completefile_path)
 
 ########################################################################
 
