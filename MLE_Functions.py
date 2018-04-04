@@ -60,6 +60,8 @@ class MLEParameters(object):
 		self.ms_positions = parameter_list["multistart_positions"].split('|')
 		self.ms_grid_dimensions = parameter_list["multistart_grid_parameters"].split('|')
 		self.parallel_processors = int(parameter_list["parallel_processors"])
+		self.mode_completeness_tracker = CompletenessTracker(self.mode_list)
+		self.all_modes_complete = False
 	def _retrieve_current_values(list_by_mode,mode_idx,current_mode,param_num):
 		# retrieves the appropriate list from a list of parameter lists
 			# by mode
@@ -141,10 +143,14 @@ class MLEParameters(object):
 			self.current_max_parameter_val_list == self.current_min_parameter_val_list
 		# identify parameters MLE needs to be performed on
 		self._id_parameters_to_loop_over()
-		# set up a list of completefiles and the current summary file
-		self.current_completefile_list = []
+		# set up completefile tracker for these parameters
+		self.parameter_completeness_tracker = CompletenessTracker(self.parameters_to_loop_over)
+		self.current_mode_complete = False
 		# output_identifier is a string that will be included in filenames
 		self.output_identifier = output_identifier
+	def get_fitted_parameter_list(self):
+		# get list of parameters to loop over for current mode
+		return(self.current_parameters_to_loop_over)
 	def set_parameter(self,parameter_name):
 		# set current parameter, number of likelihood profile points
 			# for it, and create a temporary list of fixed parameters
@@ -171,6 +177,23 @@ class MLEParameters(object):
 		self.current_ms_grid_dimensions = sum([x == current_fixed_parameter for x in self.current_ms_grid_parameters])
 		self.current_parallel_processors = min(self.parallel_processors,
 			self.current_ms_positions**self.current_ms_grid_dimensions)
+	def update_parameter_completeness(self, completefile):
+		# checks whether jobs for current parameter are all complete
+		self.parameter_completeness_tracker.update_key_status( \
+			self.current_fixed_parameter,completefile)
+	def check_completeness_within_mode(self):
+		# checks whether all parameters within mode are complete
+		# change mode completeness status accordingly
+		self.parameter_completeness_tracker.check_completeness()
+		self.current_mode_complete = \
+			self.parameter_completeness_tracker.get_completeness()
+		self.mode_completeness_tracker.switch_key_completeness( \
+			self.current_mode, self.current_mode_complete)
+		return(self.current_mode_complete)
+	def check_completeness_across_modes(self):
+		self.mode_completeness_tracker.check_completeness()
+		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
+		return(self.all_modes_complete)
 
 class SubmissionStringProcessor(object):
 	# creates a code submission string appropriate to the programming
@@ -246,21 +269,23 @@ class MLEstimation(object):
 		self.cluster_folders = copy.deepcopy(cluster_folders)
 		self.mle_folders = copy.deepcopy(mle_folders)
 		self.completefile = os.path.join(cluster_folders.completefile_path, \
-			('MLE_' + mle_parameters.output_identifier + '_completefile.txt'))
-		self.job_name = mle_folders.experiment_folder_name + '-MLE-' + \
-			mle_parameters.output_id_parameter
+			'_'.join(['MLE',mle_parameters.output_id_parameter,'completefile.txt']))
+		self.job_name = '-'.join([mle_folders.experiment_folder_name,'MLE', \
+			mle_parameters.output_id_parameter])
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self._process_input_data_dict()
-		self.output_filename = 'data_'+mle_parameters.output_id_parameter
+		self.output_filename = '_'.join(['data',mle_parameters.output_id_parameter])
 		self.output_extension = 'csv'
 		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
 		self.module = 'matlab'
-		self.code_name = 'MLE_' + mle_parameters.current_mode
+		self.code_name = '_'.join(['MLE',mle_parameters.current_mode])
 		self.additional_beginning_lines_in_sbatch = []
 		self.additional_end_lines_in_sbatch = []
 			# don't include lines specific to matlab parallelization here
 		self._create_code_run_string()
+	def get_completefile_path(self):
+		return(self.completefile)
 	def _create_code_run_string(self):
 		key_list = ['external_counter','combined_fixed_parameter_array', \
 			'combined_min_array','combined_max_array','combined_length_array', \
@@ -318,119 +343,103 @@ class MLEstimation(object):
 		additional_beginning_lines_in_sbatch = self.additional_beginning_lines_in_sbatch
 		additional_end_lines_in_sbatch = self.additional_end_lines_in_sbatch
 		completefile_path = self.completefile
-		
+		# set up and run batch jobs
 		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
 			initial_mem, cluster_parameters, output_folder, output_extension, \
 			output_filename, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_string, additional_beginning_lines_in_sbatch, \
 			additional_end_lines_in_sbatch, completefile_path)
 
+class CompletenessTracker(object):
+	# Keeps a running tally of keys (which can be parameters, modes, etc) and checks their completeness
+	def __init__(self,key_list):
+		self._create_completeness_dict(key_list)
+		self.completeness_status = False
+	def _create_completeness_dict(self,key_list):
+		# creates dictionary with parameter names as keys and False as values
+		completeness_list = [False]*len(key_list)
+		self.completeness_dict = dict(zip(key_list,completeness_list))
+	def update_key_status(self, key, completefile_path):
+		# checks whether key has associated completefile and changes its status accordingly
+		if os.path.isfile(completefile_path):
+			self.completeness_dict[key] = True
+	def switch_key_completeness(self, key, value_bool):
+		# switches a key value to value_bool
+		# useful for cases when completefiles not kept track of
+		self.completeness_dict[key] = value_bool
+	def check_completeness(self):
+		# checks whethere all parameters completed
+		if all(self.completeness_dict.values()):
+			self.completeness_status = True
+		else:
+			self.completeness_status = False
+	def get_completeness(self):
+		# returns completeness status
+		return(self.completeness_status)
+
 ########################################################################
 
-def ML_Estimator(completefile_folder,trackfile_folder,profile_points,
-	current_mode,mode_list,username,MLE_time,MLE_memory,slurm_folder,
-	current_fixed_parameter,current_fixed_parameter_bool_list,
-	MLE_output_folder,growth_condition,current_L,current_gridpower,
-	phenotype_file,petite_file,rep,strain_number,
-	parallel_processors_max,output_dir_name,max_memory,max_time,
-	start_values,parameter_max_list,parameter_min_list,
-	pernamently_fixed_parameter_bool,current_parameter_list,
-	total_parameter_number,ms_positions,parameter_profile_ub_list,
-	parameter_profile_lb_list):
-	# runs MLE
+def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
+	mle_folders, experiment_path):
+	# Handles all of MLE across modes, including confidence
+		# interval identification
+	# May be too rigid, so should potentially be moved to main code
+	for current_mode in mle_parameters.mode_list:
+		##### RUN MLE #####
+		output_id_string = current_mode
+		mle_parameters.set_mode(current_mode,output_id_string)
+		MLE_summary_file_path = os.path.join(experiment_path, \
+			'_'.join([output_id_string,'MLE_file.csv']))
+		# use additional_code_run_keys and values to specify where input
+			# data comes from (and any other extra information that
+			# doesn't come from setup_file)
+		additional_code_run_keys = []
+		additional_code_run_values = []
+		# run MLE for current set of parameters
+		run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
+			additional_code_run_keys, additional_code_run_values)
+		# if all parameters for this mode are complete, update mode completeness
+		# this also updates completeness across modes
+		current_mode_mle_complete_status = \
+			mle_parameters.check_completeness_within_mode()
+		if current_mode_complete_status:
+			##### RUN ASYMPTOTIC CI IDENTIFICATION #####
+
+			# if asymptotic CI identification is complete:
+			#	- identify position at which sims need to happen
+			#		- run sims
+			#			- get CIs from sims
 
 
-	if not os.path.isfile(current_MLE_completefile):
-		# Update the trackfile; get list of jobs, if any, for which
-			# simulation still needs to be run
 
-		MLE_memory = MLE_memory*parallel_processors
 
-		[new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtimes_to_submit, \
-			aborted_newmems_to_submit] = Trackfile_Processor(profile_points,
-				current_mode,current_MLE_trackfile,current_MLE_completefile,
-				username,current_job_name,slurm_folder,
-				folder_with_csv_output_files,current_output_filename,
-				current_output_extension,output_dir_name,
-				max_memory,max_time,MLE_memory,MLE_time)
 
-		if new_jobs_to_submit or aborted_jobs_to_submit:
-			# write a sbatch file to submit a batch process
-			current_sbatch_filename = slurm_folder + '/' + current_job_name + '.q'
-			# when doing MLE in 'knownmuts' mode, LL for each strain
-				# has to be calculated separately, so MLE code uses
-				# parfor loop, making code run faster on multiple
-				# processors
+def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
+	additional_code_run_keys, additional_code_run_values):
+	# Handles all of MLE for a particular mode, including confidence
+		# interval identification
+	# Loops through parameters for particular mode, finding ML
+		# parameters at every fixed parameter value
+	# Compiles results together to find asymptotic CI values (based on
+		# chi-sq distribution of 2*log(LR))
+	# Runs through simulations to find simulation-based CI values
+	# mle_parameters must have the mode already set
+	parameters_to_loop_over = mle_parameters.get_fitted_parameter_list()
+	mle_tracker = MLETracker(parameters_to_loop_over)
+	for current_fixed_parameter in parameters_to_loop_over:
+		# set current parameter
+		mle_parameters.set_parameter(current_fixed_parameter)
+		# create MLEstimation object
+		ml_estimator = MLEstimation(mle_parameters, cluster_parameters, \
+			cluster_folders, mle_folders, additional_code_run_keys, \
+			additional_code_run_values)
+		# submit and track current set of jobs
+		ml_estimator.run_job_submission()
+		# track completeness within current mode
+		mle_completefile = ml_estimator.get_completefile_path()
+		mle_parameters.update_parameter_completeness(mle_completefile)
 
-			if parallel_processors > 1:
-				additional_beginning_lines_in_sbatch = ['if [ \"$SLURM_JOBTMP" == \"\" ]; then',\
-				'    export SLURM_JOBTMP=/state/partition1/$USER/$$',\
-				'    mkdir -p $SLURM_JOBTMP',\
-				'fi',\
-				'export MATLAB_PREFDIR=$(mktemp -d $SLURM_JOBTMP/matlab-XXXX)']#,\
-#					'export NTHREADS=$(cat $PBS_NODEFILE | wc -l)']
-				additional_end_lines_in_sbatch = ['rm -rf $SLURM_JOBTMP/*']
-			else:
-				additional_beginning_lines_in_sbatch = []
-				additional_end_lines_in_sbatch = []
 
-			module_to_use = 'matlab'
-
-			####### ??? TO DO ??? #######
-			# need to consider/try parallelization of the strainwise stage
-			# Fix parallelization code above to be up to date with SLURM
-			####### ??? TO DO ??? #######
-
-			parameter_list = '{\'' + '\',\''.join(current_parameter_list) + '\'}'
-			combined_fixed_parameter_array = '[' + ','.join(map(str,(current_fixed_parameter_bool_list*1))) + ']'
-				# current_fixed_parameter_bool_list should be a numpy
-					# array of boolean values, so multiplying it by 1
-					# produces integers of 1 or 0, which is input matlab
-					# can take
-			combined_min_array = '[' + ','.join(map(str,parameter_min_list)) + ']'
-			combined_max_array = '[' + ','.join(map(str,parameter_max_list)) + ']'
-			combined_profile_ub_array = '[' + ','.join(map(str,parameter_profile_ub_list)) + ']'
-			combined_profile_lb_array = '[' + ','.join(map(str,parameter_profile_lb_list)) + ']'
-			combined_length_array = '[' + ','.join([str(profile_points)]*total_parameter_number) + ']'
-			combined_position_array = '[$SLURM_ARRAY_TASK_ID]'
-				# if combined_position_array has length=1, MLE programs
-					# interpret it as an array of the correct length
-					# with the same value repeated
-			combined_start_values_array = '[' + ','.join(map(str,start_values)) + ']'
-			external_counter = '$SLURM_ARRAY_TASK_ID'
-			assigned_parallel_processors = '$SLURM_CPUS_PER_TASK'
-
-			csv_output_prename = growth_condition + '_data_' + current_mode + \
-				'_' + current_fixed_parameter
-
-			matlab_input_list = [combined_fixed_parameter_array,external_counter, \
-				combined_min_array,combined_max_array,combined_length_array, \
-				combined_position_array,combined_start_values_array, \
-				parameter_list,('\''+csv_output_prename+'\''),('\''+MLE_output_folder+'\''), \
-				('\''+mat_phenotype_file+'\''),assigned_parallel_processors,str(ms_positions),
-				('\''+petite_file+'\''),combined_profile_ub_array,combined_profile_lb_array]
-
-			code_run_string = ('\'MLE_' + current_mode + '(\'\"'
-				+ '\"\",\"\"'.join(matlab_input_list) + '\"\");exit\"')
-
-			if current_mode =='mixed':
-				default_single_job_time = 3*MLE_time
-				# 'mixed' mode requires additional time
-			elif current_mode == 'mixedgauss':
-				default_single_job_time = 2*MLE_time
-			else:
-				default_single_job_time = MLE_time
-			default_single_job_mem = MLE_memory # in MB
-
-			# submit aborted jobs one-by-one, new_jobs_to_submit as a batch job
-			Job_List_Submitter(new_jobs_to_submit,aborted_jobs_to_submit,aborted_newtimes_to_submit,
-				aborted_newmems_to_submit,current_sbatch_filename,
-				parallel_processors,code_dir,user_email,module_to_use,
-				code_run_string,current_job_name,
-				additional_beginning_lines_in_sbatch,additional_end_lines_in_sbatch,
-				default_single_job_time,default_single_job_mem)
-
-	return current_MLE_completefile
 
 
 
