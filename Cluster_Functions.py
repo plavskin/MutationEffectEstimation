@@ -56,9 +56,18 @@ class ClusterParameters(object):
 		self.starting_time = parameter_list["starting_time"]
 		self.temp_storage_path = parameter_list["temp_storage_folder"]
 		self.max_char_num = parameter_list["max_char_num"]
-		self.cluster_architecture = parameter_list["cluster_architecture"]
+		self.cluster_architecture = parameter_list["cluster_architecture"].lower()
+		self._set_cluster_architecture_properties()
 		self.current_mem = self.starting_mem
 		self.current_time = self.starting_time
+	def _set_cluster_architecture_properties(self):
+		# sets properties related to the cluster architecture
+		if self.cluster_architecture == 'slurm':
+			self.within_batch_counter = '$SLURM_ARRAY_TASK_ID'
+		elif self.cluster_architecture == 'macosx':
+			self.within_batch_counter = '$ARRAY_TASK_ID'
+		else:
+			print('Error! Did not enter recognized cluster architecture')
 	def set_current_time(self,new_time):
 		self.current_time = new_time
 	def set_current_mem(self,new_mem):
@@ -88,7 +97,7 @@ class JobParameters(object):
 	def __init__(self, name, output_folder, output_extension, output_filename, \
 		cluster_job_submission_folder,experiment_folder, module, code_run_string, \
 		additional_beginning_lines_in_sbatch, additional_end_lines_in_sbatch, \
-		parallel_processors, cluster_job_submission_submission_file_name):
+		parallel_processors):
 		self.name = name
 		self.output_folder = output_folder
 		self.output_extension = output_extension
@@ -103,7 +112,6 @@ class JobParameters(object):
 		self.additional_end_lines_in_sbatch = \
 			self._string_to_list(additional_end_lines_in_sbatch)
 		self.parallel_processors = parallel_processors
-		self.cluster_job_submission_submission_file_name = cluster_job_submission_submission_file_name
 	def _string_to_list(parameter):
 		# checks whether parameter is entered as a string or list, and
 			# if a string, converts to a list holding that string; if
@@ -540,6 +548,44 @@ class JobListManager(object):
 			# update status of submitted jobs
 			self.batch_status_change(current_jobs_to_submit,JobStatus.PROCESSING)
 
+class CompletefileManager(object):
+	# Handles checking if current set of jobs is complete, and writing completefile
+	def __init__(self, completefile_path):
+		self.completefile_path = completefile_path
+		self.incomplete_status_list = [JobStatus.TO_PROCESS, \
+			JobStatus.PROCESSING,JobStatus.ABORTED_TO_RESTART]
+			# If there are any jobs with one of these statuses, this
+				# set of jobs is not yet complete
+	def add_job_list_manager(self,job_list_manager):
+		self.job_list_manager = job_list_manager
+	def check_completeness(self):
+		# check whether jobs complete
+		# return completeness status
+		if os.path.isfile(self.completefile_path):
+			self.completeness = True
+		elif hasattr(self, 'job_list_manager'):
+			self._check_job_status()
+		else:
+			self.completeness = False
+		return(self.completeness)
+	def _check_job_status(self):
+		# checks to see whether any jobs still need to be run or are
+			# running in job_list_manager
+		# If jobs have all been completed, writes a completefile
+		incomplete_job_list = []
+		for current_job_status in self.incomplete_status_list:
+			current_job_list = \
+				self.job_list_manager.get_jobs_by_status(current_job_status)
+			incomplete_job_list.extend(current_job_list)
+		incomplete_job_number = len(incomplete_job_list)
+		if incomplete_job_number == 0:
+			self.completeness = True
+			# write completeness file
+			open(self.completefile_path,'a').close()
+		else:
+			self.completeness = False
+
+
 class TrackfileManager(object):
 	# Handles writing and reading of trackfile
 	def __init__(self, job_parameters, cluster_parameters):
@@ -663,7 +709,7 @@ class SlurmManager(object):
 		single_job_time_string = self._convert_time_format(job_time)
 		single_job_mem_string = self._convert_mem_format(job_mem)
 		# write submission file
-		with open(self.job_parameters.cluster_job_submission_submission_file_name,'w') \
+		with open(self.sbatch_filename,'w') \
 			as sbatch_job_file:
 			sbatch_job_file.write('#!/bin/bash\n')
 			sbatch_job_file.write('#SBATCH --job-name=' + \
@@ -723,7 +769,7 @@ class SlurmManager(object):
 		os.chdir(self.job_parameters.cluster_job_submission_folder)			
 		# Run .q file for sim
 		subprocess.call('sbatch ' + \
-			self.job_parameters.cluster_job_submission_submission_file_name,shell=True)
+			self.sbatch_filename,shell=True)
 	def create_and_submit_batch_job(self,job_list_string,job_time,job_mem):
 		# creates and submits batch job on slurm
 		self._create_slurm_job(job_list_string,job_time,job_mem)
@@ -748,32 +794,40 @@ def _create_job_list(job_name, job_numbers, initial_time, initial_mem, \
 def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	cluster_parameters, output_folder, output_extension, output_filename, \
 	cluster_job_submission_folder, experiment_folder, module, code_run_string, \
-	additional_beginning_lines_in_sbatch, additional_end_lines_in_sbatch):
+	additional_beginning_lines_in_sbatch, additional_end_lines_in_sbatch, \
+	completefile_path):
 	# Handles entire flow of job, from creation of new trackfile to
 		# submission of jobs to updating trackfile
-	job_parameters = JobParameters(job_name, output_folder, \
-		output_extension, output_filename, cluster_job_submission_folder, experiment_folder, \
-		module, code_run_string, additional_beginning_lines_in_sbatch, \
-		additional_end_lines_in_sbatch, parallel_processors, \
-		cluster_job_submission_submission_file_name)
-	current_trackfile = TrackfileManager(job_parameters, cluster_parameters)
-	# check whether trackfile exists; if so, use it to get job data and
-		# update statuses; otherwise, create new trackfile
-	current_trackfile_path = current_trackfile.get_trackfile_path()
-	if os.path.isfile(current_trackfile_path):
-		# retrieve job list, update it, submit jobs
-		# job_list_manager is a JobListManager object
-		job_list_manager = current_trackfile.read_trackfile()
-		# update status of all jobs in job_list_manager
-		job_list_manager.autoupdate_job_status()
-	else:
-		# create job list (JobListManager object)
-		job_list_manager = _create_job_list(job_name, job_numbers, initial_time, \
-			initial_mem, job_parameters, cluster_parameters)
-	# create cluster_submission_manager
-	if cluster_parameters.cluster_architecture.lower() == 'slurm':
-		cluster_submission_manager = SlurmManager(job_parameters,cluster_parameters)
-	# submit whatever jobs possible
-	job_list_manager.submit_jobs(cluster_submission_manager)
-	# update trackfile and summaryfile
-	current_trackfile.write_output_files(job_list_manager)
+	completefile_manager = CompletefileManager(completefile_path)
+	# check completeness and only run other code if job is not complete
+	jobs_complete = completefile_manager.check_completeness()
+	if not jobs_complete:
+		########### ADD COMPLETENESS UPDATE BELOW
+		job_parameters = JobParameters(job_name, output_folder, \
+			output_extension, output_filename, cluster_job_submission_folder, experiment_folder, \
+			module, code_run_string, additional_beginning_lines_in_sbatch, \
+			additional_end_lines_in_sbatch, parallel_processors)
+		current_trackfile = TrackfileManager(job_parameters, cluster_parameters)
+		# check whether trackfile exists; if so, use it to get job data and
+			# update statuses; otherwise, create new trackfile
+		current_trackfile_path = current_trackfile.get_trackfile_path()
+		if os.path.isfile(current_trackfile_path):
+			# retrieve job list, update it, submit jobs
+			# job_list_manager is a JobListManager object
+			job_list_manager = current_trackfile.read_trackfile()
+			# update status of all jobs in job_list_manager
+			job_list_manager.autoupdate_job_status()
+		else:
+			# create job list (JobListManager object)
+			job_list_manager = _create_job_list(job_name, job_numbers, initial_time, \
+				initial_mem, job_parameters, cluster_parameters)
+		# create cluster_submission_manager
+		if cluster_parameters.cluster_architecture.lower() == 'slurm':
+			cluster_submission_manager = SlurmManager(job_parameters,cluster_parameters)
+		# submit whatever jobs possible
+		job_list_manager.submit_jobs(cluster_submission_manager)
+		# update trackfile and summaryfile
+		current_trackfile.write_output_files(job_list_manager)
+		# update completefile
+		completefile_manager.add_job_list_manager(job_list_manager)
+		completefile_manager.check_completeness()
