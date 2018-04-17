@@ -8,20 +8,24 @@ import Cluster_Functions
 import copy
 
 class FolderManager(object):
-	def __init__(self,cluster_parameters,experiment_folder_name):
+	def __init__(self, cluster_parameters, cluster_folders, \
+		experiment_folder_name):
 		self.experiment_folder_name = experiment_folder_name
 		self.experiment_path = \
-			os.path.join(cluster_parameters.composite_data_folder,experiment_folder_name)
+			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
 		self.sim_output_path = os.path.join(cluster_parameters.temp_storage_path, \
 			experiment_folder_name,'simulated_phenotypes')
 		self.MLE_output_path = os.path.join(cluster_parameters.temp_storage_path, \
 			experiment_folder_name,'MLE_output')
+		self.completefile_folder = cluster_folders.completefile_path
 		self.LL_profile_path = os.path.join(self.experiment_path,'/LL_profiles')
 	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
 		self.MLE_combined_sim_path = os.path.join(self.experiment_path,'/MLE_sim_outputs')
 		self._set_up_folders()
 	def _set_up_folders(self):
-		setup_complete_file = os.path.join(self.completefile_folder,'folder_setup_complete.txt')
+		setup_complete_file = \
+			os.path.join(self.completefile_folder, \
+			'folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
 			new_directory_list = (self.sim_output_path,self.MLE_output_path, \
 				self.LL_profile_path,self.MLE_combined_sim_path)
@@ -43,32 +47,30 @@ class MLEParameters(object):
 		# (currently only pays attention to the first time mode or parameter listed)
 	############### ??? TO DO ??? ###############
 	def __init__(self,parameter_list):
-		self.sim_repeats_by_mode = parameter_list["sim_repeats"].split('|')
-		self.profile_points_by_mode = parameter_list["profile_points_by_mode"].split('|')
-		self.mode_list = parameter_list["mode_list"].split('|')
-		self.parameters_by_mode = parameter_list["parameters_by_mode"].split('|')
+		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
+		self.profile_points_by_mode = parameter_list["profile_points_by_mode"]
+		self.mode_list = parameter_list["mode_list"]
+		self.parameters_by_mode = parameter_list["parameters_by_mode"]
 		self.min_parameter_vals_by_mode = \
-			parameter_list["min_parameter_vals_by_mode"].split('|')
+			parameter_list["min_parameter_vals_by_mode"]
 		self.max_parameter_vals_by_mode = \
-			parameter_list["max_parameter_vals_by_mode"].split('|')
+			parameter_list["max_parameter_vals_by_mode"]
 		self.starting_parameter_vals_by_mode = \
-			parameter_list["starting_parameter_vals_by_mode"].split('|')
+		 	parameter_list["starting_parameter_vals_by_mode"]
 		self.profile_lower_limits_by_mode = \
-			parameter_list["profile_lower_limits_by_mode"].split('|')
+			parameter_list["profile_lower_limits_by_mode"]
 		self.profile_upper_limits_by_mode = \
-			parameter_list["profile_upper_limits_by_mode"].split('|')
-		self.ms_positions = parameter_list["multistart_positions"].split('|')
-		self.ms_grid_dimensions = parameter_list["multistart_grid_parameters"].split('|')
-		self.parallel_processors = int(parameter_list["parallel_processors"])
+			parameter_list["profile_upper_limits_by_mode"]
+		self.ms_positions = parameter_list["multistart_positions"]
+		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
+		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
+		self.parallel_processors = parameter_list["parallel_processors"]
 		self.mode_completeness_tracker = CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
-	def _retrieve_current_values(list_by_mode,mode_idx,current_mode,param_num):
+	def _retrieve_current_values(self,list_by_mode,mode_idx,current_mode,param_num):
 		# retrieves the appropriate list from a list of parameter lists
 			# by mode
-		if len(list_by_mode) > 1:
-			output_list = list_by_mode[mode_idx].split(';')
-		else:
-			output_list = list_by_mode.split(';')
+		output_list = list_by_mode[mode_idx]
 		# ensure length of outputs is same as length of parameter_list
 		output_list_length = len(output_list)
 		if output_list_length == 1:
@@ -104,16 +106,17 @@ class MLEParameters(object):
 			# get likelihood profile)
 		self.point_numbers_to_loop_over = numpy.append([1], \
 			self.current_profile_point_list[ \
-			numpy.invert(pernamently_fixed_parameter_bool)])
+			parameters_to_loop_over_bool])
 	def set_mode(self,mode_name,output_identifier):
 		# for all MLE_parameter attributes, retrieves the parameter or
 			# list of parameters corresponding to the current mode
 		self.current_mode = mode_name
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_sim_repeats = self.sim_repeats_by_mode[mode_idx]
-		self.current_ms_positions = int(self.ms_positions[mode_idx])
-		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx].split(';')
-		self.current_parameter_list = self.parameters_by_mode[mode_idx].split(';')
+		self.current_ms_positions = self.ms_positions[mode_idx]
+		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx]
+		self.current_logspace_profile_list = self.logspace_profile_list_by_mode[mode_idx]
+		self.current_parameter_list = self.parameters_by_mode[mode_idx]
 		# find the total number of parameters, including fixed ones
 		self.total_param_num = len(self.current_parameter_list)
 		# create lists, of length total_param_num, of settings for each
@@ -121,22 +124,22 @@ class MLEParameters(object):
 		# if input in file was incorrect length relative to number of
 			# parameters, corresponding list is just NaN
 		self.current_min_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(min_parameter_vals_by_mode,\
+			numpy.array(self._retrieve_current_values(self.min_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_max_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(max_parameter_vals_by_mode,\
+			numpy.array(self._retrieve_current_values(self.max_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_start_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(starting_parameter_vals_by_mode,\
+			numpy.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_point_list = \
-			numpy.array(self._retrieve_current_values(profile_points_by_mode,\
+			numpy.array(self._retrieve_current_values(self.profile_points_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_lower_limit_list = \
-			numpy.array(self._retrieve_current_values(profile_lower_limits_by_mode,\
+			numpy.array(self._retrieve_current_values(self.profile_lower_limits_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_upper_limit_list = \
-			numpy.array(self._retrieve_current_values(profile_upper_limits_by_mode,\
+			numpy.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		# identify list of parameters that are permanently fixed
 		self.current_permafixed_parameter_bool = \
@@ -144,7 +147,8 @@ class MLEParameters(object):
 		# identify parameters MLE needs to be performed on
 		self._id_parameters_to_loop_over()
 		# set up completefile tracker for these parameters
-		self.parameter_completeness_tracker = CompletenessTracker(self.parameters_to_loop_over)
+		self.parameter_completeness_tracker = \
+			CompletenessTracker(self.current_parameters_to_loop_over)
 		self.current_mode_complete = False
 		# output_identifier is a string that will be included in filenames
 		self.output_identifier = output_identifier
@@ -156,7 +160,7 @@ class MLEParameters(object):
 			# for it, and create a temporary list of fixed parameters
 			# that includes it
 		self.current_fixed_parameter = parameter_name
-		if current_fixed_parameter == 'unfixed':
+		if self.current_fixed_parameter == 'unfixed':
 			self.current_profile_point_num = 1
 			# list of fixed parameters is unchanged from default
 			self.current_tempfixed_parameter_bool = \
@@ -171,10 +175,11 @@ class MLEParameters(object):
 			self.current_tempfixed_parameter_bool[current_fixed_parameter_idx] = \
 				True
 			self.current_profile_point_num = \
-				self.current_profile_points_list[current_fixed_parameter_idx]
-		self.output_id_parameter = self.output_identifier + '_' self.current_fixed_parameter
+				self.current_profile_point_list[current_fixed_parameter_idx]
+		self.output_id_parameter = self.output_identifier + '_' + self.current_fixed_parameter
 		# identify how many dimensions are being used in multistart
-		self.current_ms_grid_dimensions = sum([x == current_fixed_parameter for x in self.current_ms_grid_parameters])
+		self.current_ms_grid_dimensions = sum([x == self.current_fixed_parameter \
+			for x in self.current_ms_grid_parameters])
 		self.current_parallel_processors = min(self.parallel_processors,
 			self.current_ms_positions**self.current_ms_grid_dimensions)
 	def update_parameter_completeness(self, completefile):
@@ -198,68 +203,28 @@ class MLEParameters(object):
 class SubmissionStringProcessor(object):
 	# creates a code submission string appropriate to the programming
 		# environment (module) being used
-	def __init__(self,module,key_list,value_list, code_name):
+	def __init__(self, module, key_list, value_list, code_name):
 		self._submission_string_generator(key_list,value_list,module,code_name)
-	def get_code_run_string(self):
-		return(self.code_run_string)
-	def _convert_mixed_list(self,current_list, module):
-		# checks type of every element of current_list and converts it
-			# to a string
-		# joins elements into single string
-		converted_by_part_list = []
-		for current_value in value_list:
-			current_val_converted = self._convert_val(current_value)
-			converted_by_part_list.append(current_val_converted)
-		converted_list = self._convert_str_list(converted_by_part_list, module)
-		return(converted_list)
-	def _convert_str_list(current_list, module):
+	def get_code_run_input(self):
+		return(self.code_sub_input_processor)
+	def _submission_string_generator(self, key_list, value_list, module, \
+		code_name):
 		if module == 'matlab':
-			converted_list = '{\'' + '\',\''.join(current_list) + '\'}'
+			code_sub_input_processor = \
+			Cluster_Functions.MatlabInputProcessor(code_name)
+		elif module == 'r':
+			code_sub_input_processor = \
+			Cluster_Functions.RInputProcessor(code_name)
 		else:
-			print('Error! unrecognized module.')
-		return(converted_list)
-	def _convert_int_list(current_list, module):
-		if module == 'matlab':
-			converted_list = '[' + ','.join(current_list) + ']'
-		else:
-			print('Error! unrecognized module.')
-		return(converted_list)
-	def _convert_str(current_str, module):
-		if module == 'matlab':
-			converted_str = '\'' + current_str + '\''
-		else:
-			print('Error! unrecognized module.')
-		return(converted_str)
-	def _convert_int(current_int, module):
-		if module == 'matlab':
-			converted_int = str(current_int)
-		else:
-			print('Error! unrecognized module.')
-		return(converted_int)
-	def _convert_val(self,current_value, module):
-		if isinstance(current_value, list):
-			if all(isinstance(temp_val,int) for temp_val in current_value):
-				converted_value = self._convert_int_list(current_value, module)
-			elif all(isinstance(temp_val,str) for temp_val in current_value):
-				converted_value = self._convert_str_list(current_value, module)
-			else:
-				converted_value = self._convert_mixed_list(current_value, module)
-		elif isinstance(current_value, int):
-			converted_value = self._convert_int(current_value, module)
-		elif isinstance(current_value, basestring):
-			converted_value = self._convert_str(current_value, module)
-		else:
-			print('Error! Trying to convert list element of unrecognized type in submission string conversion:')
-			print(current_value)
-		return(converted_value)
-	def _submission_string_generator(self,key_list,value_list,module,code_name):
-		converted_key_string = self._convert_mixed_list(key_list, module)
-		converted_value_string = self._convert_mixed_list(value_list, module)
-		matlab_input_list = [converted_key_string, converted_value_string]
-		if module == 'matlab':
-			code_run_string = ('\'' + code_name + '(\'\"'
-				+ '\"\",\"\"'.join(matlab_input_list) + '\"\");exit\"')
-		self.code_run_string = code_run_string
+			raise ValueError('%s is not an available module at the moment' \
+				% (module))
+		converted_key_string = \
+			code_sub_input_processor.convert_mixed_list(key_list)
+		converted_value_string = \
+			code_sub_input_processor.convert_mixed_list(value_list)
+		code_input_arg_list = [converted_key_string, converted_value_string]
+		code_sub_input_processor.set_code_run_argument_string(code_input_arg_list)
+		self.code_sub_input_processor = code_sub_input_processor
 
 class MLEstimation(object):
 	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
@@ -274,7 +239,6 @@ class MLEstimation(object):
 			mle_parameters.output_id_parameter])
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
-		self._process_input_data_dict()
 		self.output_filename = '_'.join(['data',mle_parameters.output_id_parameter])
 		self.output_extension = 'csv'
 		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
@@ -283,22 +247,23 @@ class MLEstimation(object):
 		self.additional_beginning_lines_in_sbatch = []
 		self.additional_end_lines_in_sbatch = []
 			# don't include lines specific to matlab parallelization here
-		self._create_code_run_string()
+		self._create_code_run_input()
 	def get_completefile_path(self):
 		return(self.completefile)
-	def _create_code_run_string(self):
+	def _create_code_run_input(self):
 		key_list = ['external_counter','combined_fixed_parameter_array', \
 			'combined_min_array','combined_max_array','combined_length_array', \
 			'combined_position_array','combined_start_values_array', \
 			'parameter_list','csv_output_prename','output_folder', \
 			'parallel_processors','ms_positions','combined_profile_ub_array', \
-			'combined_profile_lb_array','ms_grid_parameter_array']
-		value_list = [self.cluster_parameters.within_batch_counter, \
+			'combined_profile_lb_array','ms_grid_parameter_array', \
+			'combined_logspace_parameters']
+		value_list = ['${' + self.cluster_parameters.within_batch_counter + '}', \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
 			self.mle_parameters.current_max_parameter_val_list, \
 			self.mle_parameters.current_profile_point_num, \
-			[self.cluster_parameters.within_batch_counter], \
+			['${' + self.cluster_parameters.within_batch_counter + '}'], \
 				# if combined_position_array has length=1, MLE programs
 					# interpret it as an array of the correct length
 					# with the same value repeated
@@ -308,8 +273,9 @@ class MLEstimation(object):
 			self.mle_parameters.current_parallel_processors, \
 			self.mle_parameters.current_ms_positions, \
 			self.mle_parameters.current_profile_upper_limit_list, \
-			self.mle_parameters.current_profile_lower_limit_list,
-			self.current_ms_grid_parameters]
+			self.mle_parameters.current_profile_lower_limit_list, \
+			self.mle_parameters.current_ms_grid_parameters, \
+			self.mle_parameters.current_logspace_profile_list]
 		# take values from self.additional_code_run_keys and
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
@@ -323,14 +289,14 @@ class MLEstimation(object):
 		submission_string_processor = \
 			SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
-		self.code_run_string = submission_string_processor.get_code_run_string()
+		self.code_run_input = submission_string_processor.get_code_run_input()
 	def run_job_submission(self):
 		# handles submission of the job
 		job_name = self.job_name
 		job_numbers = [x + 1 for x in \
 			list(range(self.mle_parameters.current_profile_point_num))]
 		initial_time = self.cluster_parameters.current_time
-		initiral_mem = self.cluster_parameters.current_mem * \
+		initial_mem = self.cluster_parameters.current_mem * \
 			self.mle_parameters.current_parallel_processors
 		cluster_parameters = self.cluster_parameters
 		output_folder = self.output_path
@@ -339,16 +305,17 @@ class MLEstimation(object):
 		cluster_job_submission_folder = self.cluster_folders.cluster_job_submission_path
 		experiment_folder = self.mle_folders.experiment_path
 		module = self.module
-		code_run_string = self.code_run_string
+		code_run_input = self.code_run_input
 		additional_beginning_lines_in_sbatch = self.additional_beginning_lines_in_sbatch
 		additional_end_lines_in_sbatch = self.additional_end_lines_in_sbatch
+		parallel_processors = self.mle_parameters.current_parallel_processors
 		completefile_path = self.completefile
 		# set up and run batch jobs
 		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
 			initial_mem, cluster_parameters, output_folder, output_extension, \
 			output_filename, cluster_job_submission_folder, experiment_folder, \
-			module, code_run_string, additional_beginning_lines_in_sbatch, \
-			additional_end_lines_in_sbatch, completefile_path)
+			module, code_run_input, additional_beginning_lines_in_sbatch, \
+			additional_end_lines_in_sbatch, parallel_processors, completefile_path)
 
 class CompletenessTracker(object):
 	# Keeps a running tally of keys (which can be parameters, modes, etc) and checks their completeness
@@ -402,17 +369,13 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		# this also updates completeness across modes
 		current_mode_mle_complete_status = \
 			mle_parameters.check_completeness_within_mode()
-		if current_mode_complete_status:
+	#	if current_mode_complete_status:
 			##### RUN ASYMPTOTIC CI IDENTIFICATION #####
 
 			# if asymptotic CI identification is complete:
 			#	- identify position at which sims need to happen
 			#		- run sims
 			#			- get CIs from sims
-
-
-
-
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	additional_code_run_keys, additional_code_run_values):
@@ -425,7 +388,6 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	# Runs through simulations to find simulation-based CI values
 	# mle_parameters must have the mode already set
 	parameters_to_loop_over = mle_parameters.get_fitted_parameter_list()
-	mle_tracker = MLETracker(parameters_to_loop_over)
 	for current_fixed_parameter in parameters_to_loop_over:
 		# set current parameter
 		mle_parameters.set_parameter(current_fixed_parameter)
