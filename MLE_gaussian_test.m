@@ -4,7 +4,6 @@ function MLE_gaussian_test(key_list, value_list)
 
     % takes input from a data file, estimates best-fit gaussian parameters
 
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % To avoid overflow issues, set a max value that log likelihood can
         % be equal to throughout the MLE
@@ -40,7 +39,8 @@ function MLE_gaussian_test(key_list, value_list)
     % Set up csv filename where results of test strain parameters will be saved
 
     csvname_string_addition = strcat(csv_output_prename,'_',int2str(external_counter));
-    csv_folder = strcat(output_folder,'/csv_output');
+    csv_folder = output_folder;
+%    csv_folder = strcat(output_folder,'/csv_output');
 %    csv_filename = strcat(csv_folder,'/global_params_strainwise-',...
 %        csvname_string_addition,'.csv');
     csv_filename = strcat(csv_folder,'/',csvname_string_addition,'.csv');
@@ -56,7 +56,7 @@ function MLE_gaussian_test(key_list, value_list)
     test_data = data_table.data;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    glabal_param_number = 2;
+    global_param_number = 2;
 
     if length(combined_position_array)==1
         combined_position_array = repmat(combined_position_array(1),size(parameter_list));
@@ -184,10 +184,10 @@ function MLE_gaussian_test(key_list, value_list)
     dlmwrite(csv_filename,export_data,'delimiter',',','precision',9);
 
 
-    if runtime < 120
-        pausetime=120-runtime;
-        pause(pausetime)
-    end
+%    if runtime < 120
+%        pausetime=120-runtime;
+%        pause(pausetime)
+%    end
 
-exit
+end
 

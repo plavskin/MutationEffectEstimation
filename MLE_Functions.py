@@ -164,14 +164,14 @@ class MLEParameters(object):
 			self.current_profile_point_num = 1
 			# list of fixed parameters is unchanged from default
 			self.current_tempfixed_parameter_bool = \
-				self.current_permafixed_parameter_bool
+				copy.copy(self.current_permafixed_parameter_bool)
 			# other properties need to be NaN
 		else:
 			# find index of current_fixed_parameter in parameter list
 			current_fixed_parameter_idx = self.current_parameter_list.index(parameter_name)
 			# temporarily fix current parameter
 			self.current_tempfixed_parameter_bool = \
-				self.current_permafixed_parameter_bool
+				copy.copy(self.current_permafixed_parameter_bool)
 			self.current_tempfixed_parameter_bool[current_fixed_parameter_idx] = \
 				True
 			self.current_profile_point_num = \
@@ -241,7 +241,7 @@ class MLEstimation(object):
 		self.additional_code_run_values = additional_code_run_values
 		self.output_filename = '_'.join(['data',mle_parameters.output_id_parameter])
 		self.output_extension = 'csv'
-		self.output_path = os.path.join(mle_folders.MLE_output_path,'csv_output')
+		self.output_path = os.path.join(mle_folders.current_output_subfolder,'csv_output')
 		self.module = 'matlab'
 		self.code_name = '_'.join(['MLE',mle_parameters.current_mode])
 		self.additional_beginning_lines_in_sbatch = []
@@ -262,7 +262,7 @@ class MLEstimation(object):
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
 			self.mle_parameters.current_max_parameter_val_list, \
-			self.mle_parameters.current_profile_point_num, \
+			self.mle_parameters.current_profile_point_list, \
 			['${' + self.cluster_parameters.within_batch_counter + '}'], \
 				# if combined_position_array has length=1, MLE programs
 					# interpret it as an array of the correct length

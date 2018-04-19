@@ -238,9 +238,11 @@ class BatchSubmissionManager(object):
 		self._update_remaining_chars(len(job_string))
 		self._update_remaining_jobs_in_batch(len(job_sublist))
 	def _reset_batch(self):
+		self._update_batches_remaining(1)
 		self.remaining_chars = self.max_char_num
-		if not self.job_submission_string_list[-1] == '':
-			self.job_submission_string_list.append('')
+	#	if not self.job_submission_string_list[-1] == '':
+	#		self.job_submission_string_list.append('')
+		self.job_submission_string_list.append('')
 		self.remaining_jobs_in_batch = self.max_jobs_per_batch
 	def _consecutive_parser(self, job_list, stepsize = 1):
 		# Splits list of integers into list of lists of consecutive nums
@@ -272,6 +274,12 @@ class BatchSubmissionManager(object):
 			current_job_string = (str(min(consecutive_job_list))+'-'+
 				str(max(consecutive_job_list))+',')
 		return(current_job_string)
+	def _update_job_sublist(self, job_sublist, current_job_sublist, current_job_string):
+		# adds current_job_sublist to job_submission_list,
+			# removes current_job_sublist from job_list
+		self._add_jobs_to_submission_list(current_job_sublist,current_job_string)
+		job_sublist = [x for x in job_sublist if x not in current_job_sublist]
+		return(job_sublist)
 	def _job_list_parser(self, job_sublist):
 		# Taking in a list of jobs, reorganize them so that consecutive
 			# jobs can be called as intervals (e.g. '5-8' for
@@ -283,29 +291,37 @@ class BatchSubmissionManager(object):
 		if self.space_in_queue < len(job_sublist):
 			# reorder job_sublist and truncate
 			job_sublist = numpy.sort(job_sublist)[0:self.space_in_queue]
-		# create a string that can be used to submit those jobs
-			# to SLURM, and count the number of characters in that string
-		current_job_string = self._job_list_string_converter(job_sublist)
-		if len(current_job_string) <= self.remaining_chars and \
-			len(job_sublist) <= self.remaining_jobs_in_batch:
-			self._add_jobs_to_submission_list(job_sublist,current_job_string)
-		else:
-			# start new batch, try adding jobs to list again
-			self._update_batches_remaining(1)
-			if self.batches_remaining > 0:
-				# reset batch
-				self._reset_batch()
+		while len(job_sublist) > 0 and self.batches_remaining > 0:
+			if self.remaining_jobs_in_batch > 0:
+				# move number of jobs that can be from job_sublist to current_job_sublist
+				current_job_sublist = job_sublist[0:self.remaining_jobs_in_batch]
+				# create a string that can be used to submit those jobs
+					# to SLURM, and count the number of characters in that string
+				current_job_string = self._job_list_string_converter(current_job_sublist)
 				if len(current_job_string) <= self.remaining_chars:
-					self._add_jobs_to_submission_list(job_sublist,current_job_string)
+					job_sublist = self._update_job_sublist(job_sublist, \
+						current_job_sublist, current_job_string)
 				else:
 					# try splitting up job_list one-by-one
-					for current_job in job_sublist:
+					for current_job in current_job_sublist:
 						current_job_string = self._job_list_string_converter([current_job])
-						if len(current_job_string) <= self.remaining_chars and \
-							len(job_sublist) <= self.remaining_jobs_in_batch:
-							self._add_jobs_to_submission_list(job_sublist,current_job_string)
-						else:
+						# for single jobs, first check whether string
+							# is longer than max chars; if it is, add
+							# it to errors; otherwise, if length is
+							# less than remaining chars, add it to
+							# current batch; otherwise, start new batch
+						if len(current_job_string) > self.max_char_num:
 							self.jobs_to_error.append(current_job)
+							job_sublist.remove(current_job)
+						elif len(current_job_string) <= self.remaining_chars:
+							job_sublist = self._update_job_sublist(job_sublist, \
+								[current_job], current_job_string)
+						else:
+							self._reset_batch()
+							job_sublist = self._update_job_sublist(job_sublist, \
+								[current_job], current_job_string)
+			else:
+				self._reset_batch()
 	def select_jobs_to_sub(self):
 		# Based on the amount of space available in the queue, splits jobs
 			# into ones that can be run now vs those that have to be run
@@ -393,14 +409,15 @@ class JobListManager(object):
 			completed_files = ''
 		completed_job_list = re.findall(' ' + self.job_parameters.output_filename + '_(\d+?)\.'
 			+ self.job_parameters.output_extension,completed_files,re.DOTALL)
-		jobs_just_completed = list(set(completed_job_list) & set(jobs_just_finished))
+		completed_job_int_list = [int(x) for x in completed_job_list]
+		jobs_just_completed = list(set(completed_job_int_list) & set(jobs_just_finished))
 		return(jobs_just_completed)
 	def _extract_latest_errorfile(self, cluster_job_submission_folder, \
 		job_sub_run_output_list, job_name,job_num):
 		# identifies the latest error file associated with a job,
 			# if one exists, and extracts its contents
-		missing_job_codes = re.findall(job_name + '.e(\d+?)-' + job_num + '$',
-			job_sub_run_output_list, re.MULTILINE)
+		missing_job_codes = re.findall(job_name + '.e(\d+?)-' + str(job_num) + \
+			'$', job_sub_run_output_list, re.MULTILINE)
 		if missing_job_codes:
 			job_code = str(max(map(int,missing_job_codes)))
 				# jobs are assigned consecutive code numbers on cluster,
@@ -408,7 +425,7 @@ class JobListManager(object):
 					# with the most recent run of current_missing_job,
 					# look for max code
 			latest_errorfile = cluster_job_submission_folder + '/' + job_name + '.e' + job_code \
-				+ '-' + job_num
+				+ '-' + str(job_num)
 			if os.path.isfile(latest_errorfile):
 				latest_errorfile_contents = open(latest_errorfile).read()
 			else:
@@ -433,8 +450,8 @@ class JobListManager(object):
 	def _parse_job_submission_output(self):
 		# gets list of files in cluster_job_submission output folder
 		try:
-			job_sub_run_output_list = subprocess.check_output('ls -lrt ' + \
-				self.job_parameters.cluster_job_submission_folder,shell=True)
+			job_sub_run_output_list = subprocess.check_output('ls -lrt \'' + \
+				self.job_parameters.cluster_job_submission_folder + '\'',shell=True)
 		except subprocess.CalledProcessError:
 			job_sub_run_output_list = ''
 		return(job_sub_run_output_list)
@@ -467,7 +484,7 @@ class JobListManager(object):
 				# as an error
 			if latest_errorfile_contents:
 				error_status_dict = \
-					cluster_submission_manager.error_status_check(self, \
+					cluster_submission_manager.error_status_check(\
 						latest_errorfile_contents)
 				if error_status_dict['cluster_error_check']:
 					self.batch_status_change([current_missing_job], \
@@ -594,18 +611,19 @@ class JobListManager(object):
 			self.batch_status_change(jobs_exceeding_max_char_num,JobStatus.ERROR)
 			# get list of jobs which can be submitted for this batch
 			current_jobs_to_submit = submission_manager.get_submitted_jobs()
-			current_job_submission_strings = submission_manager.get_submission_string_list()
-			# get time and memory requirements for these jobs
-				# these should all be the same, but take the max anyway
-			current_batch_time = max(self.get_job_times(current_jobs_to_submit))
-			current_batch_mem = max(self.get_job_mems(current_jobs_to_submit))
-			# submit jobs, one batch at a time
-			for current_job_sub_string in current_job_submission_strings:
-				cluster_submission_manager.create_and_submit_batch_job( \
-					current_job_sub_string, current_batch_time, \
-					current_batch_mem)
-			# update status of submitted jobs
-			self.batch_status_change(current_jobs_to_submit,JobStatus.PROCESSING)
+			if len(current_jobs_to_submit) > 0:
+				current_job_submission_strings = submission_manager.get_submission_string_list()
+				# get time and memory requirements for these jobs
+					# these should all be the same, but take the max anyway
+				current_batch_time = max(self.get_job_times(current_jobs_to_submit))
+				current_batch_mem = max(self.get_job_mems(current_jobs_to_submit))
+				# submit jobs, one batch at a time
+				for current_job_sub_string in current_job_submission_strings:
+					cluster_submission_manager.create_and_submit_batch_job( \
+						current_job_sub_string, current_batch_time, \
+						current_batch_mem)
+				# update status of submitted jobs
+				self.batch_status_change(current_jobs_to_submit,JobStatus.PROCESSING)
 
 class CompletefileManager(object):
 	# Handles checking if current set of jobs is complete, and writing completefile
@@ -668,8 +686,8 @@ class TrackfileManager(object):
 		with open(self.trackfile_path, 'rU') as trackfile_opened:
 			trackfile_contents = list(csv.reader(trackfile_opened))
 			for row_list in trackfile_contents[1:]:
-				current_job = Job(row_list[0], row_list[1], row_list[2], \
-					row_list[3])
+				current_job = Job(int(row_list[0]), row_list[1], float(row_list[2]), \
+					float(row_list[3]))
 				current_job_list.append(current_job)
 		return JobListManager(current_job_list,self.job_parameters,self.cluster_parameters)
 	def write_output_files(self, job_list_manager):
@@ -779,6 +797,8 @@ class MatlabInputProcessor(object):
 			converted_value = self.convert_bool_list(current_value)
 		elif all(isinstance(temp_val,int) for temp_val in current_value):
 			converted_value = self.convert_int_list(current_value)
+		elif all(isinstance(temp_val,float) for temp_val in current_value):
+			converted_value = self.convert_float_list(current_value)
 		elif all(isinstance(temp_val,str) for temp_val in current_value):
 			converted_value = self.convert_str_list(current_value)
 		else:
@@ -1032,10 +1052,9 @@ class MacOSXManager(object):
 		# Writes files to submit to cluster queue
 		# take first int in job_number_string as the required job number
 		job_number = str(re.findall('\d+',job_number_string)[0])
+		print('job_number is '+job_number)
 		self.sh_filename = self.sh_filename_prefix + job_number + \
 			self.sh_filename_suffix
-		print('job_number_string is ' + job_number_string)
-		print('job number is ' + job_number)
 		# write submission file
 		with open(self.sh_filename,'w') \
 			as batch_job_file:
@@ -1091,7 +1110,10 @@ class MacOSXManager(object):
 		# parses contents of job submission run error file
 		error_status_dict = dict()
 		error_status_dict['unidentified_error_check'] = \
-			len(latest_errorfile_contents > self.empty_errorfile_size)
+			len(latest_errorfile_contents) > self.empty_errorfile_size
+		error_status_dict['time_limit_check'] = False
+		error_status_dict['memory_limit_check'] = False
+		error_status_dict['cluster_error_check'] = False
 		return(error_status_dict)
 
 

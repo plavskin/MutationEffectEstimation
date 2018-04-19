@@ -211,7 +211,6 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 					# this also updates completeness across modes
 					current_mode_mle_complete_status = \
 						mle_parameters.check_completeness_within_mode()
-
 #					if sum(MLE_completeness_test_list) == len(parameters_to_loop_over):
 #					#if sum(MLE_completeness_test_list) >= 24:
 #						# run MLE on every non-fixed parameter and in unfixed mode
