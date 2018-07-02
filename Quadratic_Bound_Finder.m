@@ -1,0 +1,76 @@
+function Quadratic_Bound_Finder(key_list, value_list)
+
+	% EP 07-02-18
+
+	% Takes list of parameter values, as well as cdf values based on
+		% LRT corresponding to each of these parameter values, and fits
+		% the parameter value corresponding to 1-cutoff_pval
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % get parameter values
+    parameter_dict = containers.Map(key_list,value_list);
+
+    cutoff_pval = str2num(parameter_dict('cutoff_pval'));
+    mle_param_val = str2num(parameter_dict('mle_param_val'));
+    parameter_vals = parameter_dict('parameter_values');
+    cdf_vals = parameter_dict('cdf_vals');
+    output_file = parameter_dict('combined_max_array');
+    output_file = parameter_dict('output_file');
+    quad_fit_file = parameter_dict('quad_fit_file');
+    % convert parameter_vals to distances from the maxmimum likelihood
+    	% estimate of the parameter
+    parameter_distance_vals = mle_param_val - parameter_vals;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    % quadratic_fit_fun reframes quadratic function to allow bounds to
+    	% be placed on coefficients
+	quadratic_fit_fun = @(coeff_vector,x_vals,y_vals) y_vals-...
+		(coeff_vector(1)*x_vals.^2-...
+		2*coeff_vector(1)*coeff_vector(2)*x_vals+coeff_vector(3));
+		% coeff_vector = [a, 2*a*b, c]
+
+	% initialize starting coefficients and set constrains
+	% a must be negative
+	% x_max > -b/2a or x_max < -b/2a, depending on direction of CI bound
+		% this is the axis of the parabola; this requirement means that
+			% all parameter_distance_vals are fitted on a single,
+			% 'ascending' side of the parabola
+	direct_fit_coefficients = polyfit(parameter_distance_vals,cdf_vals,2);
+	starting_coefficients = NaN([1,3]);
+	starting_coefficients(1) = min(direct_fit_coefficients(1),-10^-50);
+		% make sure a is negative, i.e. parabola 'faces' down
+	if min(parameter_distance_vals)<0
+		current_lb = [-Inf,-Inf,-Inf];
+		current_ub = [0,min(parameter_distance_vals),Inf];
+		starting_coefficients(2) = max(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),min(parameter_distance_vals));
+			% second coefficient is -b/2a
+	else
+		current_lb = [-Inf,max(parameter_distance_vals),-Inf];
+		current_ub = [0,Inf,Inf];
+		starting_coefficients(2) = min(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),max(parameter_distance_vals));
+	end
+	starting_coefficients(3) = direct_fit_coefficients(3);
+
+	% Fit quadratic with constraints above
+	optimal_coefficients = lsqnonlin(@(coeffs) quadratic_fit_fun(coeffs,parameter_distance_vals,cdf_vals),...
+		starting_coefficients,current_lb,current_ub);
+
+	a = optimal_coefficients(1);
+	b = -optimal_coefficients(2)*2*a;
+	c = optimal_coefficients(3);
+	quadratic_fit = [a,b,c];
+	possible_bounds = roots(quadratic_fit+[0,0,-(1-cutoff_pval)]);
+		% here, (1-cutoff_pval) is subtracted from the value for c to
+			% find the x-intercepts of the parabola at height
+			% 1-cutoff_pval
+
+	% find the point out of possible_bounds that is closest to 0:
+		% this is the intercept on the correct side of the parabola
+
+	[~,bound_index] = min(abs(possible_bounds));
+	cdf_bound = possible_bounds(bound_index) + mle_param_val;
+
+	dlmwrite(output_file,[cdf_bound],'delimiter',',','precision',9);
+	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
+
+end
