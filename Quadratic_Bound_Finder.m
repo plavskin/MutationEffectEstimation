@@ -4,19 +4,19 @@ function Quadratic_Bound_Finder(key_list, value_list)
 
 	% Takes list of parameter values, as well as cdf values based on
 		% LRT corresponding to each of these parameter values, and fits
-		% the parameter value corresponding to 1-cutoff_pval
+		% the parameter value corresponding to cdf_bound
 	
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get parameter values
     parameter_dict = containers.Map(key_list,value_list);
 
-    cutoff_pval = str2num(parameter_dict('cutoff_pval'));
+    cdf_bound = str2num(parameter_dict('cdf_bound'));
+    	% cdf_bound = 1-p_value
     mle_param_val = str2num(parameter_dict('mle_param_val'));
     parameter_vals = parameter_dict('parameter_values');
     cdf_vals = parameter_dict('cdf_vals');
-    output_file = parameter_dict('combined_max_array');
     output_file = parameter_dict('output_file');
-    quad_fit_file = parameter_dict('quad_fit_file');
+    quad_fit_file = parameter_dict('fit_file');
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     % quadratic_fit_fun reframes quadratic function to allow bounds to
@@ -34,7 +34,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
 			% 'ascending' side of the parabola
 	direct_fit_coefficients = polyfit(parameter_vals,cdf_vals,2);
 	starting_coefficients = NaN([1,3]);
-	starting_coefficients(1) = min(direct_fit_coefficients(1),-10^-50);
+	starting_coefficients(1) = min(direct_fit_coefficients(1),(mle_param_val-10^-50));
 		% make sure a is negative, i.e. parabola 'faces' down
 	if min(parameter_vals)<mle_param_val
 		current_lb = [-Inf,-Inf,-Inf];
@@ -56,10 +56,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	b = -optimal_coefficients(2)*2*a;
 	c = optimal_coefficients(3);
 	quadratic_fit = [a,b,c];
-	possible_bounds = roots(quadratic_fit+[0,0,-(1-cutoff_pval)]);
-		% here, (1-cutoff_pval) is subtracted from the value for c to
-			% find the x-intercepts of the parabola at height
-			% 1-cutoff_pval
+	possible_bounds = roots(quadratic_fit+[0,0,-cdf_bound]);
+		% here, cdf_bound is subtracted from the value for c to
+			% find the x-intercepts of the parabola at height cdf_bound
 
 	% find the point out of possible_bounds that is closest to 0:
 		% this is the intercept on the correct side of the parabola
