@@ -21,8 +21,7 @@ function MLE_gaussian_test(key_list, value_list)
     combined_position_array = cellfun(@str2num,parameter_dict('combined_position_array'));
     combined_start_values_array = parameter_dict('combined_start_values_array');
     parameter_list = parameter_dict('parameter_list');
-    csv_output_prename = parameter_dict('csv_output_prename');
-    output_folder = parameter_dict('output_folder');
+    output_file = parameter_dict('output_file');
     parallel_processors = parameter_dict('parallel_processors');
     ms_positions = parameter_dict('ms_positions');
     combined_profile_ub_array = parameter_dict('combined_profile_ub_array');
@@ -35,20 +34,6 @@ function MLE_gaussian_test(key_list, value_list)
     % process parameter name arrays into bool arrays
     combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Set up csv filename where results of test strain parameters will be saved
-
-    csvname_string_addition = strcat(csv_output_prename,'_',int2str(external_counter));
-    csv_folder = output_folder;
-%    csv_folder = strcat(output_folder,'/csv_output');
-%    csv_filename = strcat(csv_folder,'/global_params_strainwise-',...
-%        csvname_string_addition,'.csv');
-    csv_filename = strcat(csv_folder,'/',csvname_string_addition,'.csv');
-
-    % create csv_folder in output_directory if it doesn't currently exist
-    if exist(csv_folder,'dir') ~= 7
-        mkdir(csv_folder);
-    end
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get data
     data_table = readtable(phenotype_file);
@@ -181,8 +166,12 @@ function MLE_gaussian_test(key_list, value_list)
         end
     end
     
-    dlmwrite(csv_filename,export_data,'delimiter',',','precision',9);
+    %dlmwrite(output_file,export_data,'delimiter',',','precision',9);
 
+    table_data = num2cell([-fval_current,runtime,vout_current_corrected]);
+    table_headers = {'LL','runtime',parameter_list{:}};
+    T = table(table_data{:},'VariableNames',table_headers);
+    writetable(T,output_file);
 
 %    if runtime < 120
 %        pausetime=120-runtime;
