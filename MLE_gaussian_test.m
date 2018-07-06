@@ -169,7 +169,7 @@ function MLE_gaussian_test(key_list, value_list)
     %dlmwrite(output_file,export_data,'delimiter',',','precision',9);
 
     table_data = num2cell([-fval_current,runtime,vout_current_corrected]);
-    table_headers = {'LL','runtime',parameter_list{:}};
+    table_headers = {'LL','runtime_in_secs',parameter_list{:}};
     T = table(table_data{:},'VariableNames',table_headers);
     writetable(T,output_file);
 
