@@ -30,3 +30,5 @@ max_char_num,4096,int,maximum number of characters in a list of job arrays to be
 cluster_architecture,macosx,str,what kind of architecture the HPC cluster uses (currently only 'slurm' and 'macosx' supported)
 logspace_profile_list,sigma,nested_str_list,parameters whose profiles should be done in log rather than in linear space
 max_jobs_per_batch,1,int,maximum number of jobs that can be submitted in a single batch job ('inf' indicates that the maximum default allower by the cluster to run per user will be used)
+runtime_percentile,95,int,percentile of runtimes to report from within each parameter's profile point run
+CI_pval_by_mode,0.05,float_list,p-val of Cis identified in each mode; modes are separated by vertical bars; modes appear in same order as in mode list
