@@ -163,14 +163,14 @@ class FolderManager(object):
 
 class JobParameters(object):
 	# holds parameters of the job currently being run
-	def __init__(self, name, output_folder, output_extension, output_filename, \
+	def __init__(self, name, output_folder, output_extension, output_file_label, \
 		cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 		parallel_processors):
 		self.name = name
 		self.output_folder = output_folder
 		self.output_extension = output_extension
-		self.output_filename = output_filename
+		self.output_file_label = output_file_label
 		self.cluster_job_submission_folder = cluster_job_submission_folder
 		self.experiment_folder = experiment_folder
 		self.module = module
@@ -407,7 +407,7 @@ class JobListManager(object):
 				+ '"' + self.job_parameters.output_folder + '"',shell=True)
 		except subprocess.CalledProcessError:
 			completed_files = ''
-		completed_job_list = re.findall(' ' + self.job_parameters.output_filename + '_(\d+?)\.'
+		completed_job_list = re.findall(' ' + self.job_parameters.output_file_label + '_(\d+?)\.'
 			+ self.job_parameters.output_extension,completed_files,re.DOTALL)
 		completed_job_int_list = [int(x) for x in completed_job_list]
 		jobs_just_completed = list(set(completed_job_int_list) & set(jobs_just_finished))
@@ -1145,7 +1145,7 @@ def _create_job_list(job_name, job_numbers, initial_time, initial_mem, \
 	return JobListManager(current_job_list,job_parameters,cluster_parameters)
 
 def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
-	cluster_parameters, output_folder, output_extension, output_filename, \
+	cluster_parameters, output_folder, output_extension, output_file_label, \
 	cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 	additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 	parallel_processors, completefile_path):
@@ -1157,7 +1157,7 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	if not jobs_complete:
 		########### ADD COMPLETENESS UPDATE BELOW
 		job_parameters = JobParameters(job_name, output_folder, \
-			output_extension, output_filename, cluster_job_submission_folder, experiment_folder, \
+			output_extension, output_file_label, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, parallel_processors)
 		current_trackfile = TrackfileManager(job_parameters, cluster_parameters)

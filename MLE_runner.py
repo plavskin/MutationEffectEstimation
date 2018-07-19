@@ -180,50 +180,23 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 					current_phenotype_file = os.path.join(cluster_folders.experiment_path, \
 						(current_growth_condition + '_phenotype_file.csv'))
 
-				print(mle_parameters.mode_list)
-				for current_mode in mle_parameters.mode_list:
+				# use additional_code_run_keys and values to specify where input
+					# data comes from (and any other extra information that
+					# doesn't come from setup_file)
+				additional_code_run_keys = ['phenotype_file','petite_file','L', \
+					'gridpower']
+				additional_code_run_values = [current_phenotype_file, \
+					current_petite_file,current_L,current_gridpower]
+				output_id_string_start = '_'.join([current_growth_condition, rep])
 
-					print('##################################################################################')
-					print(current_mode)
+				# run MLE and LL profile creation, as well as CI
+					# identification, for the current mode
+				MLE_Functions.loop_over_modes(mle_parameters, \
+					cluster_parameters, cluster_folders, mle_folders, \
+					experiment_path, additional_code_run_keys, \
+					additional_code_run_values, output_id_string_start)
 
-					# Use parameter lists appropriate to current_mode, but
-						# adding 'unfixed' parameter regime to the list
-					output_id_string = (current_growth_condition + '_' + \
-						current_mode + '_' + rep)
-					mle_parameters.set_mode(current_mode,output_id_string)
 
-					##### RUN MLE #####
-					output_id_string = current_mode
-					mle_parameters.set_mode(current_mode,output_id_string)
-					MLE_summary_file_path = os.path.join(experiment_path, \
-						'_'.join([output_id_string,'MLE_file.csv']))
-					# use additional_code_run_keys and values to specify where input
-						# data comes from (and any other extra information that
-						# doesn't come from setup_file)
-					additional_code_run_keys = ['phenotype_file','petite_file','L', \
-						'gridpower']
-					additional_code_run_values = [current_phenotype_file, \
-						current_petite_file,current_L,current_gridpower]
-					# run MLE for current set of parameters
-					MLE_Functions.run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
-						additional_code_run_keys, additional_code_run_values)
-					# if all parameters for this mode are complete, update mode completeness
-					# this also updates completeness across modes
-					current_mode_mle_complete_status = \
-						mle_parameters.check_completeness_within_mode()
-#					if sum(MLE_completeness_test_list) == len(parameters_to_loop_over):
-#					#if sum(MLE_completeness_test_list) >= 24:
-#						# run MLE on every non-fixed parameter and in unfixed mode
-#						
-#						fixed_parameter_list = parameters_to_loop_over[1:]
-#						#fixed_parameter_list = parameters_to_loop_over[1:24]
-#							# doesn't include 'unfixed'
-#
-#						current_ML_combination_completefile = MLE_combiner(
-#							completefile_folder,current_growth_condition,
-#							current_mode,rep,current_folder,MLE_summary_file,
-#							point_numbers_to_loop_over,fixed_parameter_list,
-#							current_MLE_output_subfolder,LL_profile_folder,lambda_SNM,current_parameter_list)
 
 		# remove MLE_running.txt so MLE_runner.py can run again
 #		os.remove(currently_running_checkfile)
