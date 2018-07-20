@@ -152,7 +152,7 @@ class FolderManager(object):
 			experiment_folder_name,'cluster_job_submission_folder')
 		self._set_up_folders()
 	def _set_up_folders(self):
-		setup_complete_file = os.path.join(self.completefile_path,'folder_setup_complete.txt')
+		setup_complete_file = os.path.join(self.completefile_path,'cluster_folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
 			new_directory_list = (self.trackfile_path,self.completefile_path, \
 				self.cluster_job_submission_path)

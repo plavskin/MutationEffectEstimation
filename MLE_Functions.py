@@ -8,6 +8,7 @@ import Cluster_Functions
 import copy
 import pandas
 from scipy.stats import chi2
+import csv
 
 class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
@@ -23,12 +24,14 @@ class FolderManager(object):
 		self.LL_profile_path = os.path.join(self.experiment_path,'LL_profiles')
 		self.CI_bound_path = os.path.join(self.experiment_path,'CI_bounds')
 	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
-		self.MLE_combined_sim_path = os.path.join(self.experiment_path,'MLE_sim_outputs')
+		self.MLE_combined_sim_path = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				'MLE_sim_outputs')
 		self._set_up_folders()
 	def _set_up_folders(self):
 		setup_complete_file = \
 			os.path.join(self.completefile_folder, \
-			'folder_setup_complete.txt')
+			'mle_folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
 			new_directory_list = (self.sim_output_path,self.MLE_output_path, \
 				self.LL_profile_path,self.MLE_combined_sim_path)
@@ -161,9 +164,12 @@ class MLEParameters(object):
 		self.current_mode_complete = False
 		# output_identifier is a string that will be included in filenames
 		self.output_identifier = output_identifier
-	def get_fitted_parameter_list(self):
+	def get_fitted_parameter_list(self, include_unfixed):
 		# get list of parameters to loop over for current mode
-		return(self.current_parameters_to_loop_over)
+		parameters_to_return = copy.copy(self.current_parameters_to_loop_over)
+		if not include_unfixed:
+			parameters_to_return.remove('unfixed')
+		return(parameters_to_return)
 	def get_complete_parameter_list(self):
 		# get list of parameters in current mode
 		return(self.current_parameter_list)
@@ -259,6 +265,7 @@ class MLEstimation(object):
 			mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter)
 		self.module = 'matlab'
+		self.output_extension = 'csv'
 		self.code_name = '_'.join(['MLE',mle_parameters.current_mode])
 		self.additional_beginning_lines_in_job_sub = []
 		self.additional_end_lines_in_job_sub = []
@@ -408,8 +415,8 @@ class LLProfile(object):
 #			columns = (self.non_parameter_columns + self.parameter_list))
 	def _set_ML_params(self, ml_param_df):
 		self.ML_params = copy.copy(ml_param_df)
-		self.max_LL = ml_param_df['LL'][0]
-		self.fixed_param_MLE_val = ml_param_df[self.fixed_param][0]
+		self.max_LL = ml_param_df.iloc[0]['LL']
+		self.fixed_param_MLE_val = ml_param_df.iloc[0][self.fixed_param]
 #	def _check_and_update_ML(self, ml_param_df):
 		# checks whether ml_param_df contains a higher LL value
 			# that current self.max_LL; if so, update self.ML_params and
@@ -438,13 +445,14 @@ class LLProfile(object):
 			# max likelihood
 		# id row of LL_df corresponding to max LL
 #		ml_params = pandas.DataFrame(self.LL_df.loc[self.LL_df['LL'].idxmax()]).transpose()
-		ml_params = self.LL_df.loc[self.LL_df['LL'].idxmax()]
+		ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
+		### ml_param_df is a series, needs to be a df
 			# idxmax OK here because indices are reset during appending
 		# set this row to be the ML parameters
 		self._set_ML_params(ml_param_df)
 	def _populate_LL_df(self):
 		# fill in data in LL_df
-		for current_pp in self.profile_points:
+		for current_pp in range(1,(self.profile_points+1)):
 			current_datafile = _generate_filename(self.datafile_path, \
 				str(current_pp), self.output_identifier, \
 				self.current_fixed_parameter, 'data')
@@ -502,7 +510,7 @@ class LLProfile(object):
 #	def _read_LL_matrix(self):
 	def _read_LL_df(self):
 		# reads self.LL_df from a pre-recorded file
-		self.LL_df = pandas.read_csv(path_or_buf=self.LL_file)
+		self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
 		self._sort_by_profiled_param()
 #		self.LL_matrix = LL_df.as_matrix()
 	def _set_LL_df(self):
@@ -677,7 +685,7 @@ class OneSidedCIBound(object):
 		if numpy.max(profile_points) < self.cdf_bound:
 			self.warning.set_all_points_within_CI_bound()
 		# get indices of closest points to CI bound
-		CI_bound_proximal_indices = 
+		CI_bound_proximal_indices = \
 			self._id_proximal_points(self.cdf_bound, self.one_sided_LL_df['LL'], \
 				self.points_to_fit_curve)
 		# create a new df with only points closest to CI bound
@@ -818,14 +826,14 @@ class SingleParamResultSummary(object):
 			# CI calculation (e.g. 'asymptotic' or 'simulation-based');
 			# each value is a dictionary of CI bounds, with the key
 			# being the bound name and the value being the bound val
-		for current_CI_type, current_CI_bound_dict in CI_dict:
+		for current_CI_type, current_CI_bound_dict in CI_dict.iteritems():
 			self._set_CI(current_CI_bound_dict, current_CI_type)
 		# add warnings
 		self.content_dict['warnings'] = warning_string
 	def _set_CI(self, CI_bound_dict, CI_type):
 		# adds keys for each element of CI_bound_dict, combining key
 			# name with CI_type
-		for current_key, current_value in CI_bound_dict:
+		for current_key, current_value in CI_bound_dict.iteritems():
 			new_key = '_'.join([CI_type, 'CI_bound', current_key])
 			self.content_dict[new_key] = current_value
 	def get_contents(self):
@@ -872,7 +880,7 @@ class CombinedResultSummary(object):
 	#	create summary file
 	# keep track of summary files for each mode; once those are complete, stop running current folder
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
-		cluster_folders, pval, runtime_percentile):
+		cluster_folders):
 		self.mle_datafile_path = mle_folders.current_output_subfolder
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
@@ -887,15 +895,16 @@ class CombinedResultSummary(object):
 			'asymptotic_CIs', 'simulation-based_CIs'])
 		self.runtime_quant_list = numpy.array([])
 		self.true_max_param_df = pandas.DataFrame()
+		self.combined_results_df = pandas.DataFrame()
 		# set MLE results from 'unfixed' parameter (i.e. fitting all
 			# unfixed params together)
 		self.unfixed_mle_file = _generate_filename(self.mle_datafile_path, \
-			1, mle_parameters.output_identifier, 'unfixed', 'data')
+			'1', mle_parameters.output_identifier, 'unfixed', 'data')
 		self._set_unfixed_param_data()
 		self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 	def _create_combined_output_file(self, mle_folders):
 		# creates the name of the combined output file for the results
-		experiment_path = self.mle_folders.experiment_path
+		experiment_path = mle_folders.experiment_path
 		self.combined_results_output_file = os.path.join(experiment_path, \
 			('_'.join(['MLE_output', self.mle_parameters.output_identifier]) + \
 				'.csv'))
@@ -910,12 +919,12 @@ class CombinedResultSummary(object):
 			self.warnings.set_unfixed_file_missing()
 	def _set_combined_ML_params(self, ml_param_df):
 		self.true_max_param_df = ml_param_df
-		self.max_LL = ml_param_df['LL'][0]
+		self.max_LL = ml_param_df.iloc[0]['LL']
 	def _check_and_update_ML(self, ml_param_df, fixed_param):
 		# checks whether ml_param_np_array contains a higher LL value
 			# that current self.max_LL; if so, update self.ML_params and
 			# self.max_LL, and add a warning to these combined results
-		current_LL = ml_param_df['LL']
+		current_LL = ml_param_df.iloc[0]['LL']
 		if current_LL > self.max_LL:
 			if self.max_LL:
 				# only set warning about surpassing unfixed file max_LL
@@ -931,7 +940,7 @@ class CombinedResultSummary(object):
 		self.mle_parameters.set_parameter(fixed_parameter)
 		# create an LLProfile for current parameter
 		ll_profile = LLProfile(self.mle_parameters, \
-			self.datafile_path, self.LL_profile_folder, \
+			self.mle_datafile_path, self.LL_profile_folder, \
 			non_profile_max_params)
 		ll_profile.run_LL_profile_compilation()
 		warning_line = ll_profile.get_warnings()
@@ -941,7 +950,7 @@ class CombinedResultSummary(object):
 			'ML_params':ML_params})
 	def _create_initial_LL_profiles(self):
 		# creates LL_profiles (if necessary) and gets their max parameters
-		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list()
+		parameters_to_loop_over = self.mle_parameters.get_fitted_parameter_list(False)
 		for current_fixed_parameter in parameters_to_loop_over:
 			ll_profile_outputs = \
 				self._update_LL_profile(self.unfixed_ll_param_df,
@@ -954,7 +963,7 @@ class CombinedResultSummary(object):
 			self.runtime_quant_list = numpy.append(self.runtime_quant_list,runtime_quantile)
 	def _correct_LL_profiles(self):
 		# updates LL_profiles
-		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list()
+		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(False)
 		ml_params_to_include = pandas.concat(self.unfixed_ll_param_df, \
 			self.true_max_param_df)
 		for current_fixed_parameter in parameters_to_loop_over:
@@ -969,11 +978,11 @@ class CombinedResultSummary(object):
 		runtime_CI_bounds['lower'] = \
 			numpy.percentile(self.runtime_quant_list,self.pval/2*100)
 		runtime_CI_bounds['upper'] = \
-			numpy.percentile(self.runtime_quant_list,self.pval/2*100)
+			numpy.percentile(self.runtime_quant_list,(1-self.pval/2)*100)
 		runtime_CIs = {'asymptotic':{'lower':numpy.nan,'upper':numpy.nan}, \
 			'simulation-based':runtime_CI_bounds}
 		return(runtime_CIs)
-	def _add_line_to_combined_df(fixed_param_name, fixed_param_MLE, \
+	def _add_line_to_combined_df(self,fixed_param_name, fixed_param_MLE, \
 		warning_string, CI_dict):
 		# creates self.combined_summary or adds a line to it
 		current_results_line = SingleParamResultSummary(fixed_param_MLE, \
@@ -984,6 +993,16 @@ class CombinedResultSummary(object):
 			self.combined_results_df = \
 				pandas.DataFrame(current_results_dict, index = [fixed_param_name])
 		else:
+			# check that all keys in current_results_dict are columns
+				# in self.combined_results_df; if not, create these
+				# columns before updating data
+			dict_keys = current_results_dict.keys()
+			df_columns = list(self.combined_results_df.columns.values)
+			new_columns = set(dict_keys).symmetric_difference(df_columns)
+			self.combined_results_df = \
+				self.combined_results_df.append(pandas.DataFrame(columns=new_columns), \
+					sort = False)
+			# insert current_results_dict into correct row in df
 			current_results_series = pandas.Series(current_results_dict)
 			self.combined_results_df.loc[fixed_param_name] = \
 				current_results_series
@@ -993,23 +1012,18 @@ class CombinedResultSummary(object):
 			index=True)
 	def _read_combined_df(self):
 		# reads self.combined_results_df from a pre-recorded file
-		self.combined_results_df = pandas.read_csv(path_or_buf=self.combined_results_output_file)
+		self.combined_results_df = \
+			pandas.read_csv(filepath_or_buffer=self.combined_results_output_file, \
+				index_col = 0)
 		### READ in MLE, add LL, convert to true_max_param_df
 	def _create_combined_df(self):
 		# creates combined_results_df and adds line for runtime and general warnings
-		# create a list of parameter MLE vals that excludes LL
-		trimmed_mle_dict = {k:v for k,v in self.true_max_param_df.items() \
-			if not k == 'LL'}
-		# create a DataFrame where row names are parameter names
-		self.combined_results_df = pandas.DataFrame({'param_MLE':trimmed_mle_dict})
 		# include a line containing the mean self.runtime_quantile-th
 			# time within the mode, as well as the self.pval-based CI
 			# on this time, and the general warning line that applies
 			# the current mode
 		time_string = '_'.join(['avg', (str(self.runtime_percentile) + 'th'), \
 			'percentile', 'runtime', 'across', 'profile', 'points', 'in', 'hrs'])
-		# rename runtime_in_secs to time_string
-		self.combined_results_df.rename(index={'runtime_in_secs':time_string})
 		# get runtime mean and CIs
 		mean_runtime_quant = numpy.mean(self.runtime_quant_list)
 		runtime_CIs = self._get_runtime_CI()
@@ -1017,13 +1031,21 @@ class CombinedResultSummary(object):
 		mode_warning_line = self.warnings.get_warning_line()
 		# make a line to write to combined_results_df
 		self._add_line_to_combined_df(time_string, mean_runtime_quant, \
-			warning_string, runtime_CIs)
+			mode_warning_line, runtime_CIs)
+		# append a DataFrame where row names are parameter names
+		mle_df = self.true_max_param_df.transpose()
+		# rename column to 'param_MLE' and remove 'LL' row
+		mle_df.columns=['param_MLE']
+		mle_df.drop(index=['LL','runtime_in_secs'],inplace = True)
+		self.combined_results_df = \
+			self.combined_results_df.append(mle_df, sort = False)
 	def initialize_combined_results(self):
 		# check whether initial mle has been completed
-		mle_complete = mle_parameters.check_completeness_within_mode()
+		mle_complete = self.mle_parameters.check_completeness_within_mode()
 		if mle_complete:
 			# check whether initialization has been run
-			self.completeness_tracker.update_key_status(self.combined_results_output_file)
+			self.completeness_tracker.update_key_status('initialization', \
+				self.combined_results_output_file)
 			init_complete = \
 				self.completeness_tracker.get_key_completeness('initialization')
 			if init_complete:
@@ -1067,7 +1089,7 @@ def _generate_filename(output_file_path, profile_point_as_str, \
 	output_id, parameter_name, output_prename):
 	# creates a filename to which output file of MLE will be written,
 		# to be read by LLProfile
-	output_file_label = _generate_MLE_file_label(output_prename, output_id, \
+	output_file_label = _generate_file_label(output_prename, output_id, \
 		parameter_name)
 	output_file = '_'.join([output_file_label, profile_point_as_str]) + '.csv'
 	output_filename = os.path.join(output_file_path,output_file)
@@ -1081,13 +1103,15 @@ def _generate_file_label(output_prename, output_id, parameter_name):
 	output_file_label = '_'.join([output_prename, output_id, parameter_name])
 	return(output_file_label)
 
-def _get_MLE_params(self, current_param_datafile):
+def _get_MLE_params(current_param_datafile):
 	# get MLE param values and run info from output (csv) file
-	with open(current_param_datafile, 'rU') as \
-		current_param_datafile_contents:
-		current_param_data = list(csv.reader(current_param_datafile_contents))
-	current_param_np = numpy.array([float(i) for i in current_param_data[0]])
-	return(current_param_np)
+	current_param_df = pandas.read_csv(current_param_datafile)
+	return(current_param_df)
+#	with open(current_param_datafile, 'rU') as \
+#		current_param_datafile_contents:
+#		current_param_data = list(csv.reader(current_param_datafile_contents))
+#	current_param_np = numpy.array([float(i) for i in current_param_data[0]])
+#	return(current_param_np)
 
 def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mle_folders, experiment_path, additional_code_run_keys, \
@@ -1105,8 +1129,7 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 			additional_code_run_keys, additional_code_run_values)
 		# generate LL_profiles and MLE_output file, and identify CIs
 		current_combined_results = CombinedResultSummary(mle_folders, \
-			mle_parameters, cluster_parameters, cluster_folders, CI_pval, \
-			runtime_percentile)
+			mle_parameters, cluster_parameters, cluster_folders)
 		current_combined_results.initialize_combined_results()
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
@@ -1119,7 +1142,7 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 		# chi-sq distribution of 2*log(LR))
 	# Runs through simulations to find simulation-based CI values
 	# mle_parameters must have the mode already set
-	parameters_to_loop_over = mle_parameters.get_fitted_parameter_list()
+	parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(True)
 	for current_fixed_parameter in parameters_to_loop_over:
 		# set current parameter
 		mle_parameters.set_parameter(current_fixed_parameter)
