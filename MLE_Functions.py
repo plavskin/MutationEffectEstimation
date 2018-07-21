@@ -13,41 +13,49 @@ import csv
 class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
 		experiment_folder_name):
-		self.experiment_folder_name = experiment_folder_name
-		self.experiment_path = \
-			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
-		self.sim_output_path = os.path.join(cluster_parameters.temp_storage_path, \
-			experiment_folder_name,'simulated_phenotypes')
-		self.MLE_output_path = os.path.join(cluster_parameters.temp_storage_path, \
-			experiment_folder_name,'MLE_output')
-		self.completefile_folder = cluster_folders.completefile_path
-		self.LL_profile_path = os.path.join(self.experiment_path,'LL_profiles')
-		self.CI_bound_path = os.path.join(self.experiment_path,'CI_bounds')
+		self.path_dict = {}
+		self.path_dict['experiment_folder_name'] = experiment_folder_name
+		self.path_dict['experiment_path'] = \
+			os.path.join(cluster_parameters.composite_data_path, \
+				experiment_folder_name)
+		self.path_dict['sim_output_path'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name, 'simulated_phenotypes')
+		self.path_dict['MLE_output_path'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name,'MLE_output')
+		self.path_dict['completefile_folder'] = \
+			cluster_folders.get_path('completefile_path')
+		self.path_dict['LL_profile_path'] = \
+			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
+		self.path_dict['CI_bound_path'] = \
+			os.path.join(self.path_dict['experiment_path'],'CI_bounds')
 	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
-		self.MLE_combined_sim_path = \
+		self.path_dict['MLE_combined_sim_path'] = \
 			os.path.join(cluster_parameters.temp_storage_path, \
 				'MLE_sim_outputs')
 		self._set_up_folders()
 	def _set_up_folders(self):
 		setup_complete_file = \
-			os.path.join(self.completefile_folder, \
+			os.path.join(self.path_dict['completefile_folder'], \
 			'mle_folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
-			new_directory_list = (self.sim_output_path,self.MLE_output_path, \
-				self.LL_profile_path,self.MLE_combined_sim_path)
-			for current_new_directory in new_directory_list:
-				if not os.path.isdir(current_new_directory):
-					os.makedirs(current_new_directory)
+			for current_folder_key, current_path in self.path_dict.iteritems():
+				if not os.path.isdir(current_path):
+					os.makedirs(current_path)
 			open(setup_complete_file,'a').close()
+	def get_path(self, folder_name):
+		return(self.path_dict[folder_name])
 	def set_current_output_subfolder(self,current_subfolder):
 		# set (and if necessary, create) a subfolder to write temp output to
 		if current_subfolder:
-			self.current_output_subfolder = os.path.join(self.MLE_output_path, \
-				current_subfolder)
-			if not os.path.isdir(self.current_output_subfolder):
-				os.makedirs(self.current_output_subfolder)
+			self.path_dict['current_output_subfolder'] = \
+				os.path.join(self.path_dict['MLE_output_path'], \
+					current_subfolder)
+			if not os.path.isdir(self.path_dict['current_output_subfolder']):
+				os.makedirs(self.path_dict['current_output_subfolder'])
 		else:
-			self.current_output_subfolder = self.MLE_output_path
+			self.path_dict['current_output_subfolder'] = self.path_dict['MLE_output_path']
 
 
 class MLEParameters(object):
@@ -249,15 +257,17 @@ class MLEstimation(object):
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
 		self.mle_folders = copy.deepcopy(mle_folders)
-		self.completefile = os.path.join(cluster_folders.completefile_path, \
-			'_'.join(['MLE',mle_parameters.output_id_parameter,'completefile.txt']))
-		self.job_name = '-'.join([mle_folders.experiment_folder_name,'MLE', \
+		self.completefile = \
+			os.path.join(cluster_folders.get_path('completefile_path'), \
+				'_'.join(['MLE',mle_parameters.output_id_parameter, \
+					'completefile.txt']))
+		self.job_name = '-'.join([mle_folders.get_path('experiment_folder_name'),'MLE', \
 			mle_parameters.output_id_parameter])
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.within_batch_counter_call = \
 			'${' + self.cluster_parameters.within_batch_counter + '}'
-		self.output_path = mle_folders.current_output_subfolder
+		self.output_path = mle_folders.get_path('current_output_subfolder')
 		self.output_filename = _generate_filename(self.output_path, \
 			self.within_batch_counter_call, mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter, 'data')
@@ -327,8 +337,9 @@ class MLEstimation(object):
 		output_folder = self.output_path
 		output_extension = self.output_extension
 		output_file_label = self.output_file_label
-		cluster_job_submission_folder = self.cluster_folders.cluster_job_submission_path
-		experiment_folder = self.mle_folders.experiment_path
+		cluster_job_submission_folder = \
+			self.cluster_folders.get_path('cluster_job_submission_path')
+		experiment_folder = self.mle_folders.get_path('experiment_path')
 		module = self.module
 		code_run_input = self.code_run_input
 		additional_beginning_lines_in_job_sub = self.additional_beginning_lines_in_job_sub
@@ -614,13 +625,13 @@ class OneSidedCIBound(object):
 		self.CI_bound_name = _generate_file_label(self.output_prename, \
 			self.output_identifier, self.fixed_param)
 		self.CI_bound_output_file = \
-			_generate_filename(self.mle_folders.CI_bound_path, '1', \
+			_generate_filename(self.mle_folders.get_path('CI_bound_path'), '1', \
 				self.output_identifier, self.fixed_param, self.output_prename)
 		self.CI_bound_fit_file = \
-			_generate_filename(self.mle_folders.CI_bound_path, '1', \
+			_generate_filename(self.mle_folders.get_path('CI_bound_path'), '1', \
 				self.output_identifier, self.fixed_param, \
 				(self.output_prename + '_fit_file'))
-		self.completefile = os.path.join(cluster_folders.completefile_path, \
+		self.completefile = os.path.join(cluster_folders.get_path('completefile_path'), \
 			'_'.join([self.CI_bound_name,'completefile.txt']))
 		self.additional_beginning_lines_in_job_sub = []
 		self.additional_end_lines_in_job_sub = []
@@ -719,17 +730,19 @@ class OneSidedCIBound(object):
 		self.code_run_input = submission_string_processor.get_code_run_input()
 	def _run_CI_finder_submission(self):
 		# handles submission of the job
-		self.job_name = '-'.join([self.mle_folders.experiment_folder_name, \
-			self.CI_bound_name])
+		self.job_name = \
+			'-'.join([self.mle_folders.get_path('experiment_folder_name'), \
+				self.CI_bound_name])
 		job_numbers = [1]
 		initial_time = 30
 		initial_mem = 1024
 		cluster_parameters = self.cluster_parameters
-		output_folder = self.mle_folders.CI_bound_path
+		output_folder = self.mle_folders.get_path('CI_bound_path')
 		output_extension = '.csv'
 		output_file_label = self.CI_bound_name
-		cluster_job_submission_folder = self.cluster_folders.cluster_job_submission_path
-		experiment_folder = self.mle_folders.experiment_path
+		cluster_job_submission_folder = \
+			self.cluster_folders.get_path('cluster_job_submission_path')
+		experiment_folder = self.mle_folders.get_path('experiment_path')
 		module = self.module
 		code_run_input = self.code_run_input
 		additional_beginning_lines_in_job_sub = self.additional_beginning_lines_in_job_sub
@@ -881,11 +894,11 @@ class CombinedResultSummary(object):
 	# keep track of summary files for each mode; once those are complete, stop running current folder
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
 		cluster_folders):
-		self.mle_datafile_path = mle_folders.current_output_subfolder
+		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
-		self.LL_profile_folder = mle_folders.LL_profile_path
+		self.LL_profile_folder = mle_folders.get_path('LL_profile_path')
 		self.runtime_percentile = mle_parameters.runtime_percentile
 		self.pval = mle_parameters.current_CI_pval
 		self._create_combined_output_file(mle_folders)
@@ -904,7 +917,7 @@ class CombinedResultSummary(object):
 		self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 	def _create_combined_output_file(self, mle_folders):
 		# creates the name of the combined output file for the results
-		experiment_path = mle_folders.experiment_path
+		experiment_path = mle_folders.get_path('experiment_path')
 		self.combined_results_output_file = os.path.join(experiment_path, \
 			('_'.join(['MLE_output', self.mle_parameters.output_identifier]) + \
 				'.csv'))
@@ -915,7 +928,7 @@ class CombinedResultSummary(object):
 			self.unfixed_ll_param_df = _get_MLE_params(self.unfixed_mle_file)
 			self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 		else:
-			self.unfixed_ll_param_df = DataFrame()
+			self.unfixed_ll_param_df = pandas.DataFrame()
 			self.warnings.set_unfixed_file_missing()
 	def _set_combined_ML_params(self, ml_param_df):
 		self.true_max_param_df = ml_param_df
@@ -967,9 +980,8 @@ class CombinedResultSummary(object):
 		ml_params_to_include = pandas.concat(self.unfixed_ll_param_df, \
 			self.true_max_param_df)
 		for current_fixed_parameter in parameters_to_loop_over:
-			ll_profile_outputs = \
-				self._update_LL_profile(self.unfixed_ll_param_df,
-					ml_params_to_include)
+			self._update_LL_profile(self.unfixed_ll_param_df,
+				ml_params_to_include)
 	def _get_runtime_CI(self):
 		# creates 'confidence intervals' across parameters for the
 			# self.runtime_percentile-th estimates within a parameter's
@@ -1067,19 +1079,19 @@ class CombinedResultSummary(object):
 				if non_unfixed_ML_identified:
 					self._correct_LL_profiles()
 				self._write_combined_df()
+	def generate_asymptotic_CIs(self):
+		# generate and record asymptotic CIs for fitted parameters
+		self._read_combined_df()
+		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(False)
+		for current_fixed_parameter in parameters_to_loop_over:
+			# first set current parameter
+			self.mle_parameters.set_parameter(fixed_parameter)
+			# create an LLProfile for current parameter
+			ll_profile = LLProfile(self.mle_parameters, \
+				self.mle_datafile_path, self.LL_profile_folder, \
+				non_profile_max_params)
+			ll_profile.run_LL_profile_compilation()
 
-
-
-
-
-
-		# enter MLE column in df
-		# enter runtime CI
-			
-
-##### Remove warning for wrong ML from LLprofile
-##### Add warning system for CombinedResultSummary
-##### Add system for forcing ML in LLprofile
 
 
 
@@ -1165,7 +1177,9 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 #			current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, CI_p_val)
 #			current_ll_profile.run_LL_profile_compilation()
 
-def id_CI(mle_estimator, mle_folders, mle_parameters, cluster_parameters, cluster_folders, fixed_param, CI_completeness_tracker):
+def id_CI(mle_folders, mle_parameters, cluster_parameters, cluster_folders, \
+	fixed_param, CI_completeness_tracker, additional_param_df, datafile_path, \
+	LL_profile_folder, p_val):
 	# get LL_profile
 	# when LL_profile complete, get lower and upper asymptotic CI
 	# if asymptotic CI identification is complete:
@@ -1176,13 +1190,11 @@ def id_CI(mle_estimator, mle_folders, mle_parameters, cluster_parameters, cluste
 	# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
 	#	create summary file
 	# keep track of summary files for each mode; once those are complete, stop running current folder
-
+	##
 	# intialize list of warnings for current LL profile and CIs
 	CI_and_profile_warning_list = []
 	# create LL profile
-	datafile_path = mle_estimator.get_output_path()
-	LL_profile_folder = mle_folders.LL_profile_path
-	current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder)
+	current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
 	current_ll_profile.run_LL_profile_compilation()
 	# get data frame with LL profile, warnings, runtime, and MLE vals
 	current_LL_df = current_ll_profile.get_LL_df()
@@ -1190,8 +1202,7 @@ def id_CI(mle_estimator, mle_folders, mle_parameters, cluster_parameters, cluste
 	current_max_LL = current_ll_profile.get_max_LL()
 	LL_profile_warnings = current_ll_profile.get_warnings()
 	CI_and_profile_warning_list.append(LL_profile_warnings)
-	runtime_percentile = 95
-	runtime_quantile = current_ll_profile.get_runtime(runtime_percentile)
+#	runtime_quantile = current_ll_profile.get_runtime(runtime_percentile)
 
 	###### BEFORE RUNNING ANY CI COMPUTATION, NEED TO MAKE SURE THAT MAX_LL VAL IDENTIFIED IN ALL LL PROFILES IS THE SAME!
 		###### IF NOT, FORCE RE-RUN OF LL PROFILE COMPUTATION WITH HIGHEST MAX_LL VALUE
@@ -1200,8 +1211,8 @@ def id_CI(mle_estimator, mle_folders, mle_parameters, cluster_parameters, cluste
 	deg_freedom = 1
 		# 1 df for chi-square test for LL profile comparisons
 	CI_type = 'asymptotic'
-	asymptotic_CI = TwoSidedCI(p_val, current_LL_df, deg_freedom, fixed_param_MLE_val, \
-		fixed_param, current_max_LL, CI_type, mle_folders, cluster_parameters, \
+	asymptotic_CI = TwoSidedCI(p_val, current_LL_df, deg_freedom, current_fixed_param_MLE_val, \
+		current_fixed_param, current_max_LL, CI_type, mle_folders, cluster_parameters, \
 		cluster_folders)
 	asymptotic_CI.find_CI()
 	asymptotic_CI_dict = asymptotic_CI.get_CI()

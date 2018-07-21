@@ -144,22 +144,27 @@ class ClusterParameters(object):
 
 class FolderManager(object):
 	def __init__(self, cluster_parameters, experiment_folder_name):
-		self.experiment_path = \
+		self.path_dict = {}
+		self.path_dict['experiment_path'] = \
 			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
-		self.trackfile_path = os.path.join(self.experiment_path,'trackfiles')
-		self.completefile_path = os.path.join(self.experiment_path,'completefiles')
-		self.cluster_job_submission_path = os.path.join(cluster_parameters.temp_storage_path, \
-			experiment_folder_name,'cluster_job_submission_folder')
+		self.path_dict['trackfile_path'] = \
+			os.path.join(self.path_dict['experiment_path'],'trackfiles')
+		self.path_dict['completefile_path'] = \
+			os.path.join(self.path_dict['experiment_path'],'completefiles')
+		self.path_dict['cluster_job_submission_path'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name,'cluster_job_submission_folder')
 		self._set_up_folders()
 	def _set_up_folders(self):
-		setup_complete_file = os.path.join(self.completefile_path,'cluster_folder_setup_complete.txt')
+		setup_complete_file = os.path.join(self.path_dict['completefile_path'], \
+			'cluster_folder_setup_complete.txt')
 		if not os.path.isfile(setup_complete_file):
-			new_directory_list = (self.trackfile_path,self.completefile_path, \
-				self.cluster_job_submission_path)
-			for current_new_directory in new_directory_list:
-				if not os.path.isdir(current_new_directory):
-					os.makedirs(current_new_directory)
+			for current_folder_key, current_path in self.path_dict.iteritems():
+				if not os.path.isdir(current_path):
+					os.makedirs(current_path)
 			open(setup_complete_file,'a').close()
+	def get_path(self, folder_name):
+		return(self.path_dict[folder_name])
 
 class JobParameters(object):
 	# holds parameters of the job currently being run
