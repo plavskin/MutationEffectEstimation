@@ -269,7 +269,7 @@ class TwoSidedCI(object):
 		self.CI_sides = ['lower','upper']
 		self.CI_object_dictionary = dict()
 		self.CI_dictionary = dict()
-		self.CI_completeness_tracker = CompletenessTracker(self.CI_sides)
+		self.CI_completeness_tracker = Cluster_Functions.CompletenessTracker(self.CI_sides)
 		self.CI_complete = False
 		self.CI_warning_list = []
 		self.CI_object_dictionary = {}

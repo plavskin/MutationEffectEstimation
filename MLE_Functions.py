@@ -85,7 +85,7 @@ class MLEParameters(object):
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
 		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
 		self.parallel_processors = parameter_list["parallel_processors"]
-		self.mode_completeness_tracker = CompletenessTracker(self.mode_list)
+		self.mode_completeness_tracker = Cluster_Functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
 	def _retrieve_current_values(self,list_by_mode,mode_idx,current_mode,param_num):
 		# retrieves the appropriate list from a list of parameter lists
@@ -169,7 +169,7 @@ class MLEParameters(object):
 		self._id_parameters_to_loop_over()
 		# set up completefile tracker for these parameters
 		self.parameter_completeness_tracker = \
-			CompletenessTracker(self.current_parameters_to_loop_over)
+			Cluster_Functions.CompletenessTracker(self.current_parameters_to_loop_over)
 		self.current_mode_complete = False
 		# output_identifier is a string that will be included in filenames
 		self.output_identifier = output_identifier
@@ -496,7 +496,6 @@ class LLProfile(object):
 		self._set_LL_df()
 		self._write_LL_df()
 		self._id_max_LL()
-		self._check_monotonicity()
 	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders):
 		# when LL_profile complete, get lower and upper asymptotic CI
 		# if asymptotic CI identification is complete:
@@ -623,7 +622,7 @@ class CombinedResultSummary(object):
 		self._create_combined_output_file(mle_folders)
 		self.max_LL = None
 		self.warnings = CombinedResultWarning()
-		self.completeness_tracker = CompletenessTracker(['initialization', \
+		self.completeness_tracker = Cluster_Functions.CompletenessTracker(['initialization', \
 			'asymptotic_CIs', 'simulation-based_CIs'])
 		self.runtime_quant_list = numpy.array([])
 		self.true_max_param_df = pandas.DataFrame()

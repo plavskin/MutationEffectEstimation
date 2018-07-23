@@ -2,6 +2,8 @@
 
 # Contains functions necessary for naming files in MLE
 
+import os
+
 def generate_filename(output_file_path, profile_point_as_str, \
 	output_id, parameter_name, output_prename):
 	# creates a filename to which output file of MLE will be written,
