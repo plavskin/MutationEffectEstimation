@@ -9,6 +9,7 @@ import copy
 import pandas
 from scipy.stats import chi2
 import csv
+from mle_filenaming_functions import generate_file_label, generate_filename 
 
 class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
@@ -268,10 +269,10 @@ class MLEstimation(object):
 		self.within_batch_counter_call = \
 			'${' + self.cluster_parameters.within_batch_counter + '}'
 		self.output_path = mle_folders.get_path('current_output_subfolder')
-		self.output_filename = _generate_filename(self.output_path, \
+		self.output_filename = generate_filename(self.output_path, \
 			self.within_batch_counter_call, mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter, 'data')
-		self.output_file_label = _generate_file_label('data', \
+		self.output_file_label = generate_file_label('data', \
 			mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter)
 		self.module = 'matlab'
@@ -353,61 +354,16 @@ class MLEstimation(object):
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, parallel_processors, completefile_path)
 
-class CompletenessTracker(object):
-	# Keeps a running tally of keys (which can be parameters, modes, etc) and checks their completeness
-	def __init__(self,key_list):
-		self._create_completeness_dict(key_list)
-		self.completeness_status = False
-	def _create_completeness_dict(self,key_list):
-		# creates dictionary with parameter names as keys and False as values
-		completeness_list = [False]*len(key_list)
-		self.completeness_dict = dict(zip(key_list,completeness_list))
-	def update_key_status(self, key, completefile_path):
-		# checks whether key has associated completefile and changes its status accordingly
-		if os.path.isfile(completefile_path):
-			self.completeness_dict[key] = True
-	def switch_key_completeness(self, key, value_bool):
-		# switches a key value to value_bool
-		# useful for cases when completefiles not kept track of
-		self.completeness_dict[key] = value_bool
-	def get_key_completeness(self, key):
-		return(self.completeness_dict[key])
-	def _check_completeness(self):
-		# checks whethere all parameters completed
-		if all(self.completeness_dict.values()):
-			self.completeness_status = True
-		else:
-			self.completeness_status = False
-	def get_completeness(self):
-		# checks and returns completeness status
-		self._check_completeness()
-		return(self.completeness_status)
-
-class LLWarning(object):
-	# stores warnings for LLProfile objects
-	def __init__(self):
-		self.non_monotonic = False
-	def set_non_monotonic(self):
-		self.non_monotonic = True
-	def get_warning_line(self):
-		warning_list = []
-		if self.non_monotonic:
-			warning_list.append('non-monotonic LL profile before or after ML')
-		warning_string = ';'.join(warning_list)
-#		if warning_list:
-#			warning_string = 'warning! ' + warning_string
-		return(warning_string)
-
 class LLProfile(object):
 	# Gets, holds, and updates log likelihood profile
 	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
 #		unfixed_ll_param_df, true_max_param_df
-		self.warnings = LLWarning()
 		self.profile_points = mle_parameters.current_profile_point_num
 		self.output_identifier = mle_parameters.output_identifier
 		self.current_fixed_parameter = mle_parameters.current_fixed_parameter
 		self.datafile_path = datafile_path
 		self.fixed_param = mle_parameters.current_fixed_parameter
+		self.warning_line = ''
 #		self.fixed_param_idx = mle_parameters.current_fixed_parameter_idx
 #		self.parameter_list = mle_parameters.current_parameter_list
 			# the percentile of runtimes returned by LLprofile
@@ -464,7 +420,7 @@ class LLProfile(object):
 	def _populate_LL_df(self):
 		# fill in data in LL_df
 		for current_pp in range(1,(self.profile_points+1)):
-			current_datafile = _generate_filename(self.datafile_path, \
+			current_datafile = generate_filename(self.datafile_path, \
 				str(current_pp), self.output_identifier, \
 				self.current_fixed_parameter, 'data')
 			if os.path.isfile(current_datafile):
@@ -486,27 +442,24 @@ class LLProfile(object):
 #		LL_profile = self.LL_matrix[sorted_indices[:,numpy.newaxis], \
 #			[self.fixed_param_idx + self.non_parameter_column_num,0]]
 #		return(LL_profile)
-	def _check_monotonicity(self):
-		### PROBABLY MOVE THIS TO CI SECTION TO AVOID REDUNDANCY
-		# check whether LL profile is monotonic before and after ML parameter value
-		# In simple and accurately estimated LL landscape, LL
-			# profile expected to increase monotonically up until
-			# max LL, then decrease monotonically after; if this
-			# isn't the case, throw a warning
-#		LL_profile = self.get_LL_profile()
-#		y_vals = LL_profile[:,1]
-#		x_vals = LL_profile[:,0]
-		x_vals = self.LL_df_sorted[self.fixed_param]
-		y_vals = self.LL_df_sorted['LL']
-		y_diffs = numpy.diff(y_vals)
-		increasing_LL_section = y_diffs[x_vals[:-1] < self.fixed_param_MLE_val]
-		decreasing_LL_section = y_diffs[x_vals[:-1] >= self.fixed_param_MLE_val]
-			# remember indexing is different for y_diffs and y_vals,
-				# it's correct here
-		monotonicity_state = numpy.all(increasing_LL_section >= 0) and \
-			numpy.all(decreasing_LL_section <= 0)
-		if not monotonicity_state:
-			self.warnings.set_non_monotonic()
+#	def _check_monotonicity(self):
+#		### PROBABLY MOVE THIS TO CI SECTION TO AVOID REDUNDANCY
+#		# check whether LL profile is monotonic before and after ML parameter value
+#		# In simple and accurately estimated LL landscape, LL
+#			# profile expected to increase monotonically up until
+#			# max LL, then decrease monotonically after; if this
+#			# isn't the case, throw a warning
+#		x_vals = self.LL_df_sorted[self.fixed_param]
+#		y_vals = self.LL_df_sorted['LL']
+#		y_diffs = numpy.diff(y_vals)
+#		increasing_LL_section = y_diffs[x_vals[:-1] < self.fixed_param_MLE_val]
+#		decreasing_LL_section = y_diffs[x_vals[:-1] >= self.fixed_param_MLE_val]
+#			# remember indexing is different for y_diffs and y_vals,
+#				# it's correct here
+#		monotonicity_state = numpy.all(increasing_LL_section >= 0) and \
+#			numpy.all(decreasing_LL_section <= 0)
+#		if not monotonicity_state:
+#			self.warnings.set_non_monotonic()
 	def _write_LL_df(self):
 #		LL_array_sorted = \
 #			self.LL_matrix[self.LL_matrix[:,\
@@ -544,6 +497,35 @@ class LLProfile(object):
 		self._write_LL_df()
 		self._id_max_LL()
 		self._check_monotonicity()
+	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders):
+		# when LL_profile complete, get lower and upper asymptotic CI
+		# if asymptotic CI identification is complete:
+		#	- identify position at which sims need to happen
+		#		- run sims
+		#			- get CIs from sims
+		# create LL profile
+		current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
+		current_ll_profile.run_LL_profile_compilation()
+		# get data frame with LL profile, warnings, runtime, and MLE vals
+		current_LL_df = current_ll_profile.get_LL_df()
+		current_fixed_param_MLE_val = current_ll_profile.get_fixed_param_MLE_val()
+		current_max_LL = current_ll_profile.get_max_LL()
+		LL_profile_warnings = current_ll_profile.get_warnings()
+		CI_and_profile_warning_list.append(LL_profile_warnings)
+		# get asymptotic CI
+		deg_freedom = 1
+			# 1 df for chi-square test for LL profile comparisons
+		CI_type = 'asymptotic'
+		self.asymptotic_CI = TwoSidedCI(p_val, self.LL_df_sorted, deg_freedom, \
+			self.fixed_param_MLE_val, self.fixed_param, self.max_LL, CI_type, \
+			mle_folders, cluster_parameters, cluster_folders)
+		self.asymptotic_CI.find_CI()
+		asymptotic_CI_dict = asymptotic_CI.get_CI()
+		if asymptotic_CI_dict:
+			asymptotic_CI_warnings = asymptotic_CI.get_CI_warning()
+			CI_and_profile_warning_list.append(asymptotic_CI_warnings)
+			CI_completeness_tracker.switch_key_completeness(fixed_param, True)
+			###### Really, completeness tracker should only be switched once sim CI completed, or if sims not required
 	def get_LL_df(self):
 		# returns sorted LL_df
 		return(self.LL_df_sorted)
@@ -555,8 +537,7 @@ class LLProfile(object):
 	def get_ML_params(self):
 		return(self.ML_params)
 	def get_warnings(self):
-		warning_line = self.warnings.get_warning_line()
-		return(warning_line)
+		return(self.warning_line)
 	def get_runtime(self, runtime_display_percentile):
 		# finds the runtime, in hours, corresponding to
 			# self.runtime_display_percentile
@@ -565,268 +546,6 @@ class LLProfile(object):
 			self.LL_df_sorted.runtime_in_secs.quantile(percentile_as_decimal)
 		time_quantile_in_hours = time_quantile_in_seconds/3600
 		return(time_quantile_in_hours)
-
-class CIWarning(object):
-	# stores warnings for OneSidedCIBound objects
-	def __init__(self, CI_side, CI_type):
-		self.points_to_create_CI = 0
-		self.all_points_within_CI_bound = False
-		self.CI_side = CI_side
-		self.CI_type = CI_type
-	def set_all_points_within_CI_bound(self):
-		self.all_points_within_CI_bound = True
-	def set_points_to_create_CI(self,points_to_create_CI):
-		self.points_to_create_CI = points_to_create_CI
-	def set_no_output_file(self):
-		self.no_output_file = True
-	def get_warning_line(self):
-		warning_list = []
-		if self.all_points_within_CI_bound:
-			warning_list.append('All points used to calculate ' + self.CI_side + \
-				 ' CI for ' + self.CI_type + \
-				 ' CI are between expected CI bound and MLE.')
-		if self.no_output_file:
-			warning_list.append('Although the curve-fitting job was completed, there was no output file created for ' + \
-				self.CI_side + 'CI for ' + self.CI_type)
-		if set_points_to_create_CI == 0:
-			warning_list.append('It seems '  + self.CI_side + ' CI for ' + \
-				self.CI_type + ' CI was not set.')
-		elif set_points_to_create_CI == 1:
-			warning_list.append('No profile points besides MLE on ' + \
-				self.CI_side + ' side of CI for ' + self.CI_type + ' CI.')
-		elif set_points_to_create_CI == 2:
-			warning_list.append('Only one profile point besides MLE on ' + \
-				self.CI_side + \
-				' side of CI for ' + self.CI_type + \
-				'CI; CI boundary calculated as linear interpolation of p-val between to two points')
-		warning_string = ';'.join(warning_list)
-		return(warning_string)
-
-class OneSidedCIBound(object):
-	# Stores data for CI bound on one side of MLE
-	def __init__(self, p_val, profile_side, LL_df, df, fixed_param_MLE_val,
-		fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders):
-		self.cdf_bound = 1-p_val
-		self.points_to_fit_curve = 3
-		self.profile_side = profile_side
-		self.df = df
-		self.CI_type = CI_type
-			# CI_type can be either 'asymptotic' or 'sim'
-		self.fixed_param = fixed_param
-		self.fixed_param_MLE_val = fixed_param_MLE_val
-		self.max_LL = max_LL
-		self.cluster_parameters = cluster_parameters
-		self.cluster_folders = cluster_folders
-		self.mle_folders = mle_folders
-		self.module = 'matlab'
-		self.CI_bound_set = False
-		self.output_prename = '-'.join(['CI_bound', self.profile_side, \
-			self.CI_type])
-		self.CI_bound_name = _generate_file_label(self.output_prename, \
-			self.output_identifier, self.fixed_param)
-		self.CI_bound_output_file = \
-			_generate_filename(self.mle_folders.get_path('CI_bound_path'), '1', \
-				self.output_identifier, self.fixed_param, self.output_prename)
-		self.CI_bound_fit_file = \
-			_generate_filename(self.mle_folders.get_path('CI_bound_path'), '1', \
-				self.output_identifier, self.fixed_param, \
-				(self.output_prename + '_fit_file'))
-		self.completefile = os.path.join(cluster_folders.get_path('completefile_path'), \
-			'_'.join([self.CI_bound_name,'completefile.txt']))
-		self.additional_beginning_lines_in_job_sub = []
-		self.additional_end_lines_in_job_sub = []
-		self.additional_code_run_keys = []
-		self.additional_code_run_values = []
-		self._select_profile_side(LL_df)
-		self.warning = CIWarning(profile_side)
-		# need to run _asymptotic_p_val_calc and
-			# _find_CI_proximal_LL_points even if curve fitting to LL
-			# points has already occurred, since these functions throw
-			# important warnings
-		self._asymptotic_p_val_calc()
-		self._find_CI_proximal_LL_points()
-	def _select_profile_side(self, LL_df):
-		# selects data from correct side of likelihood profile
-		if self.profile_side == 'lower':
-			LL_df_one_side = LL_df[(LL_df[self.fixed_param] <= self.fixed_param_MLE_val)]
-			self.default_CI_bound = float("-inf")
-		elif self.profile_side == 'upper':
-			LL_df_one_side = LL_df[(LL_df[self.fixed_param] >= self.fixed_param_MLE_val)]
-			self.default_CI_bound = float("inf")
-		else:
-			print(('Error! Underfined profile side ' + self.profile_side))
-		self.one_sided_LL_df = LL_df_one_side.sort_values(self.fixed_param)
-	def _asymptotic_p_val_calc(self):
-		# calculates p-values for every point in LL_profile, following asymptotic assumption
-		x_vals = self.one_sided_LL_df[self.fixed_param]
-		y_vals = self.one_sided_LL_df['LL']
-		D_vals = 2*(self.max_LL-y_vals)
-		cdf_vals = 0.5 + 0.5*chi2.cdf(D_vals,self.df)
-			# rather than calculating p-vals for the whole distribution, we
-				# calculate a 'reflected' cdf for the lower side of the
-				# distribution so that the same fitting algorithm could be
-				# used to identify the x-value closest to the desired
-				# p-value cutoff
-		self.one_sided_LL_df['cdf_vals'] = cdf_vals
-	def _id_proximal_points(self, target_y, y_vals, num_points):
-		# returns indices of up to num_points points closest to target_y
-		dist_to_target = numpy.absolute(target_y-y_vals)
-		sorted_indices = numpy.argsort(dist_to_target)
-		closest_indices = sorted_indices[0:num_points]
-		return(closest_indices)
-	def _set_CI_bound(self, CI_bound):
-		# sets self.CI_bound and changed self.CI_bound_set to true
-		self.CI_bound = CI_bound
-		self.CI_bound_set = True
-	def _find_CI_proximal_LL_points(self):
-		# identify points that are most proximal to
-			# conf int cutoff
-		# if there are 3 such points, there's no problem
-			# if there are 2 such points, run linear CI estimation and throw warning
-			# if there is 1 or 0 such points, set CI bound to -/+Inf, throw warning
-			# if all points within CI bound, throw warning
-		number_profile_points = self.one_sided_LL_df.shape[0]
-		if number_profile_points <= 1:
-			self._set_CI_bound(self.default_CI_bound)
-		elif number_profile_points == 2:
-			self.code_name = 'Linear_Bound_Finder'
-		elif number_profile_points > 2:
-			self.code_name = 'Quadratic_Bound_Finder'
-		self.warning.set_points_to_create_CI(number_profile_points)
-		if numpy.max(profile_points) < self.cdf_bound:
-			self.warning.set_all_points_within_CI_bound()
-		# get indices of closest points to CI bound
-		CI_bound_proximal_indices = \
-			self._id_proximal_points(self.cdf_bound, self.one_sided_LL_df['LL'], \
-				self.points_to_fit_curve)
-		# create a new df with only points closest to CI bound
-		self.CI_bound_proximal_points = self.one_sided_LL_df[CI_bound_proximal_indices]
-	def _create_code_run_input(self):
-		key_list = ['cdf_bound', \
-			'mle_param_val', \
-			'parameter_values',\
-			'cdf_vals', \
-			'output_file', \
-			'fit_file']
-		value_list = [self.cdf_bound, \
-			self.fixed_param_MLE_val, \
-			self.CI_bound_proximal_points[self.fixed_param], \
-			self.CI_bound_proximal_points['cdf_vals'], \
-			self.CI_bound_output_file, \
-			self.CI_bound_fit_file]
-		# take values from self.additional_code_run_keys and
-			# self.additional_code_run_values where
-			# self.additional_code_run_keys isn't already in key_list,
-			# and add remaining values to key_list and value_list
-		for current_key, current_val in \
-			zip(self.additional_code_run_keys,self.additional_code_run_values):
-			if not current_key in key_list:
-				key_list.append(current_key)
-				value_list.append(current_val)
-		# process key_list and value_list into a submission string
-		submission_string_processor = \
-			SubmissionStringProcessor(self.module, key_list, value_list, \
-				self.code_name)
-		self.code_run_input = submission_string_processor.get_code_run_input()
-	def _run_CI_finder_submission(self):
-		# handles submission of the job
-		self.job_name = \
-			'-'.join([self.mle_folders.get_path('experiment_folder_name'), \
-				self.CI_bound_name])
-		job_numbers = [1]
-		initial_time = 30
-		initial_mem = 1024
-		cluster_parameters = self.cluster_parameters
-		output_folder = self.mle_folders.get_path('CI_bound_path')
-		output_extension = '.csv'
-		output_file_label = self.CI_bound_name
-		cluster_job_submission_folder = \
-			self.cluster_folders.get_path('cluster_job_submission_path')
-		experiment_folder = self.mle_folders.get_path('experiment_path')
-		module = self.module
-		code_run_input = self.code_run_input
-		additional_beginning_lines_in_job_sub = self.additional_beginning_lines_in_job_sub
-		additional_end_lines_in_job_sub = self.additional_end_lines_in_job_sub
-		parallel_processors = 1
-		completefile_path = self.completefile
-		# set up and run batch jobs
-		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
-			initial_mem, cluster_parameters, output_folder, output_extension, \
-			output_file_label, cluster_job_submission_folder, experiment_folder, \
-			module, code_run_input, additional_beginning_lines_in_job_sub, \
-			additional_end_lines_in_job_sub, parallel_processors, completefile_path)
-	def find_CI_bound(self):
-		# check if CI bound has been IDed
-		# if it has, read it in, assign it to self
-		# if not, submit job
-		# look for completefile
-		if not self.CI_bound_set:
-			if os.path.isfile(self.completefile):
-				# if completefile exists, look for CI bound file
-				# if CI bound file doesn't exist, set CI bound to
-					# negative infinity, add error message
-				# otherwsise read CI bound file
-				if os.path.isfile(self.CI_bound_output_file):
-					with open(self.CI_bound_output_file, 'rU') as \
-						CI_bound_contents:
-						self._set_CI_bound(list(csv.reader(CI_bound_contents))[0])
-				else:
-					self._set_CI_bound(self.default_CI_bound)
-					self.warning.set_no_output_file()
-			else:
-				self._run_CI_finder_submission()
-	def get_CI_bound(self):
-		# returns CI_bound if it exists, otherwise returns None
-		if self.CI_bound_set:
-			return(self.CI_bound)
-		else:
-			return(None)
-	def get_CI_bound_warning(self):
-		# returns the warning string for current CI bound
-		warning_string = self.warning.get_warning_line()
-		return(warning_string)
-
-class TwoSidedCI(object):
-	# compiles two-sided CI
-	def __init__(self, p_val, LL_df, deg_freedom, fixed_param_MLE_val, \
-		fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
-		cluster_folders):
-		self.CI_sides = ['lower','upper']
-		self.CI_object_dictionary = dict()
-		self.CI_dictionary = dict()
-		self.CI_completeness_tracker = CompletenessTracker(self.CI_sides)
-		self.CI_complete = False
-		self.CI_warning_list = []
-		for current_CI_side in self.CI_sides:
-			self.CI_object_dictionary[current_CI_side] = OneSidedCIBound(p_val, \
-				current_CI_side, LL_df, deg_freedom, fixed_param_MLE_val, \
-				fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
-				cluster_folders)
-	def find_CI(self):
-		# identifies confidence interval
-		for current_CI_side in self.CI_sides:
-			self.CI_object_dictionary[current_CI_side].find_CI_bound()
-			current_CI_bound = self.CI_object_dictionary[current_CI_side].get_CI_bound()
-			if current_CI_bound:
-				self.CI_dictionary[current_CI_side] = current_CI_bound
-				self.CI_completeness_tracker.switch_key_completeness(current_CI_side, \
-					True)
-				self.CI_complete = \
-					self.CI_completeness_tracker.get_completeness()
-				current_CI_warning = \
-					self.CI_object_dictionary[current_CI_side].get_CI_bound_warning()
-				self.CI_warning_list.append(current_CI_warning)
-	def get_CI(self):
-		# returns confidence interval dictionary if it's complete,
-			# otherwise, returns None
-		if self.CI_complete:
-			return(self.CI_dictionary)
-		else:
-			return(None)
-	def get_CI_warning(self):
-		# returns a combined warning line for both CI bounds
-		combined_warning_line = ';'.join(self.CI_warning_list)
-		return(combined_warning_line)
 
 class SingleParamResultSummary(object):
 	# stores MLE estimates and CIs for a single parameter
@@ -911,7 +630,7 @@ class CombinedResultSummary(object):
 		self.combined_results_df = pandas.DataFrame()
 		# set MLE results from 'unfixed' parameter (i.e. fitting all
 			# unfixed params together)
-		self.unfixed_mle_file = _generate_filename(self.mle_datafile_path, \
+		self.unfixed_mle_file = generate_filename(self.mle_datafile_path, \
 			'1', mle_parameters.output_identifier, 'unfixed', 'data')
 		self._set_unfixed_param_data()
 		self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
@@ -1093,27 +812,17 @@ class CombinedResultSummary(object):
 			ll_profile.run_LL_profile_compilation()
 
 
+			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
+		# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
+		#	create summary file
+		# keep track of summary files for each mode; once those are complete, stop running current folder
+		##
+
+
 
 
 
 ########################################################################
-def _generate_filename(output_file_path, profile_point_as_str, \
-	output_id, parameter_name, output_prename):
-	# creates a filename to which output file of MLE will be written,
-		# to be read by LLProfile
-	output_file_label = _generate_file_label(output_prename, output_id, \
-		parameter_name)
-	output_file = '_'.join([output_file_label, profile_point_as_str]) + '.csv'
-	output_filename = os.path.join(output_file_path,output_file)
-	return(output_filename)
-
-def _generate_file_label(output_prename, output_id, parameter_name):
-	# creates a file label that can be used by Cluster_Functions to
-		# track the completeness of the file
-	# the file label doesn't include the path, profile point, or file
-		# extension
-	output_file_label = '_'.join([output_prename, output_id, parameter_name])
-	return(output_file_label)
 
 def _get_MLE_params(current_param_datafile):
 	# get MLE param values and run info from output (csv) file
@@ -1223,7 +932,6 @@ def id_CI(mle_folders, mle_parameters, cluster_parameters, cluster_folders, \
 		###### Really, completeness tracker should only be switched once sim CI completed, or if sims not required
 
 
-##### WHEN COMBINING DATA INTO OUTPUT TABLE, REMEMBER TO INCLUDE CALCULATION OF TRUE MAX LL
 			
 
 

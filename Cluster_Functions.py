@@ -197,6 +197,36 @@ class JobParameters(object):
 			print('Error! Non-string, non-list passed to JobParameters')
 		return(output_parameter)
 
+class CompletenessTracker(object):
+	# Keeps a running tally of keys (which can be parameters, modes, etc) and checks their completeness
+	def __init__(self,key_list):
+		self._create_completeness_dict(key_list)
+		self.completeness_status = False
+	def _create_completeness_dict(self,key_list):
+		# creates dictionary with parameter names as keys and False as values
+		completeness_list = [False]*len(key_list)
+		self.completeness_dict = dict(zip(key_list,completeness_list))
+	def update_key_status(self, key, completefile_path):
+		# checks whether key has associated completefile and changes its status accordingly
+		if os.path.isfile(completefile_path):
+			self.completeness_dict[key] = True
+	def switch_key_completeness(self, key, value_bool):
+		# switches a key value to value_bool
+		# useful for cases when completefiles not kept track of
+		self.completeness_dict[key] = value_bool
+	def get_key_completeness(self, key):
+		return(self.completeness_dict[key])
+	def _check_completeness(self):
+		# checks whethere all parameters completed
+		if all(self.completeness_dict.values()):
+			self.completeness_status = True
+		else:
+			self.completeness_status = False
+	def get_completeness(self):
+		# checks and returns completeness status
+		self._check_completeness()
+		return(self.completeness_status)
+
 class BatchSubmissionManager(object):
 	# Holds parameters for current job submission session, and manages
 		# which jobs from current batch are submitted
