@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Contains functions necessary for naming files in MLE
+# Contains functions necessary for naming files, generating submission strings in MLE
 
 import os
 

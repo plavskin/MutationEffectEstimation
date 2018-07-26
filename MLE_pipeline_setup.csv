@@ -8,7 +8,7 @@ temp_storage_folder,/Users/plavskin/Documents/yeast stuff/Mutational Effect Mode
 starting_L,2,float,Size of x-axis (ln(mut effect)) used for initial MLE; centered on 0
 starting_gridpower,16,float,log2(number of gridpoints for pdf determination) used for initial MLE
 simulation_repeats_by_mode,1000,float_list,number data is simulated to calculate likelihood ratio distributions
-profile_points_by_mode,3;3,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile
+profile_points_by_mode,15;15,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile
 starting_mem,1750,float,memory (in Mb) needed to run a sinlge MLE
 starting_time,1200,float,time (in mins) alotted for running single MLE
 user_email,yp19@nyu.edu,str,email of user who will receive job notifications from qsub

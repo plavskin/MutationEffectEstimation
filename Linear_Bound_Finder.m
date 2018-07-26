@@ -10,9 +10,9 @@ function Linear_Bound_Finder(key_list, value_list)
     % get parameter values
     parameter_dict = containers.Map(key_list,value_list);
 
-    cdf_bound = str2num(parameter_dict('cdf_bound'));
+    cdf_bound = parameter_dict('cdf_bound');
     	% cdf_bound = 1-p_value
-    mle_param_val = str2num(parameter_dict('mle_param_val'));
+    mle_param_val = parameter_dict('mle_param_val');
     parameter_vals = parameter_dict('parameter_values');
     cdf_vals = parameter_dict('cdf_vals');
     output_file = parameter_dict('output_file');
@@ -24,11 +24,16 @@ function Linear_Bound_Finder(key_list, value_list)
 	m = optimal_coefficients(1);
 	b = optimal_coefficients(2);
 	linear_fit = [m,b];
-	cdf_bounds = roots(linear_fit+[0,-cdf_bound]);
+	parameter_bounds = roots(linear_fit+[0,-cdf_bound]);
 		% here, cdf_bound is subtracted from the value for b to
 			% find the x-intercepts of the line at height cdf_bound
 
-	dlmwrite(output_file,[cdf_bound],'delimiter',',','precision',9);
+    
+%    figure; plot(parameter_vals,cdf_vals,'ob'); hold on;
+%    plot(parameter_vals,polyval(linear_fit,parameter_vals),'-r'); hold off;
+            
+            
+	dlmwrite(output_file,parameter_bounds,'delimiter',',','precision',9);
 	dlmwrite(linear_fit_file,linear_fit,'delimiter',',','precision',9);
 
 end

@@ -697,6 +697,31 @@ class CompletefileManager(object):
 		else:
 			self.completeness = False
 
+class SubmissionStringProcessor(object):
+	# creates a code submission string appropriate to the programming
+		# environment (module) being used
+	def __init__(self, module, key_list, value_list, code_name):
+		self._submission_string_generator(key_list,value_list,module,code_name)
+	def get_code_run_input(self):
+		return(self.code_sub_input_processor)
+	def _submission_string_generator(self, key_list, value_list, module, \
+		code_name):
+		if module == 'matlab':
+			code_sub_input_processor = \
+				MatlabInputProcessor(code_name)
+		elif module == 'r':
+			code_sub_input_processor = \
+				RInputProcessor(code_name)
+		else:
+			raise ValueError('%s is not an available module at the moment' \
+				% (module))
+		converted_key_string = \
+			code_sub_input_processor.convert_mixed_list(key_list)
+		converted_value_string = \
+			code_sub_input_processor.convert_mixed_list(value_list)
+		code_input_arg_list = [converted_key_string, converted_value_string]
+		code_sub_input_processor.set_code_run_argument_string(code_input_arg_list)
+		self.code_sub_input_processor = code_sub_input_processor
 
 class TrackfileManager(object):
 	# Handles writing and reading of trackfile

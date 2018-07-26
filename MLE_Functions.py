@@ -7,9 +7,9 @@ import numpy
 import Cluster_Functions
 import copy
 import pandas
-from scipy.stats import chi2
 import csv
-from mle_filenaming_functions import generate_file_label, generate_filename 
+from mle_filenaming_functions import generate_file_label, generate_filename
+import mle_CI_functions
 
 class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
@@ -225,32 +225,6 @@ class MLEParameters(object):
 		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
 		return(self.all_modes_complete)
 
-class SubmissionStringProcessor(object):
-	# creates a code submission string appropriate to the programming
-		# environment (module) being used
-	def __init__(self, module, key_list, value_list, code_name):
-		self._submission_string_generator(key_list,value_list,module,code_name)
-	def get_code_run_input(self):
-		return(self.code_sub_input_processor)
-	def _submission_string_generator(self, key_list, value_list, module, \
-		code_name):
-		if module == 'matlab':
-			code_sub_input_processor = \
-			Cluster_Functions.MatlabInputProcessor(code_name)
-		elif module == 'r':
-			code_sub_input_processor = \
-			Cluster_Functions.RInputProcessor(code_name)
-		else:
-			raise ValueError('%s is not an available module at the moment' \
-				% (module))
-		converted_key_string = \
-			code_sub_input_processor.convert_mixed_list(key_list)
-		converted_value_string = \
-			code_sub_input_processor.convert_mixed_list(value_list)
-		code_input_arg_list = [converted_key_string, converted_value_string]
-		code_sub_input_processor.set_code_run_argument_string(code_input_arg_list)
-		self.code_sub_input_processor = code_sub_input_processor
-
 class MLEstimation(object):
 	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
 		mle_folders, additional_code_run_keys, additional_code_run_values):
@@ -323,7 +297,7 @@ class MLEstimation(object):
 				value_list.append(current_val)
 		# process key_list and value_list into a submission string
 		submission_string_processor = \
-			SubmissionStringProcessor(self.module, key_list, value_list, \
+			Cluster_Functions.SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
 		self.code_run_input = submission_string_processor.get_code_run_input()
 	def run_job_submission(self):
@@ -502,35 +476,34 @@ class LLProfile(object):
 		#	- identify position at which sims need to happen
 		#		- run sims
 		#			- get CIs from sims
-		# create LL profile
-		current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
-		current_ll_profile.run_LL_profile_compilation()
-		# get data frame with LL profile, warnings, runtime, and MLE vals
-		current_LL_df = current_ll_profile.get_LL_df()
-		current_fixed_param_MLE_val = current_ll_profile.get_fixed_param_MLE_val()
-		current_max_LL = current_ll_profile.get_max_LL()
-		LL_profile_warnings = current_ll_profile.get_warnings()
-		CI_and_profile_warning_list.append(LL_profile_warnings)
+#		# create LL profile
+#		current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
+#		current_ll_profile.run_LL_profile_compilation()
+#		# get data frame with LL profile, warnings, runtime, and MLE vals
+#		current_LL_df = current_ll_profile.get_LL_df()
+#		current_fixed_param_MLE_val = current_ll_profile.get_fixed_param_MLE_val()
+#		current_max_LL = current_ll_profile.get_max_LL()
+#		LL_profile_warnings = current_ll_profile.get_warnings()
+#		CI_and_profile_warning_list.append(LL_profile_warnings)
 		# get asymptotic CI
 		deg_freedom = 1
 			# 1 df for chi-square test for LL profile comparisons
 		CI_type = 'asymptotic'
-		self.asymptotic_CI = TwoSidedCI(p_val, self.LL_df_sorted, deg_freedom, \
+		self.asymptotic_CI = mle_CI_functions.TwoSidedCI(pval, self.LL_df_sorted, deg_freedom, \
 			self.fixed_param_MLE_val, self.fixed_param, self.max_LL, CI_type, \
-			mle_folders, cluster_parameters, cluster_folders)
+			mle_folders, cluster_parameters, cluster_folders, self.output_identifier)
 		self.asymptotic_CI.find_CI()
-		asymptotic_CI_dict = asymptotic_CI.get_CI()
-		if asymptotic_CI_dict:
-			asymptotic_CI_warnings = asymptotic_CI.get_CI_warning()
-			CI_and_profile_warning_list.append(asymptotic_CI_warnings)
-			CI_completeness_tracker.switch_key_completeness(fixed_param, True)
-			###### Really, completeness tracker should only be switched once sim CI completed, or if sims not required
+		self.asymptotic_CI_dict = self.asymptotic_CI.get_CI()
+		if self.asymptotic_CI_dict:
+			self.warning_line = self.asymptotic_CI.get_CI_warning()
 	def get_LL_df(self):
 		# returns sorted LL_df
 		return(self.LL_df_sorted)
 	def get_fixed_param_MLE_val(self):
 		# returns MLE value of current fixed parameter
 		return(self.fixed_param_MLE_val)
+	def get_asymptotic_CI(self):
+		return(self.asymptotic_CI_dict)
 	def get_max_LL(self):
 		return(self.max_LL)
 	def get_ML_params(self):
@@ -548,25 +521,44 @@ class LLProfile(object):
 
 class SingleParamResultSummary(object):
 	# stores MLE estimates and CIs for a single parameter
-	def __init__(self, fixed_param_MLE, max_LL, warning_string, \
-		CI_dict):
-		self.content_dict = {'param_MLE': fixed_param_MLE, \
-			'max_LL': max_LL}
-		# Add contents of CI_dict to self.content_dict
-		# CI_dict contains a dictionary of CIs; each key is the type of
-			# CI calculation (e.g. 'asymptotic' or 'simulation-based');
-			# each value is a dictionary of CI bounds, with the key
-			# being the bound name and the value being the bound val
-		for current_CI_type, current_CI_bound_dict in CI_dict.iteritems():
-			self._set_CI(current_CI_bound_dict, current_CI_type)
-		# add warnings
-		self.content_dict['warnings'] = warning_string
-	def _set_CI(self, CI_bound_dict, CI_type):
+	def __init__(self):
+		self.content_dict = {}
+	def _get_keys_by_searchstring(self, searchstring):
+		# returns keys of self.content_dict containing searchstring
+		searchstring_keys = [key for key in self.content_dict.keys() if \
+			searchstring in key]
+		return(searchstring_keys)
+	def read_from_df_line(self, df, index_name):
+		# reads content from line index_name in dataframe df
+		self.content_dict = df.loc[index_name].to_dict()
+	def set_max_LL(self, max_LL):
+		self.content_dict['max_LL'] = max_LL
+	def set_param_MLE(self, param_MLE):
+		self.content_dict['param_MLE'] = param_MLE
+	def set_warnings(self, warnings):
+		self.content_dict['warnings'] = warnings
+#	def set_val(self, key, value):
+#		# allows values to be set by simple keys
+#		self.content_dict[key] = value
+	def set_CI(self, CI_type, CI_bound_dict):
 		# adds keys for each element of CI_bound_dict, combining key
 			# name with CI_type
+		# key in CI_bound_dict is the bound name and the value is the
+			# bound value
 		for current_key, current_value in CI_bound_dict.iteritems():
 			new_key = '_'.join([CI_type, 'CI_bound', current_key])
 			self.content_dict[new_key] = current_value
+	def check_column_filledness_by_keyword(self, searchstring):
+		# check whether any keys containing keyword exist, and whether
+			# all of them contain non-NaN values
+		searchstring_keys = self._get_keys_by_searchstring(searchstring)
+		if not searchstring_keys:
+			columns_filled = False
+		else:
+			columns_filled = \
+				not numpy.any([numpy.isnan(self.content_dict[key]) for \
+					key in searchstring_keys])
+		return(columns_filled)
 	def get_contents(self):
 		return(self.content_dict)
 
@@ -614,12 +606,13 @@ class CombinedResultSummary(object):
 		cluster_folders):
 		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
 		self.mle_parameters = copy.deepcopy(mle_parameters)
+		self.mle_folders = copy.deepcopy(mle_folders)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
 		self.LL_profile_folder = mle_folders.get_path('LL_profile_path')
 		self.runtime_percentile = mle_parameters.runtime_percentile
 		self.pval = mle_parameters.current_CI_pval
-		self._create_combined_output_file(mle_folders)
+		self._create_combined_output_file()
 		self.max_LL = None
 		self.warnings = CombinedResultWarning()
 		self.completeness_tracker = Cluster_Functions.CompletenessTracker(['initialization', \
@@ -627,15 +620,24 @@ class CombinedResultSummary(object):
 		self.runtime_quant_list = numpy.array([])
 		self.true_max_param_df = pandas.DataFrame()
 		self.combined_results_df = pandas.DataFrame()
+		# set completefiles for asymptotic and sim-based CIs
+		self.asymptotic_CI_completefile = \
+			os.path.join(cluster_folders.get_path('completefile_path'), \
+				'_'.join(['asymoptotic_CI',mle_parameters.output_identifier, \
+					'completefile.txt']))
+		self.sim_CI_completefile = \
+			os.path.join(cluster_folders.get_path('completefile_path'), \
+				'_'.join(['simulation-based_CI', \
+					mle_parameters.output_identifier, 'completefile.txt']))
 		# set MLE results from 'unfixed' parameter (i.e. fitting all
 			# unfixed params together)
 		self.unfixed_mle_file = generate_filename(self.mle_datafile_path, \
 			'1', mle_parameters.output_identifier, 'unfixed', 'data')
 		self._set_unfixed_param_data()
 		self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
-	def _create_combined_output_file(self, mle_folders):
+	def _create_combined_output_file(self):
 		# creates the name of the combined output file for the results
-		experiment_path = mle_folders.get_path('experiment_path')
+		experiment_path = self.mle_folders.get_path('experiment_path')
 		self.combined_results_output_file = os.path.join(experiment_path, \
 			('_'.join(['MLE_output', self.mle_parameters.output_identifier]) + \
 				'.csv'))
@@ -709,15 +711,11 @@ class CombinedResultSummary(object):
 			numpy.percentile(self.runtime_quant_list,self.pval/2*100)
 		runtime_CI_bounds['upper'] = \
 			numpy.percentile(self.runtime_quant_list,(1-self.pval/2)*100)
-		runtime_CIs = {'asymptotic':{'lower':numpy.nan,'upper':numpy.nan}, \
-			'simulation-based':runtime_CI_bounds}
-		return(runtime_CIs)
-	def _add_line_to_combined_df(self,fixed_param_name, fixed_param_MLE, \
-		warning_string, CI_dict):
+#		runtime_CIs = {'asymptotic':{'lower':numpy.nan,'upper':numpy.nan}, \
+#			'simulation-based':runtime_CI_bounds}
+		return(runtime_CI_bounds)
+	def _add_line_to_combined_df(self,fixed_param_name, current_results_dict):
 		# creates self.combined_summary or adds a line to it
-		current_results_line = SingleParamResultSummary(fixed_param_MLE, \
-			self.max_LL, warning_string, CI_dict)
-		current_results_dict = current_results_line.get_contents()
 		if self.combined_results_df.empty:
 			# create dataframe using currently passed line
 			self.combined_results_df = \
@@ -756,12 +754,18 @@ class CombinedResultSummary(object):
 			'percentile', 'runtime', 'across', 'profile', 'points', 'in', 'hrs'])
 		# get runtime mean and CIs
 		mean_runtime_quant = numpy.mean(self.runtime_quant_list)
-		runtime_CIs = self._get_runtime_CI()
+		runtime_CI = self._get_runtime_CI()
 		# get warning line for current mode
 		mode_warning_line = self.warnings.get_warning_line()
+		# combine data into dictionary that can be added to df
+		current_results_line = SingleParamResultSummary()
+		current_results_line.set_max_LL(self.max_LL)
+		current_results_line.set_param_MLE(mean_runtime_quant)
+		current_results_line.set_warnings,(mode_warning_line)
+		current_results_line.set_CI('asymptotic', runtime_CI)
+		current_results_dict = current_results_line.get_contents()
 		# make a line to write to combined_results_df
-		self._add_line_to_combined_df(time_string, mean_runtime_quant, \
-			mode_warning_line, runtime_CIs)
+		self._add_line_to_combined_df(time_string, current_results_dict)
 		# append a DataFrame where row names are parameter names
 		mle_df = self.true_max_param_df.transpose()
 		# rename column to 'param_MLE' and remove 'LL' row
@@ -799,16 +803,67 @@ class CombinedResultSummary(object):
 				self._write_combined_df()
 	def generate_asymptotic_CIs(self):
 		# generate and record asymptotic CIs for fitted parameters
-		self._read_combined_df()
-		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(False)
-		for current_fixed_parameter in parameters_to_loop_over:
-			# first set current parameter
-			self.mle_parameters.set_parameter(fixed_parameter)
-			# create an LLProfile for current parameter
-			ll_profile = LLProfile(self.mle_parameters, \
-				self.mle_datafile_path, self.LL_profile_folder, \
-				non_profile_max_params)
-			ll_profile.run_LL_profile_compilation()
+		init_complete = \
+			self.completeness_tracker.get_key_completeness('initialization')
+		if init_complete:
+			self._read_combined_df()
+			# check whether asymptotic CI has been completed
+			self.completeness_tracker.update_key_status('asymptotic_CI', \
+				self.asymptotic_CI_completefile)
+			asymptotic_CIs_complete = \
+				self.completeness_tracker.get_key_completeness('asymptotic_CIs')
+			if not asymptotic_CIs_complete:
+				parameters_to_loop_over = \
+					self.mle_parameters.get_fitted_parameter_list(False)
+				asymptotic_CI_completeness_tracker = \
+					Cluster_Functions.CompletenessTracker(parameters_to_loop_over)
+				for current_fixed_parameter in parameters_to_loop_over:
+					# check whether this asymptotic CI has been identified
+					# read line for current_fixed_parameter from
+						# combined_results_df
+					current_results_line = SingleParamResultSummary()
+					current_results_line.read_from_df_line(self.combined_results_df, \
+						current_fixed_parameter)
+					# identify columns containing the word 'asymptotic_CI'
+						# and check that such columns exist and that none
+						# of them contain NaN)
+					current_asymptotic_CI_complete = \
+						current_results_line.check_column_filledness_by_keyword('asymptotic_CI')
+					if current_asymptotic_CI_complete:
+						asymptotic_CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
+					else:
+						# first set current parameter
+						self.mle_parameters.set_parameter(current_fixed_parameter)
+						# create an LLProfile for current parameter
+						ll_profile = LLProfile(self.mle_parameters, \
+							self.mle_datafile_path, self.LL_profile_folder, \
+							pandas.DataFrame())
+						ll_profile.run_LL_profile_compilation()
+						ll_profile.run_CI(self.pval, self.mle_folders, \
+							self.cluster_parameters, self.cluster_folders)
+						asymptotic_CI_dict = ll_profile.get_asymptotic_CI()
+							# if jobs to calculate both CI bounds have not yet been
+								# completed, returns None
+						if asymptotic_CI_dict:
+							# set the new confidence interval
+							current_results_line.set_CI('asymptotic', asymptotic_CI_dict)
+							# replace previous warning entry--all warnings are
+								# recalculated individually when a CI bound is
+								# initialized, so having a CI_bound completely
+								# identified previously will not cause a problem
+								# in skipping warnings
+							current_warning = ll_profile.get_warnings()
+							current_results_line.set_warnings(current_warning)
+							# replace line in combined_results_df with updated line
+								# that has asymptotic CI and warnings
+							current_results_dict = current_results_line.get_contents()
+							self._add_line_to_combined_df(current_fixed_parameter, current_results_dict)
+							asymptotic_CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
+				self._write_combined_df()
+				asymptotic_CIs_just_completed = \
+					asymptotic_CI_completeness_tracker.get_completeness()
+				if asymptotic_CIs_just_completed:
+					open(self.asymptotic_CI_completefile,'a').close()
 
 
 			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
@@ -851,6 +906,7 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		current_combined_results = CombinedResultSummary(mle_folders, \
 			mle_parameters, cluster_parameters, cluster_folders)
 		current_combined_results.initialize_combined_results()
+		current_combined_results.generate_asymptotic_CIs()
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	additional_code_run_keys, additional_code_run_values):
@@ -882,56 +938,9 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 #		if current_mode_complete_status:
 #			datafile_path = mle_estimator.get_output_path()
 #			LL_profile_folder = mle_folders.LL_profile_path
-#			current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, CI_p_val)
+#			current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, CI_pval)
 #			current_ll_profile.run_LL_profile_compilation()
 
-def id_CI(mle_folders, mle_parameters, cluster_parameters, cluster_folders, \
-	fixed_param, CI_completeness_tracker, additional_param_df, datafile_path, \
-	LL_profile_folder, p_val):
-	# get LL_profile
-	# when LL_profile complete, get lower and upper asymptotic CI
-	# if asymptotic CI identification is complete:
-	#	- identify position at which sims need to happen
-	#		- run sims
-	#			- get CIs from sims
-	# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
-	# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
-	#	create summary file
-	# keep track of summary files for each mode; once those are complete, stop running current folder
-	##
-	# intialize list of warnings for current LL profile and CIs
-	CI_and_profile_warning_list = []
-	# create LL profile
-	current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
-	current_ll_profile.run_LL_profile_compilation()
-	# get data frame with LL profile, warnings, runtime, and MLE vals
-	current_LL_df = current_ll_profile.get_LL_df()
-	current_fixed_param_MLE_val = current_ll_profile.get_fixed_param_MLE_val()
-	current_max_LL = current_ll_profile.get_max_LL()
-	LL_profile_warnings = current_ll_profile.get_warnings()
-	CI_and_profile_warning_list.append(LL_profile_warnings)
-#	runtime_quantile = current_ll_profile.get_runtime(runtime_percentile)
-
-	###### BEFORE RUNNING ANY CI COMPUTATION, NEED TO MAKE SURE THAT MAX_LL VAL IDENTIFIED IN ALL LL PROFILES IS THE SAME!
-		###### IF NOT, FORCE RE-RUN OF LL PROFILE COMPUTATION WITH HIGHEST MAX_LL VALUE
-
-	# get asymptotic CI
-	deg_freedom = 1
-		# 1 df for chi-square test for LL profile comparisons
-	CI_type = 'asymptotic'
-	asymptotic_CI = TwoSidedCI(p_val, current_LL_df, deg_freedom, current_fixed_param_MLE_val, \
-		current_fixed_param, current_max_LL, CI_type, mle_folders, cluster_parameters, \
-		cluster_folders)
-	asymptotic_CI.find_CI()
-	asymptotic_CI_dict = asymptotic_CI.get_CI()
-	if asymptotic_CI_dict:
-		asymptotic_CI_warnings = asymptotic_CI.get_CI_warning()
-		CI_and_profile_warning_list.append(asymptotic_CI_warnings)
-		CI_completeness_tracker.switch_key_completeness(fixed_param, True)
-		###### Really, completeness tracker should only be switched once sim CI completed, or if sims not required
-
-
-			
 
 
 
