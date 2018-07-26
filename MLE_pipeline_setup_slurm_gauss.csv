@@ -1,0 +1,34 @@
+variable name,value,type,explanation
+username,yp19,str,username on cluster
+home_folder,/home/yp19,str,home directory on cluster (which contains composite data directory and code directory)
+composite_data_folder,/home/yp19/mut_effect_estimation/composite_MLE_data,str,directory that holds all output (and initially input) data for each experiment
+backup_folder,/archive,str,backup directory on cluster (which contains a backup copy of composite data directory)
+code_folder,/home/yp19/mut_effect_estimation/plavskin_code/GR_diff_estimation,str,directory in home directory that contains all code
+temp_storage_folder,/scratch/yp19/mut_effect_estimation/temp_MLE_data,str,directory in which temporary output files are placed before being compiled
+starting_L,2,float,Size of x-axis (ln(mut effect)) used for initial MLE; centered on 0
+starting_gridpower,16,float,log2(number of gridpoints for pdf determination) used for initial MLE
+simulation_repeats_by_mode,1000,float_list,number data is simulated to calculate likelihood ratio distributions
+profile_points_by_mode,15;15,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile
+starting_mem,1750,float,memory (in Mb) needed to run a sinlge MLE
+starting_time,1200,float,time (in mins) alotted for running single MLE
+user_email,yp19@nyu.edu,str,email of user who will receive job notifications from qsub
+mode_list,gaussian_test,str_list,list of 'modes' in which MLE fitting happens separated by vertical bars ('|')
+parameters_by_mode,mu;sigma,nested_str_list,list of parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list
+min_parameter_vals_by_mode,-10;.0001,nested_float_list,list of lower bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
+max_parameter_vals_by_mode,10;100,nested_float_list,list of upper bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
+starting_parameter_vals_by_mode,0;1,nested_float_list,list of mstarting values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
+pdf_points,100,int,gridpoints in empirical pdf
+parallel_processors,4,int,parallel processors to use; do NOT set to >1 for processing on MacOSX!
+lambda_SNM,4.421,float,empirically determined mean number of SNMs per strain
+max_mem,10000,float,max memory (in Mb) a job is allowed to request
+max_time,2400,float,max time (in minutes) a job is allowed to request
+multistart_positions,1,int_list,number of positions per dimension at which to start multistart (if 0 run gs) separated by vertical bars ('|') for each mode
+profile_lower_limits_by_mode,-5;.001,nested_float_list,list of min values used in the LL for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
+profile_upper_limits_by_mode,5;10,nested_float_list,list of max values used in the LL for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
+multistart_grid_parameters,mu;sigma,nested_str_list,list of parameters across which multistart selects grid points
+max_char_num,4096,int,maximum number of characters in a list of job arrays to be submitted on cluster
+cluster_architecture,slurm,str,what kind of architecture the HPC cluster uses (currently only 'slurm' and 'macosx' supported)
+logspace_profile_list,sigma,nested_str_list,parameters whose profiles should be done in log rather than in linear space
+max_jobs_per_batch,inf,float,maximum number of jobs that can be submitted in a single batch job ('inf' indicates that the maximum default allower by the cluster to run per user will be used)
+runtime_percentile,95,int,percentile of runtimes to report from within each parameter's profile point run
+CI_pval_by_mode,0.05,float_list,p-val of Cis identified in each mode; modes are separated by vertical bars; modes appear in same order as in mode list

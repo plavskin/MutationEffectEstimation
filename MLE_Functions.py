@@ -633,8 +633,6 @@ class CombinedResultSummary(object):
 			# unfixed params together)
 		self.unfixed_mle_file = generate_filename(self.mle_datafile_path, \
 			'1', mle_parameters.output_identifier, 'unfixed', 'data')
-		self._set_unfixed_param_data()
-		self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 	def _create_combined_output_file(self):
 		# creates the name of the combined output file for the results
 		experiment_path = self.mle_folders.get_path('experiment_path')
@@ -777,6 +775,7 @@ class CombinedResultSummary(object):
 		# check whether initial mle has been completed
 		mle_complete = self.mle_parameters.check_completeness_within_mode()
 		if mle_complete:
+			self._set_unfixed_param_data()
 			# check whether initialization has been run
 			self.completeness_tracker.update_key_status('initialization', \
 				self.combined_results_output_file)
@@ -785,6 +784,7 @@ class CombinedResultSummary(object):
 			if init_complete:
 				self._read_combined_df()
 			else:
+				self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 				# create initial LL profiles and check whether one of
 					# them contains a LL higher than the 'unfixed' mode
 				self._create_initial_LL_profiles()

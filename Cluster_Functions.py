@@ -927,11 +927,10 @@ class SlurmManager(object):
 			('squeue -u '+self.cluster_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
 			shell=True))
 		# find the max number of jobs you can run at one time
-		max_allowed_jobs = round(min(max_array_size,max_submit)*self.max_job_proportion)
+		max_allowed_jobs = int(round(min(max_array_size,max_submit)*self.max_job_proportion))
 		# find max amount of jobs that can be added to queue without
 			# making it overflow
 		space_in_queue = max_allowed_jobs-jobs_in_queue
-		return(space_in_queue)
 	def job_process_finder(self):
 		# Identify jobs that are still being run by SLURM
 		# Return list of jobs currently being processed
