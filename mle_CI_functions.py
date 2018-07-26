@@ -123,11 +123,37 @@ class OneSidedCIBound(object):
 			# max LL, then decrease monotonically after; if this
 			# isn't the case, throw a warning
 		print('error! Monotonicity not checked in parent class of OneSidedCIBound objects')
-	def _id_proximal_points(self, target_y, y_vals, num_points):
+	def _id_flanking_indices(self,target_y, y_vals):
+		# identifies indices of y_vals on either side of target_y
+		dist_to_target = target_y-y_vals
+		distances_below_target = dist_to_target[(dist_to_target <= 0)]
+		distances_above_target = dist_to_target[(dist_to_target > 0)]
+		closest_index_below_target = np.where(dist_to_target == np.amax(distances_below_target))[0]
+		closest_index_above_target = np.where(dist_to_target == np.amin(distances_above_target))[0]
+		indices_to_keep = np.append(closest_index_above_target,closest_index_below_target)
+		return(indices_to_keep)
+	def _id_proximal_points(self,target_y, y_vals, num_points):
+		# y_vals is a 1-d numpy array
 		# returns indices of up to num_points points closest to target_y
-		dist_to_target = np.absolute(target_y-y_vals)
-		sorted_indices = np.argsort(dist_to_target)
-		closest_indices = sorted_indices[0:num_points]
+		# if num_points >= 2, makes sure to identify points on both sides of target_y
+		dist_to_target = target_y-y_vals
+		if num_points == 1:
+			abs_dist = np.absolute(dist_to_target)
+			sorted_indices = np.argsort(abs_dist)
+			closest_indices = sorted_indices[0]
+		else:
+			# set aside indices closest to target on either side, find
+				# indices closest to target besides those two, include
+				# indices surrounding target and anything else that's
+				# close in closest_indices
+			indices_flanking_target = self._id_flanking_indices(target_y, y_vals)
+			nonflanking_distances = np.delete(dist_to_target, indices_flanking_target)
+			abs_dist = np.absolute(nonflanking_distances)
+			sorted_abs_indices = np.argsort(abs_dist)
+			nonflanking_indices = sorted_abs_indices[0:(num_points-2)]
+			closest_nonflanking_distances = nonflanking_distances[nonflanking_indices]
+			closest_nonflanking_indices = np.argwhere(np.isin(dist_to_target,closest_nonflanking_distances))
+			closest_indices = np.sort(np.append(closest_nonflanking_indices, indices_flanking_target))
 		return(closest_indices)
 	def _set_CI_bound(self, CI_bound):
 		# sets self.CI_bound and changed self.CI_bound_set to true
@@ -155,7 +181,7 @@ class OneSidedCIBound(object):
 			self.warning.set_all_points_within_CI_bound()
 		# get indices of closest points to CI bound
 		CI_bound_proximal_indices = \
-			self._id_proximal_points(self.cdf_bound, self.one_sided_LL_df['cdf_vals'], \
+			self._id_proximal_points(self.cdf_bound, self.one_sided_LL_df['cdf_vals'].transpose().values, \
 				self.points_to_fit_curve)
 		# create a new df with only points closest to CI bound
 		self.CI_bound_proximal_points = self.one_sided_LL_df.iloc[CI_bound_proximal_indices]
