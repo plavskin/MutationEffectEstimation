@@ -9,6 +9,7 @@ import subprocess
 import numpy
 import copy
 import re
+import cluster_sub_functions
 
 class Job(object):
 	# job object that stores properties of individual jobs in queue
@@ -132,11 +133,19 @@ class ClusterParameters(object):
 	def _set_cluster_architecture_properties(self):
 		# sets properties related to the cluster architecture
 		if self.cluster_architecture == 'slurm':
-			self.within_batch_counter = 'SLURM_ARRAY_TASK_ID'
+			self.job_submission_manager = \
+				cluster_sub_functions.SlurmManager(copy.deepcopy(self))
 		elif self.cluster_architecture == 'macosx':
-			self.within_batch_counter = 'ARRAY_TASK_ID'
-		else:
-			print('Error! Did not enter recognized cluster architecture')
+			self.job_submission_manager = \
+				cluster_sub_functions.MacOSXManager(copy.deepcopy(self))
+		# if cluster determines max_jobs_per_batch that is smaller than self.max_jobs_per_batch, update this value
+		forced_max_jobs_per_batch = \
+			self.job_submission_manager.get_max_jobs_per_batch()
+		if forced_max_jobs_per_batch:
+			self.max_jobs_per_batch = \
+				int(round(min(forced_max_jobs_per_batch, self.max_jobs_per_batch)))
+	def get_job_sub_manager(self):
+		return(copy.deepcopy(self.job_submission_manager))
 	def set_current_time(self, new_time):
 		self.current_time = new_time
 	def set_current_mem(self, new_mem):
@@ -490,7 +499,7 @@ class JobListManager(object):
 		except subprocess.CalledProcessError:
 			job_sub_run_output_list = ''
 		return(job_sub_run_output_list)
-	def _missing_job_processor(self, missing_jobs, cluster_submission_manager):
+	def _missing_job_processor(self, missing_jobs, job_submission_manager):
 		# Looks through any jobs that are no longer processing but have
 			# not been successfully completed
 		# Checks for error files associated with these jobs, and updates
@@ -519,7 +528,7 @@ class JobListManager(object):
 				# as an error
 			if latest_errorfile_contents:
 				error_status_dict = \
-					cluster_submission_manager.error_status_check(\
+					job_submission_manager.error_status_check(\
 						latest_errorfile_contents)
 				if error_status_dict['cluster_error_check']:
 					self.batch_status_change([current_missing_job], \
@@ -552,7 +561,7 @@ class JobListManager(object):
 					# queue of jobs to process
 				self.batch_status_change([current_missing_job], \
 					JobStatus.TO_PROCESS)
-	def autoupdate_job_status(self, cluster_submission_manager):
+	def autoupdate_job_status(self, job_submission_manager):
 		# update the status of any jobs that were in the 'PROCESSING'
 			# status based on their current status on the cluster
 		# check for jobs that are still processing
@@ -561,7 +570,7 @@ class JobListManager(object):
 			# look for lost jobs and move those to 'TO_PROCESS' list
 		# get list of jobs that should be processing
 		prev_processing_list = self.get_jobs_by_status(JobStatus.PROCESSING)
-		current_processing_list = cluster_submission_manager.job_process_finder()
+		current_processing_list = job_submission_manager.job_process_finder()
 		# identify jobs that no longer have 'PROCESSING' status
 		jobs_just_finished = list(set(prev_processing_list)-set(current_processing_list))
 		# identify jobs that no longer have 'PROCESSING' status because
@@ -574,7 +583,7 @@ class JobListManager(object):
 			# change their status
 		missing_jobs = list(set(jobs_just_finished)-set(jobs_just_completed))
 		if missing_jobs:
-			self._missing_job_processor(missing_jobs, cluster_submission_manager)
+			self._missing_job_processor(missing_jobs, job_submission_manager)
 	def _get_jobs_to_submit(self):
 		# get list of job numbers that have to_process or
 			# aborted_to_restart status
@@ -617,7 +626,7 @@ class JobListManager(object):
 		job_num_list_grouped = [[job_num_list[j] for j in i] for i in \
 			grouped_job_order_indices]
 		return(job_num_list_grouped)
-	def submit_jobs(self, cluster_submission_manager):
+	def submit_jobs(self, job_submission_manager):
 		# Submits jobs and updates job statuses accordingly
 		job_sub_candidate_nums = self._get_jobs_to_submit()
 		job_sub_candidate_nums_grouped = \
@@ -626,9 +635,9 @@ class JobListManager(object):
 			# max number of consecutive batch submissions has not been
 			# surpassed, submit jobs in batches, starting with the
 			# batches requiring the most time and memory
-		batch_number_remaining = cluster_submission_manager.max_sub_batches_in_one_run
+		batch_number_remaining = job_submission_manager.max_sub_batches_in_one_run
 		# get amount of space available in queue
-		space_in_queue = cluster_submission_manager.free_job_calculator()
+		space_in_queue = job_submission_manager.free_job_calculator()
 		for current_batch in job_sub_candidate_nums_grouped:
 			# initialize batch submission manager
 			submission_manager = BatchSubmissionManager(current_batch, \
@@ -654,7 +663,7 @@ class JobListManager(object):
 				current_batch_mem = max(self.get_job_mems(current_jobs_to_submit))
 				# submit jobs, one batch at a time
 				for current_job_sub_string in current_job_submission_strings:
-					cluster_submission_manager.create_and_submit_batch_job( \
+					job_submission_manager.create_and_submit_batch_job( \
 						current_job_sub_string, current_batch_time, \
 						current_batch_mem)
 				# update status of submitted jobs
@@ -881,301 +890,6 @@ class MatlabInputProcessor(object):
 			print(current_value)
 		return(converted_value)
 
-class SlurmManager(object):
-	# Handles getting information from and passing information to the
-		# slurm cluster system
-	def __init__(self, job_parameters, cluster_parameters):
-		self.job_parameters = copy.deepcopy(job_parameters)
-		self.cluster_parameters = copy.deepcopy(cluster_parameters)
-		# at the request of hpc staff, don't use all available queue space
-		self.max_job_proportion = 0.95
-		self.sbatch_filename = os.path.join(self.job_parameters.cluster_job_submission_folder,\
-			(self.job_parameters.name + '.q'))
-		# specify size of an empty errorfile on this cluster architecture
-		self.empty_errorfile_size = 0
-		self._get_latest_module_path()
-		# SLURM-based cluster doesn't appear to slow down as a penalty for
-			# submitting jobs one-by-one so don't reset
-			# max_sub_batches_in_one_run if submitting jobs one-by-one
-		self.max_sub_batches_in_one_run = float('Inf')
-		# add necessary lines for running multiple parallel matlab jobs
-		if self.job_parameters.module == 'matlab' and \
-			self.job_parameters.parallel_processors > 1:
-			matlab_parallel_start_lines = ['if [ \"$SLURM_JOBTMP" == \"\" ]; then',\
-				'    export SLURM_JOBTMP=/state/partition1/$USER/$$',\
-				'    mkdir -p $SLURM_JOBTMP',\
-				'fi',\
-				'export MATLAB_PREFDIR=$(mktemp -d $SLURM_JOBTMP/matlab-XXXX)']
-			matlab_parallel_end_lines = ['rm -rf $SLURM_JOBTMP/*']
-			self.job_parameters.additional_beginning_lines_in_job_sub.extend(matlab_parallel_start_lines)
-			self.job_parameters.additional_end_lines_in_job_sub.extend(matlab_parallel_end_lines)
-	def free_job_calculator(self):
-		# gets the number of jobs that can still be submitted to
-			# the routing queue
-		# Get max number of jobs in a single array submission
-		max_array_size_response_string = subprocess.check_output(
-			'scontrol show config | grep MaxArraySize',shell=True)
-		max_array_size_response_split = max_array_size_response_string.split(' = ')
-		max_array_size = int(max_array_size_response_split[1].rstrip())
-		# Get max number of jobs user can have in queue or running
-		max_submit_response_string = subprocess.check_output(
-			('sacctmgr list assoc format=user,maxsubmit where user='+self.cluster_parameters.username),
-			shell=True)
-		max_submit = int(re.findall((self.cluster_parameters.username+'\s+(\d+)'),max_submit_response_string)[0])
-		# how many jobs are currently in default_queue for this user?
-		jobs_in_queue = int(subprocess.check_output(
-			('squeue -u '+self.cluster_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
-			shell=True))
-		# find the max number of jobs you can run at one time
-		max_allowed_jobs = int(round(min(max_array_size,max_submit)*self.max_job_proportion))
-		# find max amount of jobs that can be added to queue without
-			# making it overflow
-		space_in_queue = max_allowed_jobs-jobs_in_queue
-	def job_process_finder(self):
-		# Identify jobs that are still being run by SLURM
-		# Return list of jobs currently being processed
-		try:
-			jobs_running_list = subprocess.check_output('squeue -u ' + self.cluster_parameters.username + ' -r -n '
-				+ self.job_parameters.name + ' | egrep " PD | CG | R " ',shell=True)
-		except subprocess.CalledProcessError:
-			jobs_running_list = ''
-		jobs_still_in_processing = re.findall('^\s+\d+_(\d+)\s',jobs_running_list,re.MULTILINE)
-		return(jobs_still_in_processing)
-	def _get_latest_module_path(self):
-		try:
-			module_output = subprocess.check_output('module avail', shell=True)
-		except subprocess.CalledProcessError:
-			module_output = ''
-		relevant_module_list = re.findall(' (' + self.job_parameters.module + \
-			os.sep + '.+?)\\n', module_output)
-		# latest module is the last one in the list
-		latest_module_path = re.findall('(' + self.job_parameters.module + \
-			os.sep + '\S+)', relevant_module_list[-1])[0]
-		self.module_path = latest_module_path
-	def _convert_time_format(self, time_in_mins):
-		# convert time_in_mins from minutes to hh:mm:ss	
-		hours = int(math.floor(float(time_in_mins)/60))
-		if hours > 0:
-			minutes = int(float(time_in_mins) % (float(hours)*60))
-		else:
-			minutes = int(float(time_in_mins))
-		time_string = str(hours).zfill(2)+':'+ str(minutes).zfill(2)+':00'
-		return(time_string)
-	def _convert_mem_format(self, mem_in_mb):
-		# convert single_job_mem from # of Mb to memory string
-		# cluster only cares about units of GB
-		mem_in_gb = math.ceil(float(mem_in_mb)/1024)
-		mem_string = str(int(mem_in_gb))+'GB'
-		return(mem_string)
-	def _create_slurm_job(self, job_list_string, job_time, job_mem):
-		# Writes files to submit to cluster queue
-		# convert memory and time formats
-		single_job_time_string = self._convert_time_format(job_time)
-		single_job_mem_string = self._convert_mem_format(job_mem)
-		# write submission file
-		with open(self.sbatch_filename,'w') \
-			as sbatch_job_file:
-			sbatch_job_file.write('#!/bin/bash\n')
-			sbatch_job_file.write('#SBATCH --job-name=' + \
-				self.job_parameters.name + '\n')
-				# name of current job
-			sbatch_job_file.write('#SBATCH --output=' + \
-				self.job_parameters.name + '.o%A-%a\n')
-			sbatch_job_file.write('#SBATCH --error=' + \
-				self.job_parameters.name + '.e%A-%a\n')
-			sbatch_job_file.write('#SBATCH --time=' + \
-				single_job_time_string + '\n')
-				# amount of time allowed per job
-			sbatch_job_file.write('#SBATCH --mem=' + \
-				single_job_mem_string + '\n')
-				# memory allocated to each job
-			sbatch_job_file.write('#SBATCH --nodes=1\n')
-			sbatch_job_file.write('#SBATCH --cpus-per-task=' + \
-				str(self.job_parameters.parallel_processors) + '\n')
-				# nodes and processors used per job
-			sbatch_job_file.write('#SBATCH --array=' + job_list_string + '\n')
-				# list of job IDs to be submitted
-			sbatch_job_file.write('#SBATCH --mail-type=FAIL\n')
-				# only sends email if job array fails
-			sbatch_job_file.write('#SBATCH --mail-user=' + \
-				self.cluster_parameters.user_email + '\n')
-				# email that gets notification about aborted job
-			# add any rows that need to be written for each particular file
-			if self.job_parameters.additional_beginning_lines_in_job_sub:
-				for additional_sbatch_beginning_row in \
-					self.job_parameters.additional_beginning_lines_in_job_sub:
-					sbatch_job_file.write(additional_sbatch_beginning_row + '\n')
-
-			sbatch_job_file.write('cd ' + self.cluster_parameters.code_path + '\n')
-				# cd into code directory
-			sbatch_job_file.write('module purge\n')
-			sbatch_job_file.write('module load ' + \
-				self.module_path + '\n')
-				# load module
-			# write appropriate code-running line
-			code_run_input = self.job_parameters.code_run_input
-			code_run_input.set_full_code_run_string('slurm')
-			code_run_string = code_run_input.get_code_run_string()
-			sbatch_job_file.write(code_run_string + '\n')
-			# add any rows that need to be written at the end of each
-				# particular file
-			if self.job_parameters.additional_end_lines_in_job_sub:
-				for additional_sbatch_end_row in \
-					self.job_parameters.additional_end_lines_in_job_sub:
-					sbatch_job_file.write(additional_sbatch_end_row + '\n')
-			sbatch_job_file.write('\n\n')
-				# need additional returns at end of shell scripts
-	def _submit_slurm_job(self):
-		# submits sbatch job
-		# cd into sbatch directory
-		os.chdir(self.job_parameters.cluster_job_submission_folder)			
-		# Run .q file for sim
-		subprocess.call('sbatch ' + \
-			self.sbatch_filename,shell=True)
-	def create_and_submit_batch_job(self, job_list_string, job_time, job_mem):
-		# creates and submits batch job on slurm
-		self._create_slurm_job(job_list_string,job_time,job_mem)
-		self._submit_slurm_job()
-	def error_status_check(self, latest_errorfile_contents):
-		# parses contents of job submission run error file
-		error_status_dict = dict()
-		error_status_dict['time_limit_check'] = \
-			'time limit' in latest_errorfile_contents
-		error_status_dict['memory_limit_check'] = \
-			'memory limit' in latest_errorfile_contents
-		error_status_dict['cluster_error_check'] = \
-			'bus error' in latest_errorfile_contents \
-			or 'fatal error on startup' in latest_errorfile_contents \
-			or 'reload' in latest_errorfile_contents \
-			or 'MatlabException' in latest_errorfile_contents
-		error_status_dict['unidentified_error_check'] = \
-			len(latest_errorfile_contents > self.empty_errorfile_size) and \
-			not any(time_limit_check, memory_limit_check, cluster_error_check)
-		return(error_status_dict)
-
-class MacOSXManager(object):
-	# Handles getting information from and passing information to a \
-		# MacOSX xomputer
-	def __init__(self, job_parameters, cluster_parameters):
-		self.job_parameters = copy.deepcopy(job_parameters)
-		self.cluster_parameters = copy.deepcopy(cluster_parameters)
-		# Don't use every processor on computer! (duh)
-		self.free_processors = 1
-		# On a personal computer, no slowing down as a penalty for
-			# submitting jobs one-by-one so don't reset
-			# max_sub_batches_in_one_run if submitting jobs one-by-one
-		self.max_sub_batches_in_one_run = float('Inf')
-		self.sh_filename_prefix = os.path.join(self.job_parameters.cluster_job_submission_folder,\
-			(self.job_parameters.name + '_'))
-		self.sh_filename_suffix = '.sh'
-			# job_name needs to be part of this filename in order for job tracking to work
-		# specify size of an empty errorfile on this cluster architecture
-		self.empty_errorfile_size = 0
-		### CURRENTLY CAN'T HANDLE PARALLEL MATLAB JOBS ###
-	def free_job_calculator(self):
-		# gets the number of jobs that can still be submitted to
-			# the routing queue
-		# Get max number of processors user can use
-		try:
-			number_cpus = \
-				int(subprocess.check_output('getconf _NPROCESSORS_ONLN',shell=True))
-		except subprocess.CalledProcessError:
-			number_cpus = \
-				int(subprocess.check_output('getconf NPROCESSORS_ONLN',shell=True))
-			# one of the above should work on MacOSX and linux machines
-		# how many jobs are currently running on computer?
-		# calculate this by assuming only jobs from module (e.g.
-			# matlab) are relevant, i.e. count those
-		jobs_running = int(subprocess.check_output(
-			('ps aux | grep ' + self.job_parameters.module + \
-				' | grep -v "grep" | wc -l'),shell=True))
-		# find the max number of jobs you can run at one time
-		max_allowed_jobs = number_cpus - self.free_processors
-		# find max amount of jobs that can be added to queue without
-			# making it overflow
-		space_in_queue = max_allowed_jobs-jobs_running
-		return(space_in_queue)
-	def job_process_finder(self):
-		# Identify jobs that are still being run by SLURM
-		# Return list of jobs currently being processed
-		try:
-			jobs_running_list = subprocess.check_output(('ps aux | grep ' + \
-				self.job_parameters.name + ' | grep -v "grep"'),shell=True)
-		except subprocess.CalledProcessError:
-			jobs_running_list = ''
-		jobs_still_in_processing = \
-			re.findall('\w+_(\d+)' + self.sh_filename_suffix, \
-				jobs_running_list, re.MULTILINE)
-		return(jobs_still_in_processing)
-	def _create_macosx_job(self, job_number_string):
-		# Writes files to submit to cluster queue
-		# take first int in job_number_string as the required job number
-		job_number = str(re.findall('\d+',job_number_string)[0])
-		print('job_number is '+job_number)
-		self.sh_filename = self.sh_filename_prefix + job_number + \
-			self.sh_filename_suffix
-		# write submission file
-		with open(self.sh_filename,'w') \
-			as batch_job_file:
-			batch_job_file.write('#!/bin/bash\n')
-			batch_job_file.write(\
-				self.cluster_parameters.within_batch_counter + '=' + \
-				job_number + '\n')
-			batch_job_file.write('output_file=\'' + \
-				os.path.join(self.job_parameters.cluster_job_submission_folder, \
-				self.job_parameters.name) + '.o1-\'${' + \
-				self.cluster_parameters.within_batch_counter + '}\n')
-			batch_job_file.write('error_file=\'' + \
-				os.path.join(self.job_parameters.cluster_job_submission_folder, \
-				self.job_parameters.name) + \
-				'.e1-\'${' + self.cluster_parameters.within_batch_counter + '}' + \
-				'\n')
-			### NEED A WAY TO DEAL WITH ERRORS!!! ###
-			# add any rows that need to be written for each particular file
-			if self.job_parameters.additional_beginning_lines_in_job_sub:
-				for additional_sbatch_beginning_row in \
-					self.job_parameters.additional_beginning_lines_in_job_sub:
-					batch_job_file.write(additional_sbatch_beginning_row + '\n')
-			batch_job_file.write('cd \'' + self.cluster_parameters.code_path + '\'\n')
-				# cd into code directory
-			# write appropriate code-running line
-			code_run_input = self.job_parameters.code_run_input
-			code_run_input.set_full_code_run_string('macosx')
-			code_run_string = code_run_input.get_code_run_string()
-			batch_job_file.write(code_run_string  + '> ${output_file}\n')
-			# move  any error message in output_file into error file
-			batch_job_file.write('sed -n -e "/[Ee][Rr][Rr][Oo][Rr]/,\$w ${error_file}" "${output_file}"')
-			# add any rows that need to be written at the end of each
-				# particular file
-			if self.job_parameters.additional_end_lines_in_job_sub:
-				for additional_sbatch_end_row in \
-					self.job_parameters.additional_end_lines_in_job_sub:
-					batch_job_file.write(additional_sbatch_end_row + '\n')
-			batch_job_file.write('\n\n')
-				# need additional returns at end of shell scripts
-	def _submit_macosx_job(self):
-		# submits sh job
-		# cd into sh directory
-		os.chdir(self.job_parameters.cluster_job_submission_folder)			
-		# Run .q file for sim
-		subprocess.call('sh \'' + self.sh_filename + '\'', shell=True)
-	def create_and_submit_batch_job(self, job_number, job_time, job_mem):
-		# creates and submits batch job on slurm
-		# job_time and job_mem unused, but here to maintain consistency
-			# of job submission across cluster architectures
-		self._create_macosx_job(job_number)
-		self._submit_macosx_job()
-	def error_status_check(self, latest_errorfile_contents):
-		# parses contents of job submission run error file
-		error_status_dict = dict()
-		error_status_dict['unidentified_error_check'] = \
-			len(latest_errorfile_contents) > self.empty_errorfile_size
-		error_status_dict['time_limit_check'] = False
-		error_status_dict['memory_limit_check'] = False
-		error_status_dict['cluster_error_check'] = False
-		return(error_status_dict)
-
-
 #######################################################
 def parse_setup_file(filename):
 	# parses setup file and creates a list of the parameters therein
@@ -1223,23 +937,21 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 		# check whether trackfile exists; if so, use it to get job data and
 			# update statuses; otherwise, create new trackfile
 		current_trackfile_path = current_trackfile.get_trackfile_path()
-		# create cluster_submission_manager
-		if cluster_parameters.cluster_architecture == 'slurm':
-			cluster_submission_manager = SlurmManager(job_parameters,cluster_parameters)
-		elif cluster_parameters.cluster_architecture == 'macosx':
-			cluster_submission_manager = MacOSXManager(job_parameters,cluster_parameters)
+		# create job_submission_manager
+		job_submission_manager = cluster_parameters.get_job_sub_manager()
+		job_submission_manager.set_job_parameters(job_parameters)
 		if os.path.isfile(current_trackfile_path):
 			# retrieve job list, update it, submit jobs
 			# job_list_manager is a JobListManager object
 			job_list_manager = current_trackfile.read_trackfile()
 			# update status of all jobs in job_list_manager
-			job_list_manager.autoupdate_job_status(cluster_submission_manager)
+			job_list_manager.autoupdate_job_status(job_submission_manager)
 		else:
 			# create job list (JobListManager object)
 			job_list_manager = _create_job_list(job_name, job_numbers, initial_time, \
 				initial_mem, job_parameters, cluster_parameters)
 		# submit whatever jobs possible
-		job_list_manager.submit_jobs(cluster_submission_manager)
+		job_list_manager.submit_jobs(job_submission_manager)
 		# update trackfile and summaryfile
 		current_trackfile.write_output_files(job_list_manager)
 		# update completefile

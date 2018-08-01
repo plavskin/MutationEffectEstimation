@@ -81,4 +81,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	dlmwrite(output_file,parameter_bound,'delimiter',',','precision',9);
 	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
 
+    if runtime < 120
+        pausetime=120-runtime;
+        pause(pausetime)
+    end
+
 end

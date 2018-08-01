@@ -36,4 +36,9 @@ function Linear_Bound_Finder(key_list, value_list)
 	dlmwrite(output_file,parameter_bounds,'delimiter',',','precision',9);
 	dlmwrite(linear_fit_file,linear_fit,'delimiter',',','precision',9);
 
+    if runtime < 120
+        pausetime=120-runtime;
+        pause(pausetime)
+    end
+
 end

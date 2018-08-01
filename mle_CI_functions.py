@@ -17,6 +17,7 @@ class CIWarning(object):
 		self.all_points_within_CI_bound = False
 		self.non_monotonic = False
 		self.no_output_file = False
+		self.LL_empty = False
 	def set_all_points_within_CI_bound(self):
 		self.all_points_within_CI_bound = True
 	def set_points_to_create_CI(self,points_to_create_CI):
@@ -25,8 +26,12 @@ class CIWarning(object):
 		self.no_output_file = True
 	def set_non_monotonic(self):
 		self.non_monotonic = True
+	def set_LL_empty(self):
+		self.LL_empty = True
 	def get_warning_line(self, CI_side, CI_type):
 		warning_list = []
+		if self.LL_empty:
+			warning_list.append(CI_side + ' LL profile for is empty')
 		if self.all_points_within_CI_bound:
 			warning_list.append('All points used to calculate ' + CI_side + \
 				 ' CI for ' + CI_type + \
@@ -57,6 +62,8 @@ class OneSidedCIBound(object):
 		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
 		output_identifier):
 		self.cdf_bound = 1-pval
+			# if pval is passed to OneSidedCIBound by TwoSidedCIBound,
+				# then originally supplied pval is divided by 2
 		self.points_to_fit_curve = 3
 		self.df = df
 		self.CI_type = CI_type
@@ -75,16 +82,21 @@ class OneSidedCIBound(object):
 		self.additional_end_lines_in_job_sub = []
 		self.additional_code_run_keys = []
 		self.additional_code_run_values = []
-		self._select_profile_side(LL_df)
 		self.warning = CIWarning()
-		# need to run _asymptotic_pval_calc and
-			# _find_CI_proximal_LL_points even if curve fitting to LL
-			# points has already occurred, since these functions throw
-			# important warnings
-		self._check_monotonicity()
-		self._asymptotic_pval_calc()
-		self._find_CI_proximal_LL_points()
-		self._set_output_filenames()
+		if LL_df.empty:
+			self.warning.set_LL_empty()
+			self._set_CI_bound(np.NaN)
+		else:
+			self._select_profile_side(LL_df)
+			# need to run _asymptotic_pval_calc and
+				# _find_CI_proximal_LL_points even if curve fitting to LL
+				# points has already occurred, since these functions throw
+				# important warnings
+			self._check_monotonicity()
+			self._asymptotic_pval_calc()
+			self._find_CI_proximal_LL_points()
+			self._set_output_filenames()
+			self._create_code_run_input()
 	def _set_output_filenames(self):
 		self.output_prename = '-'.join(['CI_bound', self.profile_side, \
 			self.CI_type])
@@ -109,7 +121,7 @@ class OneSidedCIBound(object):
 		x_vals = self.one_sided_LL_df[self.fixed_param]
 		y_vals = self.one_sided_LL_df['LL']
 		D_vals = 2*(self.max_LL-y_vals)
-		cdf_vals = 0.5 + 0.5*chi2.cdf(D_vals,self.df)
+		cdf_vals = chi2.cdf(D_vals,self.df)
 			# rather than calculating p-vals for the whole distribution, we
 				# calculate a 'reflected' cdf for the lower side of the
 				# distribution so that the same fitting algorithm could be
@@ -281,7 +293,6 @@ class OneSidedCIBoundLower(OneSidedCIBound):
 		super(OneSidedCIBoundLower, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
 			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
 			cluster_folders, output_identifier)
-		self._create_code_run_input()
 	def _select_profile_side(self, LL_df):
 		# selects data from correct side of likelihood profile
 		self.default_CI_bound = float("-inf")
@@ -307,7 +318,6 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 		super(OneSidedCIBoundUpper, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
 			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
 			cluster_folders, output_identifier)
-		self._create_code_run_input()
 	def _select_profile_side(self, LL_df):
 		# selects data from correct side of likelihood profile
 		LL_df_one_side = LL_df[(LL_df[self.fixed_param] >= self.fixed_param_MLE_val)]
@@ -338,11 +348,11 @@ class TwoSidedCI(object):
 		self.CI_complete = False
 		self.CI_warning_list = []
 		self.CI_object_dictionary = {}
-		self.CI_object_dictionary['lower'] = OneSidedCIBoundLower(pval, \
+		self.CI_object_dictionary['lower'] = OneSidedCIBoundLower(pval/2, \
 				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
-		self.CI_object_dictionary['upper'] = OneSidedCIBoundUpper(pval, \
+		self.CI_object_dictionary['upper'] = OneSidedCIBoundUpper(pval/2, \
 				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)

@@ -240,8 +240,11 @@ class MLEstimation(object):
 			mle_parameters.output_id_parameter])
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
+		job_submission_manager = cluster_parameters.get_job_sub_manager()
+		self.within_batch_counter = \
+			job_submission_manager.get_within_batch_counter()
 		self.within_batch_counter_call = \
-			'${' + self.cluster_parameters.within_batch_counter + '}'
+			'${' + self.within_batch_counter + '}'
 		self.output_path = mle_folders.get_path('current_output_subfolder')
 		self.output_filename = generate_filename(self.output_path, \
 			self.within_batch_counter_call, mle_parameters.output_identifier, \
@@ -331,41 +334,24 @@ class MLEstimation(object):
 class LLProfile(object):
 	# Gets, holds, and updates log likelihood profile
 	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
-#		unfixed_ll_param_df, true_max_param_df
 		self.profile_points = mle_parameters.current_profile_point_num
 		self.output_identifier = mle_parameters.output_identifier
 		self.current_fixed_parameter = mle_parameters.current_fixed_parameter
 		self.datafile_path = datafile_path
 		self.fixed_param = mle_parameters.current_fixed_parameter
 		self.warning_line = ''
-#		self.fixed_param_idx = mle_parameters.current_fixed_parameter_idx
-#		self.parameter_list = mle_parameters.current_parameter_list
-			# the percentile of runtimes returned by LLprofile
-#		self.unfixed_ll_param_df = unfixed_ll_param_df
-#		self.true_max_param_df = true_max_param_df
 		self.additional_param_df = copy.copy(additional_param_df)
 		self.max_LL = None
+		self.ML_params = None
+		self.fixed_param_MLE_val = None
 		self.LL_file = os.path.join(LL_profile_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
 				self.current_fixed_parameter]) + '.csv'))
 		self.LL_df = pandas.DataFrame()
-#		self.non_parameter_columns = ['LL','runtime_in_secs']
-#		self.non_parameter_column_num = len(self.non_parameter_columns)
-#		self.LL_matrix = numpy.array([])
-#		self.LL_df = pandas.DataFrame(\
-#			columns = (self.non_parameter_columns + self.parameter_list))
 	def _set_ML_params(self, ml_param_df):
 		self.ML_params = copy.copy(ml_param_df)
 		self.max_LL = ml_param_df.iloc[0]['LL']
 		self.fixed_param_MLE_val = ml_param_df.iloc[0][self.fixed_param]
-#	def _check_and_update_ML(self, ml_param_df):
-		# checks whether ml_param_df contains a higher LL value
-			# that current self.max_LL; if so, update self.ML_params and
-			# self.max_LL, and add a warning to this LL profile
-#		current_LL = ml_param_df['LL'][0]
-#		if current_LL > self.max_LL:
-#			self._set_ML_params(ml_param_df)
-#			self.warnings.set_non_unfixed_ML(fixed_param)
 	def _add_vals(self, ll_param_df):
 		# adds values to self.LL_df from current_param_datafile
 		# if current LL is max, updates max_LL, ML_params, and
@@ -376,21 +362,15 @@ class LLProfile(object):
 			self.LL_df = self.LL_df.append(ll_param_df).drop_duplicates().reset_index(drop=True)
 		else:
 			self.LL_df = ll_param_df
-#		if len(self.LL_matrix) == 0:
-#			self.LL_matrix = ll_param_df
-#		else:
-#			self.LL_matrix = vstack(self.LL_matrix,ll_param_df)
-#	def _populate_LL_matrix(self):
 	def _id_max_LL(self):
 		# identifies and sets the parameter values corresponding to the
 			# max likelihood
 		# id row of LL_df corresponding to max LL
-#		ml_params = pandas.DataFrame(self.LL_df.loc[self.LL_df['LL'].idxmax()]).transpose()
-		ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
-		### ml_param_df is a series, needs to be a df
-			# idxmax OK here because indices are reset during appending
-		# set this row to be the ML parameters
-		self._set_ML_params(ml_param_df)
+		if not self.LL_df.empty:
+			ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
+				# idxmax OK here because indices are reset during appending
+			# set this row to be the ML parameters
+			self._set_ML_params(ml_param_df)
 	def _populate_LL_df(self):
 		# fill in data in LL_df
 		for current_pp in range(1,(self.profile_points+1)):
@@ -404,59 +384,27 @@ class LLProfile(object):
 	def _sort_by_profiled_param(self):
 		# returns order of rows in self.LL_df sorted by the
 			# parameter being profiled
-		self.LL_df_sorted = self.LL_df.sort_values(self.fixed_param)
-#		parameter_indices_sorted = self.LL_matrix[:, \
-#			self.fixed_param_idx + self.non_parameter_column_num].argsort()
-#		return(numpy.array(parameter_indices_sorted))
-#	def get_LL_profile(self):
-#		# gets a numpy array in which the first column is the parameter
-#			# being profiled and the second column are the
-#			# correspinding LL values, sorted by the profiled parameter
-#		sorted_indices = self._sort_by_profiled_param()
-#		LL_profile = self.LL_matrix[sorted_indices[:,numpy.newaxis], \
-#			[self.fixed_param_idx + self.non_parameter_column_num,0]]
-#		return(LL_profile)
-#	def _check_monotonicity(self):
-#		### PROBABLY MOVE THIS TO CI SECTION TO AVOID REDUNDANCY
-#		# check whether LL profile is monotonic before and after ML parameter value
-#		# In simple and accurately estimated LL landscape, LL
-#			# profile expected to increase monotonically up until
-#			# max LL, then decrease monotonically after; if this
-#			# isn't the case, throw a warning
-#		x_vals = self.LL_df_sorted[self.fixed_param]
-#		y_vals = self.LL_df_sorted['LL']
-#		y_diffs = numpy.diff(y_vals)
-#		increasing_LL_section = y_diffs[x_vals[:-1] < self.fixed_param_MLE_val]
-#		decreasing_LL_section = y_diffs[x_vals[:-1] >= self.fixed_param_MLE_val]
-#			# remember indexing is different for y_diffs and y_vals,
-#				# it's correct here
-#		monotonicity_state = numpy.all(increasing_LL_section >= 0) and \
-#			numpy.all(decreasing_LL_section <= 0)
-#		if not monotonicity_state:
-#			self.warnings.set_non_monotonic()
+		if not self.LL_df.empty:
+			self.LL_df_sorted = self.LL_df.sort_values(self.fixed_param)
+		else:
+			self.LL_df_sorted = self.LL_df
 	def _write_LL_df(self):
-#		LL_array_sorted = \
-#			self.LL_matrix[self.LL_matrix[:,\
-#				self.fixed_param_idx + self.non_parameter_column_num].argsort()]
-#		LL_df = pandas.DataFrame(
-#			columns = (self.non_parameter_columns + self.parameter_list),
-#			data = LL_array_sorted)
-#		if not os.path.isfile(self.LL_file):
 		# write LL_df to file regardless of whether file already
 			# exists, since LL_df may have been updated
 		self.LL_df_sorted.to_csv(path_or_buf=self.LL_file,index=False)
-#	def _read_LL_matrix(self):
 	def _read_LL_df(self):
 		# reads self.LL_df from a pre-recorded file
-		self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
+		try:
+			self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
+		except pandas.io.common.EmptyDataError:
+			# if file is empty, just create an empty df for self.LL_df
+			self.LL_df = pandas.DataFrame()
 		self._sort_by_profiled_param()
-#		self.LL_matrix = LL_df.as_matrix()
 	def _set_LL_df(self):
 		# gets LL_df, either from a pre-recorded file, or from MLE outputs
 		# if true_max_param_df is non-empty, add it to LL_df and update
 			# max LL-related parameters
 		if os.path.isfile(self.LL_file):
-#			self._read_LL_matrix()
 			self._read_LL_df()
 		else:
 			self._populate_LL_df()
@@ -476,15 +424,6 @@ class LLProfile(object):
 		#	- identify position at which sims need to happen
 		#		- run sims
 		#			- get CIs from sims
-#		# create LL profile
-#		current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, additional_param_df)
-#		current_ll_profile.run_LL_profile_compilation()
-#		# get data frame with LL profile, warnings, runtime, and MLE vals
-#		current_LL_df = current_ll_profile.get_LL_df()
-#		current_fixed_param_MLE_val = current_ll_profile.get_fixed_param_MLE_val()
-#		current_max_LL = current_ll_profile.get_max_LL()
-#		LL_profile_warnings = current_ll_profile.get_warnings()
-#		CI_and_profile_warning_list.append(LL_profile_warnings)
 		# get asymptotic CI
 		deg_freedom = 1
 			# 1 df for chi-square test for LL profile comparisons
@@ -514,9 +453,12 @@ class LLProfile(object):
 		# finds the runtime, in hours, corresponding to
 			# self.runtime_display_percentile
 		percentile_as_decimal = runtime_display_percentile/100
-		time_quantile_in_seconds = \
-			self.LL_df_sorted.runtime_in_secs.quantile(percentile_as_decimal)
-		time_quantile_in_hours = time_quantile_in_seconds/3600
+		try:
+			time_quantile_in_seconds = \
+				self.LL_df_sorted.runtime_in_secs.quantile(percentile_as_decimal)
+			time_quantile_in_hours = time_quantile_in_seconds/3600
+		except AttributeError:
+			time_quantile_in_hours = numpy.NaN
 		return(time_quantile_in_hours)
 
 class SingleParamResultSummary(object):
@@ -530,16 +472,17 @@ class SingleParamResultSummary(object):
 		return(searchstring_keys)
 	def read_from_df_line(self, df, index_name):
 		# reads content from line index_name in dataframe df
-		self.content_dict = df.loc[index_name].to_dict()
+		if index_name in df.index.values:
+			self.content_dict = df.loc[index_name].to_dict()
+		else:
+			key_list = list(df.columns.values)
+			self.content_dict = {current_key:numpy.NaN for current_key in key_list}
 	def set_max_LL(self, max_LL):
 		self.content_dict['max_LL'] = max_LL
 	def set_param_MLE(self, param_MLE):
 		self.content_dict['param_MLE'] = param_MLE
 	def set_warnings(self, warnings):
 		self.content_dict['warnings'] = warnings
-#	def set_val(self, key, value):
-#		# allows values to be set by simple keys
-#		self.content_dict[key] = value
 	def set_CI(self, CI_type, CI_bound_dict):
 		# adds keys for each element of CI_bound_dict, combining key
 			# name with CI_type
@@ -688,7 +631,8 @@ class CombinedResultSummary(object):
 					current_fixed_parameter)
 			# check if LL of current_ll_profile is higher than current max_LL, and update true_max_param_df accordingly
 			current_ML_params = ll_profile_outputs['ML_params']
-			self._check_and_update_ML(current_ML_params, current_fixed_parameter)
+			if not current_ML_params.empty:
+				self._check_and_update_ML(current_ML_params, current_fixed_parameter)
 			# get runtime
 			runtime_quantile = ll_profile_outputs['runtime_quantile']
 			self.runtime_quant_list = numpy.append(self.runtime_quant_list,runtime_quantile)
@@ -709,8 +653,6 @@ class CombinedResultSummary(object):
 			numpy.percentile(self.runtime_quant_list,self.pval/2*100)
 		runtime_CI_bounds['upper'] = \
 			numpy.percentile(self.runtime_quant_list,(1-self.pval/2)*100)
-#		runtime_CIs = {'asymptotic':{'lower':numpy.nan,'upper':numpy.nan}, \
-#			'simulation-based':runtime_CI_bounds}
 		return(runtime_CI_bounds)
 	def _add_line_to_combined_df(self,fixed_param_name, current_results_dict):
 		# creates self.combined_summary or adds a line to it
@@ -727,7 +669,7 @@ class CombinedResultSummary(object):
 			new_columns = set(dict_keys).symmetric_difference(df_columns)
 			self.combined_results_df = \
 				self.combined_results_df.append(pandas.DataFrame(columns=new_columns), \
-					sort = False)
+					sort=False)
 			# insert current_results_dict into correct row in df
 			current_results_series = pandas.Series(current_results_dict)
 			self.combined_results_df.loc[fixed_param_name] = \
@@ -765,12 +707,13 @@ class CombinedResultSummary(object):
 		# make a line to write to combined_results_df
 		self._add_line_to_combined_df(time_string, current_results_dict)
 		# append a DataFrame where row names are parameter names
-		mle_df = self.true_max_param_df.transpose()
-		# rename column to 'param_MLE' and remove 'LL' row
-		mle_df.columns=['param_MLE']
-		mle_df.drop(index=['LL','runtime_in_secs'],inplace = True)
-		self.combined_results_df = \
-			self.combined_results_df.append(mle_df, sort = False)
+		if not self.true_max_param_df.empty:
+			mle_df = self.true_max_param_df.transpose()
+			# rename column to 'param_MLE' and remove 'LL' row
+			mle_df.columns=['param_MLE']
+			mle_df.drop(index=['LL','runtime_in_secs'],inplace = True)
+			self.combined_results_df = \
+				self.combined_results_df.append(mle_df, sort = False)
 	def initialize_combined_results(self):
 		# check whether initial mle has been completed
 		mle_complete = self.mle_parameters.check_completeness_within_mode()
@@ -784,7 +727,7 @@ class CombinedResultSummary(object):
 			if init_complete:
 				self._read_combined_df()
 			else:
-				self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
+#				self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 				# create initial LL profiles and check whether one of
 					# them contains a LL higher than the 'unfixed' mode
 				self._create_initial_LL_profiles()
@@ -882,11 +825,6 @@ def _get_MLE_params(current_param_datafile):
 	# get MLE param values and run info from output (csv) file
 	current_param_df = pandas.read_csv(current_param_datafile)
 	return(current_param_df)
-#	with open(current_param_datafile, 'rU') as \
-#		current_param_datafile_contents:
-#		current_param_data = list(csv.reader(current_param_datafile_contents))
-#	current_param_np = numpy.array([float(i) for i in current_param_data[0]])
-#	return(current_param_np)
 
 def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mle_folders, experiment_path, additional_code_run_keys, \
@@ -935,11 +873,6 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 		# this also updates completeness across modes
 		current_mode_mle_complete_status = \
 			mle_parameters.check_completeness_within_mode()
-#		if current_mode_complete_status:
-#			datafile_path = mle_estimator.get_output_path()
-#			LL_profile_folder = mle_folders.LL_profile_path
-#			current_ll_profile = LLProfile(mle_parameters, datafile_path, LL_profile_folder, CI_pval)
-#			current_ll_profile.run_LL_profile_compilation()
 
 
 
