@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import numpy as np
 from mle_filenaming_functions import generate_file_label, generate_filename
-import Cluster_Functions
+from cluster_wrangler import cluster_functions
 from scipy.stats import chi2
 import csv
 
@@ -223,7 +223,7 @@ class OneSidedCIBound(object):
 				value_list.append(current_val)
 		# process key_list and value_list into a submission string
 		submission_string_processor = \
-			Cluster_Functions.SubmissionStringProcessor(self.module, key_list, value_list, \
+			cluster_functions.SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
 		self.code_run_input = submission_string_processor.get_code_run_input()
 	def _run_CI_finder_submission(self):
@@ -248,7 +248,7 @@ class OneSidedCIBound(object):
 		parallel_processors = 1
 		completefile_path = self.completefile
 		# set up and run batch jobs
-		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
+		cluster_functions.job_flow_handler(job_name, job_numbers, initial_time, \
 			initial_mem, cluster_parameters, output_folder, output_extension, \
 			output_file_label, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
@@ -344,7 +344,7 @@ class TwoSidedCI(object):
 		self.CI_sides = ['lower','upper']
 		self.CI_object_dictionary = dict()
 		self.CI_dictionary = dict()
-		self.CI_completeness_tracker = Cluster_Functions.CompletenessTracker(self.CI_sides)
+		self.CI_completeness_tracker = cluster_functions.CompletenessTracker(self.CI_sides)
 		self.CI_complete = False
 		self.CI_warning_list = []
 		self.CI_object_dictionary = {}

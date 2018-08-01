@@ -4,7 +4,7 @@
 
 import os
 import numpy
-import Cluster_Functions
+from cluster_wrangler import cluster_functions
 import copy
 import pandas
 import csv
@@ -85,7 +85,7 @@ class MLEParameters(object):
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
 		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
 		self.parallel_processors = parameter_list["parallel_processors"]
-		self.mode_completeness_tracker = Cluster_Functions.CompletenessTracker(self.mode_list)
+		self.mode_completeness_tracker = cluster_functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
 	def _retrieve_current_values(self,list_by_mode,mode_idx,current_mode,param_num):
 		# retrieves the appropriate list from a list of parameter lists
@@ -169,7 +169,7 @@ class MLEParameters(object):
 		self._id_parameters_to_loop_over()
 		# set up completefile tracker for these parameters
 		self.parameter_completeness_tracker = \
-			Cluster_Functions.CompletenessTracker(self.current_parameters_to_loop_over)
+			cluster_functions.CompletenessTracker(self.current_parameters_to_loop_over)
 		self.current_mode_complete = False
 		# output_identifier is a string that will be included in filenames
 		self.output_identifier = output_identifier
@@ -301,7 +301,7 @@ class MLEstimation(object):
 				value_list.append(current_val)
 		# process key_list and value_list into a submission string
 		submission_string_processor = \
-			Cluster_Functions.SubmissionStringProcessor(self.module, key_list, value_list, \
+			cluster_functions.SubmissionStringProcessor(self.module, key_list, value_list, \
 				self.code_name)
 		self.code_run_input = submission_string_processor.get_code_run_input()
 	def run_job_submission(self):
@@ -326,7 +326,7 @@ class MLEstimation(object):
 		parallel_processors = self.mle_parameters.current_parallel_processors
 		completefile_path = self.completefile
 		# set up and run batch jobs
-		Cluster_Functions.job_flow_handler(job_name, job_numbers, initial_time, \
+		cluster_functions.job_flow_handler(job_name, job_numbers, initial_time, \
 			initial_mem, cluster_parameters, output_folder, output_extension, \
 			output_file_label, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
@@ -559,7 +559,7 @@ class CombinedResultSummary(object):
 		self._create_combined_output_file()
 		self.max_LL = None
 		self.warnings = CombinedResultWarning()
-		self.completeness_tracker = Cluster_Functions.CompletenessTracker(['initialization', \
+		self.completeness_tracker = cluster_functions.CompletenessTracker(['initialization', \
 			'asymptotic_CIs', 'simulation-based_CIs'])
 		self.runtime_quant_list = numpy.array([])
 		self.true_max_param_df = pandas.DataFrame()
@@ -760,7 +760,7 @@ class CombinedResultSummary(object):
 				parameters_to_loop_over = \
 					self.mle_parameters.get_fitted_parameter_list(False)
 				asymptotic_CI_completeness_tracker = \
-					Cluster_Functions.CompletenessTracker(parameters_to_loop_over)
+					cluster_functions.CompletenessTracker(parameters_to_loop_over)
 				for current_fixed_parameter in parameters_to_loop_over:
 					# check whether this asymptotic CI has been identified
 					# read line for current_fixed_parameter from

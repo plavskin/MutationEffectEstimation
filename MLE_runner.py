@@ -10,10 +10,10 @@ import subprocess
 import math
 import numpy
 from scipy.stats import chi2
-import re
+import re 
 from shutil import copyfile
-import Cluster_Functions
-import MLE_Functions
+from cluster_wrangler import cluster_functions
+from mlestimator import mle_functions
 
 usage = '''
 
@@ -74,7 +74,7 @@ setup_file = Check_Input()
 	# setup_file is given as input when running the code, and contains
 		# info about directories containing code and data
 
-initial_parameter_list = Cluster_Functions.parse_setup_file(setup_file)
+initial_parameter_list = cluster_functions.parse_setup_file(setup_file)
 
 # path of file that determines whether MLE_runner already running
 currently_running_checkfile = os.path.join(initial_parameter_list['home_folder'],\
@@ -101,19 +101,19 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 			copyfile(setup_file, local_setup_file)
 
 		# Read setup_file from experiment_path
-		parameter_list = Cluster_Functions.parse_setup_file(local_setup_file)
-		cluster_parameters = Cluster_Functions.ClusterParameters(parameter_list)
+		parameter_list = cluster_functions.parse_setup_file(local_setup_file)
+		cluster_parameters = cluster_functions.ClusterParameters(parameter_list)
 		# get general info necessary to run the rest of code
-		mle_parameters = MLE_Functions.MLEParameters(parameter_list)
+		mle_parameters = mle_functions.MLEParameters(parameter_list)
 
 		# create MLE_running.txt so no new instances of MLE_runner.py run
 #		open(currently_running_checkfile,'w+').close()
 
 		# Get names of necessary folders, and, if this hasn't been done
 			# before, create those folders
-		cluster_folders = Cluster_Functions.FolderManager(cluster_parameters, \
+		cluster_folders = cluster_functions.FolderManager(cluster_parameters, \
 			experiment_folder_name)
-		mle_folders = MLE_Functions.FolderManager(cluster_parameters, \
+		mle_folders = mle_functions.FolderManager(cluster_parameters, \
 			cluster_folders, experiment_folder_name)
 
 		##########
@@ -191,7 +191,7 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 
 				# run MLE and LL profile creation, as well as CI
 					# identification, for the current mode
-				MLE_Functions.loop_over_modes(mle_parameters, \
+				mle_functions.loop_over_modes(mle_parameters, \
 					cluster_parameters, cluster_folders, mle_folders, \
 					experiment_path, additional_code_run_keys, \
 					additional_code_run_values, output_id_string_start)
