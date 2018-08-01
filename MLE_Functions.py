@@ -270,7 +270,7 @@ class MLEstimation(object):
 			'parameter_list','output_file', \
 			'parallel_processors','ms_positions','combined_profile_ub_array', \
 			'combined_profile_lb_array','ms_grid_parameter_array', \
-			'combined_logspace_parameters']
+			'combined_logspace_parameters','datafile_path','output_id_parameter']
 		value_list = [self.within_batch_counter_call, \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
@@ -288,7 +288,8 @@ class MLEstimation(object):
 			self.mle_parameters.current_profile_upper_limit_list, \
 			self.mle_parameters.current_profile_lower_limit_list, \
 			self.mle_parameters.current_ms_grid_parameters, \
-			self.mle_parameters.current_logspace_profile_list]
+			self.mle_parameters.current_logspace_profile_list,
+			self.output_path, self.mle_parameters.output_id_parameter]
 		# take values from self.additional_code_run_keys and
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
