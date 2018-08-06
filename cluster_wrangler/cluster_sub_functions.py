@@ -9,8 +9,10 @@ import subprocess
 import math
 
 class JobSubmissionManager(object):
-	# Base class that handles getting information from and passing
-		# information to the cluster system
+	"""
+	Base class that handles getting information from and passing
+	information to the cluster system
+	"""
 	def __init__(self, cluster_parameters):
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 	def get_within_batch_counter(self):
@@ -20,32 +22,36 @@ class JobSubmissionManager(object):
 	def get_max_jobs_per_batch(self):
 		return(None)
 	def free_job_calculator(self):
-		# gets the number of jobs that can still be submitted to
-			# the routing queue
+		"""
+		Gets the number of jobs that can still be submitted to
+		the routing queue
+		"""
 		print('error! cannot run free_job_calculator on base JobSubmissionManager class.')
 		space_in_queue = 0
 		return(space_in_queue)
 	def job_process_finder(self):
-		# Identify jobs that are still being run
-		# Return list of jobs currently being processed
+		"""
+		Identifies jobs that are still being run
+		Returns list of jobs currently being processed
+		"""
 		print('error! cannot run job_process_finder on base JobSubmissionManager class.')
 		jobs_still_in_processing = []
 		return(jobs_still_in_processing)
 	def _create_submission_job(self, job_list_string, job_time, job_mem):
-		# Writes files to submit to cluster queue
+		""" Writes files to submit to cluster queue """
 		# convert memory and time formats
 		print('error! cannot create submission job in base JobSubmissionManager class.')
 	def _submit_job(self):
-		# submits sbatch job
+		""" Submits job/job batch """
 		# cd into sbatch directory
 		# Run submission file
 		print('error! cannot submit job from base JobSubmissionManager class.')
 	def create_and_submit_batch_job(self, job_list_string, job_time, job_mem):
-		# creates and submits batch job on slurm
+		""" Creates and submits batch/single job on computer/cluster """
 		self._create_submission_job(job_list_string,job_time,job_mem)
 		self._submit_job()
 	def error_status_check(self, latest_errorfile_contents):
-		# parses contents of job submission run error file
+		""" Parses contents of job submission run error file """
 		error_status_dict = dict()
 		error_status_dict['time_limit_check'] = \
 			'time limit' in latest_errorfile_contents
@@ -63,8 +69,10 @@ class JobSubmissionManager(object):
 		return(error_status_dict)
 
 class MacOSXManager(JobSubmissionManager):
-	# Handles getting information from and passing information to a \
-		# MacOSX xomputer
+	"""
+	Handles getting information from and passing information to a
+	MacOSX computer
+	"""
 	def __init__(self, cluster_parameters):
 		super(MacOSXManager, self).__init__(cluster_parameters)
 		# Don't use every processor on computer! (duh)
@@ -84,8 +92,10 @@ class MacOSXManager(JobSubmissionManager):
 		self.sh_filename_prefix = os.path.join(self.job_parameters.cluster_job_submission_folder,\
 			(self.job_parameters.name + '_'))
 	def free_job_calculator(self):
-		# gets the number of jobs that can still be submitted to
-			# the routing queue
+		"""
+		Gets the number of jobs that can still be submitted to
+		the routing queue
+		"""
 		# Get max number of processors user can use
 		try:
 			number_cpus = \
@@ -107,8 +117,10 @@ class MacOSXManager(JobSubmissionManager):
 		space_in_queue = max_allowed_jobs-jobs_running
 		return(space_in_queue)
 	def job_process_finder(self):
-		# Identify jobs that are still being run
-		# Return list of jobs currently being processed
+		"""
+		Identifies jobs that are still being run
+		Returns list of jobs currently being processed
+		"""
 		try:
 			jobs_running_list = subprocess.check_output(('ps aux | grep ' + \
 				self.job_parameters.name + ' | grep -v "grep"'),shell=True)
@@ -119,7 +131,7 @@ class MacOSXManager(JobSubmissionManager):
 				jobs_running_list, re.MULTILINE)]
 		return(jobs_still_in_processing)
 	def _create_submission_job(self, job_number_string, *unused):
-		# Writes files to submit to cluster queue
+		""" Writes files to submit to cluster queue """
 		# take first int in job_number_string as the required job number
 		job_number = str(re.findall('\d+',job_number_string)[0])
 		self.sh_filename = self.sh_filename_prefix + job_number + \
@@ -163,15 +175,17 @@ class MacOSXManager(JobSubmissionManager):
 			batch_job_file.write('\n\n')
 				# need additional returns at end of shell scripts
 	def _submit_job(self):
-		# submits sh job
+		""" Submits sh job """
 		# cd into sh directory
 		os.chdir(self.job_parameters.cluster_job_submission_folder)			
 		# Run .q file for sim
 		subprocess.call('sh \'' + self.sh_filename + '\'', shell=True)
 
 class SlurmManager(JobSubmissionManager):
-	# Handles getting information from and passing information to the
-		# slurm cluster system
+	"""
+	Handles getting information from and passing information to the
+	slurm cluster system
+	"""
 	def __init__(self, cluster_parameters):
 		super(SlurmManager, self).__init__(cluster_parameters)
 		# at the request of hpc staff, don't use all available queue space
@@ -200,7 +214,7 @@ class SlurmManager(JobSubmissionManager):
 			self.job_parameters.additional_beginning_lines_in_job_sub.extend(matlab_parallel_start_lines)
 			self.job_parameters.additional_end_lines_in_job_sub.extend(matlab_parallel_end_lines)
 	def get_max_jobs_per_batch(self):
-		# Get max number of jobs in a single array submission
+		""" Gets max number of jobs in a single array submission """
 		max_array_size_response_string = subprocess.check_output(
 			'scontrol show config | grep MaxArraySize',shell=True)
 		max_array_size_response_split = max_array_size_response_string.split(' = ')
@@ -214,8 +228,10 @@ class SlurmManager(JobSubmissionManager):
 		max_allowed_jobs = int(round(min(max_array_size,max_submit)*self.max_job_proportion))
 		return(max_allowed_jobs)
 	def free_job_calculator(self):
-		# gets the number of jobs that can still be submitted to
-			# the routing queue
+		"""
+		Gets the number of jobs that can still be submitted to
+		the routing queue
+		"""
 		max_allowed_jobs = self.get_max_jobs_per_batch()
 		# how many jobs are currently in default_queue for this user?
 		jobs_in_queue = int(subprocess.check_output(
@@ -226,8 +242,10 @@ class SlurmManager(JobSubmissionManager):
 		space_in_queue = max_allowed_jobs-jobs_in_queue
 		return(space_in_queue)
 	def job_process_finder(self):
-		# Identify jobs that are still being run by SLURM
-		# Return list of jobs currently being processed
+		"""
+		Identifies jobs that are still being run by SLURM
+		Return list of jobs currently being processed
+		"""
 		try:
 			jobs_running_list = subprocess.check_output('squeue -u ' + self.cluster_parameters.username + ' -r -n '
 				+ self.job_parameters.name + ' | egrep " PD | CG | R " ',shell=True)
@@ -236,6 +254,10 @@ class SlurmManager(JobSubmissionManager):
 		jobs_still_in_processing = [int(k) for k in re.findall('^\s+\d+_(\d+)\s',jobs_running_list,re.MULTILINE)]
 		return(jobs_still_in_processing)
 	def _get_latest_module_path(self):
+		"""
+		Identifes the most up-to-date path for the module of the
+		application you need to use
+		"""
 		try:
 			module_output = subprocess.check_output('module avail', shell=True)
 		except subprocess.CalledProcessError:
@@ -247,7 +269,7 @@ class SlurmManager(JobSubmissionManager):
 			os.sep + '\S+)', relevant_module_list[-1])[0]
 		self.module_path = latest_module_path
 	def _convert_time_format(self, time_in_mins):
-		# convert time_in_mins from minutes to hh:mm:ss	
+		""" Converts time_in_mins from minutes to hh:mm:ss """	
 		hours = int(math.floor(float(time_in_mins)/60))
 		if hours > 0:
 			minutes = int(float(time_in_mins) % (float(hours)*60))
@@ -256,13 +278,15 @@ class SlurmManager(JobSubmissionManager):
 		time_string = str(hours).zfill(2)+':'+ str(minutes).zfill(2)+':00'
 		return(time_string)
 	def _convert_mem_format(self, mem_in_mb):
-		# convert single_job_mem from # of Mb to memory string
-		# cluster only cares about units of GB
+		"""
+		Converts single_job_mem from # of Mb to memory string
+		Cluster only cares about units of GB
+		"""
 		mem_in_gb = math.ceil(float(mem_in_mb)/1024)
 		mem_string = str(int(mem_in_gb))+'GB'
 		return(mem_string)
 	def _create_submission_job(self, job_list_string, job_time, job_mem):
-		# Writes files to submit to cluster queue
+		""" Writes files to submit to cluster queue """
 		# convert memory and time formats
 		single_job_time_string = self._convert_time_format(job_time)
 		single_job_mem_string = self._convert_mem_format(job_mem)
@@ -320,7 +344,7 @@ class SlurmManager(JobSubmissionManager):
 			sbatch_job_file.write('\n\n')
 				# need additional returns at end of shell scripts
 	def _submit_job(self):
-		# submits sbatch job
+		""" Submits sbatch job """
 		# cd into sbatch directory
 		os.chdir(self.job_parameters.cluster_job_submission_folder)			
 		# Run .q file for sim

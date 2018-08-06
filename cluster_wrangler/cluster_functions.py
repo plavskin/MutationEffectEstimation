@@ -1,7 +1,9 @@
 #!/usr/bin/python
 
-# Contains objects needed for running jobs on cluster and keeping track
-	# of their progress
+"""
+Contains objects needed for running jobs on cluster and keeping track
+of their progress
+"""
 
 import os
 import csv
@@ -12,7 +14,7 @@ import re
 import cluster_sub_functions
 
 class Job(object):
-	# job object that stores properties of individual jobs in queue
+	""" job object that stores properties of individual jobs in queue """
 	def __init__(self, number, status, time, mem):
 		self.number = number
 		self.status = status
@@ -35,7 +37,7 @@ class Job(object):
 		return(info_list)
 
 class JobStatus(object):
-	# enum for job status
+	""" enum for job status """
 	TO_PROCESS = 'To Process'
 	PROCESSING = 'Processing'
 	COMPLETED = 'Completed'
@@ -44,7 +46,7 @@ class JobStatus(object):
 	ERROR = 'Error'
 
 class Parameter(object):
-	# processes a single parameter passed to it
+	""" processes a single parameter passed to it """
 	def __init__(self, name, value, current_type, explanation):
 		self.name = name
 		self.explanation = explanation
@@ -52,7 +54,7 @@ class Parameter(object):
 		self.value = value
 		self._parse_value()
 	def concat_to_string(self):
-		# returns a string with parameter info
+		""" returns a string with parameter info """
 		concatenated_string = ""
 		concatenated_string += self.name
 		if self.type == "str":
@@ -74,7 +76,7 @@ class Parameter(object):
 		concatenated_string += '\n'+self.explanation
 		return(concatenated_string)
 	def _parse_value(self):
-		# determines what type the parameter belongs to
+		""" determines what type the parameter belongs to """
 		if   self.type == "str":
 			self.value = self.value
 		elif self.type == "nested_str_list":
@@ -97,22 +99,22 @@ class Parameter(object):
 			raise ValueError("invalid data type: " + self.type)
 
 class Parameters(object):
-	# creates a list of arbitrary parameters
-    def __init__(self, parameters):
-        self.parameters = {}
-        for p in parameters:
-            self.parameters[p.name] = p
-    def __getitem__(self, name):
-        if name in self.parameters:
-            return self.parameters[name].value
-        else:
-            raise ValueError('this parameter does not exist: ' + name)
-    def print_values(self):
-        for name in self.parameters:
-            print(self.parameters[name].concat_to_string())
+	""" creates a list of arbitrary parameters """
+	def __init__(self, parameters):
+		self.parameters = {}
+		for p in parameters:
+			self.parameters[p.name] = p
+	def __getitem__(self, name):
+		if name in self.parameters:
+			return self.parameters[name].value
+		else:
+			raise ValueError('this parameter does not exist: ' + name)
+	def print_values(self):
+		for name in self.parameters:
+			print(self.parameters[name].concat_to_string())
 
 class ClusterParameters(object):
-	# holds parameters general to the system
+	""" holds parameters general to the system """
 	def __init__(self,parameter_list):
 		self.code_path = parameter_list["code_folder"]
 		self.home_path = parameter_list["home_folder"]
@@ -131,7 +133,7 @@ class ClusterParameters(object):
 		self.current_mem = self.starting_mem
 		self.current_time = self.starting_time
 	def _set_cluster_architecture_properties(self):
-		# sets properties related to the cluster architecture
+		""" sets properties related to the cluster architecture """
 		if self.cluster_architecture == 'slurm':
 			self.job_submission_manager = \
 				cluster_sub_functions.SlurmManager(copy.deepcopy(self))
@@ -152,6 +154,7 @@ class ClusterParameters(object):
 		self.current_mem = new_mem
 
 class FolderManager(object):
+	""" Creates and holds paths used by cluster_wrangler """
 	def __init__(self, cluster_parameters, experiment_folder_name):
 		self.path_dict = {}
 		self.path_dict['experiment_path'] = \
@@ -176,7 +179,7 @@ class FolderManager(object):
 		return(self.path_dict[folder_name])
 
 class JobParameters(object):
-	# holds parameters of the job currently being run
+	""" Holds parameters of the job currently being run """
 	def __init__(self, name, output_folder, output_extension, output_file_label, \
 		cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
@@ -195,9 +198,11 @@ class JobParameters(object):
 			self._string_to_list(additional_end_lines_in_job_sub)
 		self.parallel_processors = parallel_processors
 	def _string_to_list(self, parameter):
-		# checks whether parameter is entered as a string or list, and
-			# if a string, converts to a list holding that string; if
-			# neither, returns an error
+		"""
+		Checks whether parameter is entered as a string or list, and
+		if a string, converts to a list holding that string; if
+		neither, returns an error
+		"""
 		if isinstance(parameter, list):
 			output_parameter = parameter
 		elif isinstance(parameter, basestring):
@@ -207,40 +212,53 @@ class JobParameters(object):
 		return(output_parameter)
 
 class CompletenessTracker(object):
-	# Keeps a running tally of keys (which can be parameters, modes, etc) and checks their completeness
+	"""
+	Keeps a running tally of keys (which can be parameters, modes, etc)
+	and checks their completeness
+	"""
 	def __init__(self,key_list):
 		self._create_completeness_dict(key_list)
 		self.completeness_status = False
 	def _create_completeness_dict(self,key_list):
-		# creates dictionary with parameter names as keys and False as values
+		"""
+		Creates dictionary with parameter names as keys and False
+		as values
+		"""
 		completeness_list = [False]*len(key_list)
 		self.completeness_dict = dict(zip(key_list,completeness_list))
 	def update_key_status(self, key, completefile_path):
-		# checks whether key has associated completefile and changes its status accordingly
+		"""
+		Checks whether key has associated completefile and changes its
+		status accordingly
+		"""
 		if os.path.isfile(completefile_path):
 			self.completeness_dict[key] = True
 	def switch_key_completeness(self, key, value_bool):
-		# switches a key value to value_bool
-		# useful for cases when completefiles not kept track of
+		"""
+		Switches a key value to value_bool
+		Useful for cases when completefiles not kept track of
+		"""
 		self.completeness_dict[key] = value_bool
 	def get_key_completeness(self, key):
 		return(self.completeness_dict[key])
 	def _check_completeness(self):
-		# checks whethere all parameters completed
+		""" Checks whethere all parameters completed """
 		if all(self.completeness_dict.values()):
 			self.completeness_status = True
 		else:
 			self.completeness_status = False
 	def get_completeness(self):
-		# checks and returns completeness status
+		""" Checks and returns completeness status """
 		self._check_completeness()
 		return(self.completeness_status)
 
 class BatchSubmissionManager(object):
-	# Holds parameters for current job submission session, and manages
-		# which jobs from current batch are submitted
-	# Algorithm here assumes space_in_queue is typically more limiting
-		# than max_char_num and batches_remaining
+	"""
+	Holds parameters for current job submission session, and manages
+	which jobs from current batch are submitted
+	Algorithm here assumes space_in_queue is typically more limiting
+	than max_char_num and batches_remaining
+	"""
 	def __init__(self, job_list, max_char_num, max_jobs_per_batch, \
 		space_in_queue, batches_remaining):
 		self.space_in_queue = space_in_queue
@@ -254,8 +272,10 @@ class BatchSubmissionManager(object):
 		self.remaining_jobs_in_batch = max_jobs_per_batch
 		self.jobs_to_error = []
 	def get_error_jobs(self):
-		# returns jobs whose corresponding strings (for the job alone
-			# plus a comma) are longer than max_char_num
+		"""
+		Returns jobs whose corresponding strings (for the job alone
+		plus a comma) are longer than max_char_num
+		"""
 		return(self.jobs_to_error)
 	def get_submission_string_list(self):
 		return(self.job_submission_string_list)
@@ -289,10 +309,12 @@ class BatchSubmissionManager(object):
 		self.job_submission_string_list.append('')
 		self.remaining_jobs_in_batch = self.max_jobs_per_batch
 	def _consecutive_parser(self, job_list, stepsize = 1):
-		# Splits list of integers into list of lists of consecutive nums
-		# Returns the list of consecutive integer lists, as well as a
-			# list of lists of the indices of each member of each
-			# consecutive integer lists in the original job_list
+		"""
+		Splits list of integers into list of lists of consecutive nums
+		Returns the list of consecutive integer lists, as well as a
+		list of lists of the indices of each member of each consecutive
+		integer lists in the original job_list
+		"""
 		np_job_list = numpy.array(job_list)
 		sorted_indices = numpy.argsort(np_job_list)
 		sorted_job_list = np_job_list[sorted_indices]
@@ -303,8 +325,10 @@ class BatchSubmissionManager(object):
 		split_job_list = numpy.array(numpy.split(sorted_job_list,split_indices))
 		return(split_job_list)
 	def _job_list_string_converter(self, consecutive_job_list):
-		# Converts a consecutive list of job numbers into a job
-			# submission string for SLURM
+		"""
+		Converts a consecutive list of job numbers into a job
+		submission string for SLURM
+		"""
 		# test that consecutive_job_list is actually consecutive
 		test_list = self._consecutive_parser(consecutive_job_list)
 		if len(test_list) > 1:
@@ -319,19 +343,23 @@ class BatchSubmissionManager(object):
 				str(max(consecutive_job_list))+',')
 		return(current_job_string)
 	def _update_job_sublist(self, job_sublist, current_job_sublist, current_job_string):
-		# adds current_job_sublist to job_submission_list,
-			# removes current_job_sublist from job_list
+		"""
+		Adds current_job_sublist to job_submission_list,
+		removes current_job_sublist from job_list
+		"""
 		self._add_jobs_to_submission_list(current_job_sublist,current_job_string)
 		job_sublist = [x for x in job_sublist if x not in current_job_sublist]
 		return(job_sublist)
 	def _job_list_parser(self, job_sublist):
-		# Taking in a list of jobs, reorganize them so that consecutive
-			# jobs can be called as intervals (e.g. '5-8' for
-			# '5,6,7,8'), and find the optimal arrangement that
-			# maximizes job number so that the character count for the
-			# list of jobs doesn't exceed max_char_num
-		# Assumes that max_char_num is sufficiently large
-			# i.e. >(2*(max number of digits in a job number)+2)
+		"""
+		Taking in a list of jobs, reorganizes them so that consecutive
+		jobs can be called as intervals (e.g. '5-8' for '5,6,7,8'), and
+		finds the optimal arrangement that maximizes job number so that
+		the character count for the list of jobs doesn't exceed
+		max_char_num
+		Assumes that max_char_num is sufficiently large
+		i.e. >(2*(max number of digits in a job number)+2)
+		"""
 		if self.space_in_queue < len(job_sublist):
 			# reorder job_sublist and truncate
 			job_sublist = numpy.sort(job_sublist)[0:self.space_in_queue]
@@ -367,16 +395,17 @@ class BatchSubmissionManager(object):
 			else:
 				self._reset_batch()
 	def select_jobs_to_sub(self):
-		# Based on the amount of space available in the queue, splits jobs
-			# into ones that can be run now vs those that have to be run
-			# later
-		#################
-		# Take the maximum number of jobs that can be submitted from
-			# initial_job_list, and parse them to ensure that
-			#	1. they're listed in the most efficient SLURM-readable
-			#		format
-			#	2. this list doesn't exceed the max number of chars
-			#		allowed by SLURM
+		"""
+		Based on the amount of space available in the queue, splits
+		jobs into ones that can be run now vs those that have to be run
+		later
+		Takes the maximum number of jobs that can be submitted from
+		initial_job_list, and parse them to ensure that
+			1. they're listed in the most efficient SLURM-readable
+			format
+			2. this list doesn't exceed the max number of chars
+			allowed by SLURM
+		"""
 		################# maybe correct? #################
 		job_list_split = self._consecutive_parser(self.job_list)
 		job_number_list = numpy.array([len(i) for i in job_list_split])
@@ -388,8 +417,10 @@ class BatchSubmissionManager(object):
 		self._update_batches_remaining(1)
 
 class JobListManager(object):
-	# holds list of jobs corresponding to a single 'name'
-	# updates current job status
+	"""
+	Holds list of jobs corresponding to a single 'name'
+	Updates current job status
+	"""
 	def __init__(self, jobs, job_parameters, cluster_parameters):
 		self.jobs = {}
 		for j in jobs:
@@ -397,38 +428,43 @@ class JobListManager(object):
 		self.job_parameters = copy.deepcopy(job_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 	def get_job_name(self):
-		# returns the name of the jobs
+		""" Returns the name of the stored jobs """
 		job_name = self.job_parameters.name
 		return(job_name)
-	def _get_status_list(self):
-		# gets current status of every job
-		# ??? Do I need this function? ???
-		status_list=[self.jobs[num].status for num in self.jobs]
-		return status_list
+#	def _get_status_list(self):
+#		# gets current status of every job
+#		# ??? Do I need this function? ???
+#		status_list=[self.jobs[num].status for num in self.jobs]
+#		return status_list
 	def get_jobs_by_status(self, status):
-		# gets list of jobs with a specific status
+		""" Gets list of jobs with a specific status """
 		job_subset_list = []
 		for num in self.jobs:
 			if self.jobs[num].status == status:
 				job_subset_list.append(num)
 		return job_subset_list
 	def get_job_times(self, number_list):
-		# gets list of job times for all jobs in number_list
+		""" Gets list of job times for all jobs in number_list """
 		job_time_list = []
 		for num in number_list:
 			job_time_list.append(self.jobs[num].get_time())
 		return(job_time_list)
 	def get_job_mems(self, number_list):
-		# gets list of job memories for all jobs in number_list
+		""" Gets list of job memories for all jobs in number_list """
 		job_mem_list = []
 		for num in number_list:
 			job_mem_list.append(self.jobs[num].get_mem())
 		return(job_mem_list)
 	def batch_status_change(self, number_list, new_status):
-		# changes the status of all jobs in number_list to new_status
+		""" Changes the status of all jobs in number_list to new_status """
 		for num in number_list:
 			self.jobs[num].change_status(new_status)
 	def extract_contents(self, required_status_list):
+		"""
+		Returns a list of job information lists (using
+		Job.extract_job_info) for all jobs with a status that is in
+		required_status_list
+		"""
 		joblist_contents = []
 		for current_key,current_job in self.jobs.iteritems():
 			current_status = current_job.get_status()
@@ -437,15 +473,21 @@ class JobListManager(object):
 				joblist_contents.append(current_job_extract)
 		return(joblist_contents)
 	def _batch_mem_change(self, number_list, new_mem):
-		# changes the mem of all jobs in number_list to new_mem
+		"""
+		Changes the mem of all jobs in number_list to new_mem
+		"""
 		for num in number_list:
 			self.jobs[num].change_mem(new_mem)
 	def _batch_time_change(self, number_list, new_time):
-		# changes the time of all jobs in number_list to new_time
+		"""
+		Changes the time of all jobs in number_list to new_time
+		"""
 		for num in number_list:
 			self.jobs[num].change_time(new_time)
 	def _just_completed_finder(self, jobs_just_finished):
-		# Identify which jobs from a list have been successfully completed
+		"""
+		Identifies which jobs from a list have been successfully completed
+		"""
 		try:
 			completed_files = subprocess.check_output('ls -lrt '
 				+ '"' + self.job_parameters.output_folder + '"',shell=True)
@@ -458,8 +500,10 @@ class JobListManager(object):
 		return(jobs_just_completed)
 	def _extract_latest_errorfile(self, cluster_job_submission_folder, \
 		job_sub_run_output_list, job_name,job_num):
-		# identifies the latest error file associated with a job,
-			# if one exists, and extracts its contents
+		"""
+		Identifies the latest error file associated with a job, if one
+		exists, and extracts its contents
+		"""
 		missing_job_codes = re.findall(job_name + '.e(\d+?)-' + str(job_num) + \
 			'$', job_sub_run_output_list, re.MULTILINE)
 		if missing_job_codes:
@@ -479,7 +523,7 @@ class JobListManager(object):
 		return(latest_errorfile_contents.lower())
 	def _aborted_job_processor(self, max_mem, max_time, time_multiplier,
 		mem_multiplier, job_num):
-		# For aborted jobs, update job memory or time, and change job status
+		""" For aborted jobs, updates job memory or time, and changes job status """
 		current_job = self.jobs[job_num]
 		most_recent_time = current_job.time
 		most_recent_mem = current_job.mem
@@ -492,7 +536,7 @@ class JobListManager(object):
 			self._batch_mem_change([job_num],current_updated_mem)
 			self._batch_time_change([job_num],current_updated_time)
 	def _parse_job_submission_output(self):
-		# gets list of files in cluster_job_submission output folder
+		""" Gets list of files in cluster_job_submission output folder """
 		try:
 			job_sub_run_output_list = subprocess.check_output('ls -lrt \'' + \
 				self.job_parameters.cluster_job_submission_folder + '\'',shell=True)
@@ -500,17 +544,19 @@ class JobListManager(object):
 			job_sub_run_output_list = ''
 		return(job_sub_run_output_list)
 	def _missing_job_processor(self, missing_jobs, job_submission_manager):
-		# Looks through any jobs that are no longer processing but have
-			# not been successfully completed
-		# Checks for error files associated with these jobs, and updates
-			# their status to ABORTED_FOREVER, ABORTED_TO_RESTART, or
-			# TO_PROCESS
-		# if error file exists:
-			#	1. check whether it contains info on exceeded time or
-			#		mem limits; if so, resubmit with max time and memory
-			#	2. Otherwise, check whether error file empty
-			#		if not, add field to error list
-			#		if so, restart field
+		"""
+		Looks through any jobs that are no longer processing but have
+		not been successfully completed
+		Checks for error files associated with these jobs, and updates
+		their status to ABORTED_FOREVER, ABORTED_TO_RESTART, or
+		TO_PROCESS
+		If error file exists:
+			1. check whether it contains info on exceeded time or
+			mem limits; if so, resubmit with max time and memory
+			2. Otherwise, check whether error file empty
+				if not, add field to error list
+				if so, restart field
+		"""
 		job_sub_run_output_list = \
 			self._parse_job_submission_output()
 		for current_missing_job in missing_jobs:
@@ -542,7 +588,7 @@ class JobListManager(object):
 					mem_multiplier = 1.5
 					self._aborted_job_processor(self.cluster_parameters.max_mem, \
 						self.cluster_parameters.max_time, time_multiplier, \
-						mem_multiplier, job_num)
+						mem_multiplier, current_missing_job)
 				elif error_status_dict['time_limit_check']:
 					# updated time should be 2x times previous time
 						# allotment
@@ -552,7 +598,7 @@ class JobListManager(object):
 					mem_multiplier = 1
 					self._aborted_job_processor(self.cluster_parameters.max_mem, \
 						self.cluster_parameters.max_time, time_multiplier, \
-						mem_multiplier, job_num)
+						mem_multiplier, current_missing_job)
 				elif error_status_dict['unidentified_error_check']:
 					self.batch_status_change([current_missing_job], \
 						JobStatus.ERROR)
@@ -562,13 +608,16 @@ class JobListManager(object):
 				self.batch_status_change([current_missing_job], \
 					JobStatus.TO_PROCESS)
 	def autoupdate_job_status(self, job_submission_manager):
-		# update the status of any jobs that were in the 'PROCESSING'
-			# status based on their current status on the cluster
-		# check for jobs that are still processing
-		# among the rest, look for errors, completed
-			# parse errors, move jobs among 'PROCESSING', 'ABORTED_FOREVER', 'ABORTED_TO_RESTART' statuses
-			# look for lost jobs and move those to 'TO_PROCESS' list
-		# get list of jobs that should be processing
+		"""
+		Updates the status of any jobs that were in the 'PROCESSING'
+		status based on their current status on the cluster
+		Checks for jobs that are still processing
+		Among the rest, look for errors, completed jobs
+		parses errors, moves jobs among 'PROCESSING',
+		'ABORTED_FOREVER', 'ABORTED_TO_RESTART' statuses
+		looks for lost jobs and moves those to 'TO_PROCESS' list
+		Gets list of jobs that should be processing
+		"""
 		prev_processing_list = self.get_jobs_by_status(JobStatus.PROCESSING)
 		current_processing_list = job_submission_manager.job_process_finder()
 		# identify jobs that no longer have 'PROCESSING' status
@@ -585,8 +634,10 @@ class JobListManager(object):
 		if missing_jobs:
 			self._missing_job_processor(missing_jobs, job_submission_manager)
 	def _get_jobs_to_submit(self):
-		# get list of job numbers that have to_process or
-			# aborted_to_restart status
+		"""
+		Gets list of job numbers that have to_process or
+		aborted_to_restart status
+		"""
 		jobs_aborted_to_restart = \
 			self.get_jobs_by_status(JobStatus.ABORTED_TO_RESTART)
 		jobs_to_process = \
@@ -594,9 +645,11 @@ class JobListManager(object):
 		job_candidate_numbers = jobs_aborted_to_restart + jobs_to_process
 		return(job_candidate_numbers)
 	def _group_jobs_by_time_and_mem(self, times, mems, order):
-		# Group jobs based on common time and mem requirement
-			# times, mems, order must all by numpy.arrays
-		# reorder job_candidate_times and job_candidate_mems
+		"""
+		Groups jobs based on common time and mem requirement
+			times, mems, order must all by numpy.arrays
+		Reorders job_candidate_times and job_candidate_mems
+		"""
 		times_sorted = times[order]
 		mems_sorted = mems[order]
 		# identify positions where time and mem don't change from previous position
@@ -608,10 +661,12 @@ class JobListManager(object):
 		split_order = numpy.split(order,split_indices)
 		return(split_order)
 	def _group_jobs_for_sub(self, job_num_list):
-		# Get the order in which jobs should be considered for submission
-			# Then group jobs based on common mem and time requirement
-		# get times  and memory amts for jobs that have to_process or
-			# aborted_to_restart status
+		"""
+		Gets the order in which jobs should be considered for submission
+			Then groups jobs based on common mem and time requirement
+		Gets times  and memory amts for jobs that have to_process or
+		aborted_to_restart status
+		"""
 		job_candidate_times = \
 			numpy.array(self.get_job_times(job_num_list))
 		job_candidate_mems = \
@@ -627,7 +682,7 @@ class JobListManager(object):
 			grouped_job_order_indices]
 		return(job_num_list_grouped)
 	def submit_jobs(self, job_submission_manager):
-		# Submits jobs and updates job statuses accordingly
+		""" Submits jobs and updates job statuses accordingly """
 		job_sub_candidate_nums = self._get_jobs_to_submit()
 		job_sub_candidate_nums_grouped = \
 			self._group_jobs_for_sub(job_sub_candidate_nums)
@@ -670,7 +725,10 @@ class JobListManager(object):
 				self.batch_status_change(current_jobs_to_submit,JobStatus.PROCESSING)
 
 class CompletefileManager(object):
-	# Handles checking if current set of jobs is complete, and writing completefile
+	"""
+	Handles checking whether current set of jobs is complete, and
+	writing completefile
+	"""
 	def __init__(self, completefile_path):
 		self.completefile_path = completefile_path
 		self.incomplete_status_list = [JobStatus.TO_PROCESS, \
@@ -680,8 +738,7 @@ class CompletefileManager(object):
 	def add_job_list_manager(self, job_list_manager):
 		self.job_list_manager = job_list_manager
 	def check_completeness(self):
-		# check whether jobs complete
-		# return completeness status
+		""" Checks whether jobs complete; returns completeness status """
 		if os.path.isfile(self.completefile_path):
 			self.completeness = True
 		elif hasattr(self, 'job_list_manager'):
@@ -690,9 +747,11 @@ class CompletefileManager(object):
 			self.completeness = False
 		return(self.completeness)
 	def _check_job_status(self):
-		# checks to see whether any jobs still need to be run or are
-			# running in job_list_manager
-		# If jobs have all been completed, writes a completefile
+		"""
+		Checks to see whether any jobs still need to be run or are
+		running in job_list_manager
+		If jobs have all been completed, writes a completefile
+		"""
 		incomplete_job_list = []
 		for current_job_status in self.incomplete_status_list:
 			current_job_list = \
@@ -707,8 +766,10 @@ class CompletefileManager(object):
 			self.completeness = False
 
 class SubmissionStringProcessor(object):
-	# creates a code submission string appropriate to the programming
-		# environment (module) being used
+	"""
+	Creates a code submission string appropriate to the programming
+	environment (module) being used
+	"""
 	def __init__(self, module, key_list, value_list, code_name):
 		self._submission_string_generator(key_list,value_list,module,code_name)
 	def get_code_run_input(self):
@@ -733,7 +794,10 @@ class SubmissionStringProcessor(object):
 		self.code_sub_input_processor = code_sub_input_processor
 
 class TrackfileManager(object):
-	# Handles writing and reading of trackfile
+	"""
+	Handles writing and reading of trackfiles, which store information
+	on current job status of each job
+	"""
 	def __init__(self, job_parameters, cluster_parameters):
 		self.trackfile_path = os.path.join(job_parameters.experiment_folder, \
 			'trackfiles',('trackfile_'+job_parameters.name+'.csv'))
@@ -742,15 +806,17 @@ class TrackfileManager(object):
 		self.job_parameters = copy.deepcopy(job_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 	def get_summaryfile_path(self):
-		# returns summaryfile path
+		""" Returns summaryfile path """
 		return(self.summaryfile_path)
 	def get_trackfile_path(self):
-		# returns trackfile path
+		""" Returns trackfile path """
 		return(self.trackfile_path)
 	def read_trackfile(self):
-		# reads a csv containing the status of each job in job_list,
-			# as well as the time and memory allocated to it, and 
-			# returns a JobListManager object
+		"""
+		Reads a csv containing the status of each job in job_list, as
+		well as the time and memory allocated to it, and returns a
+		JobListManager object
+		"""
 		current_job_list = []
 		with open(self.trackfile_path, 'rU') as trackfile_opened:
 			trackfile_contents = list(csv.reader(trackfile_opened))
@@ -760,18 +826,22 @@ class TrackfileManager(object):
 				current_job_list.append(current_job)
 		return JobListManager(current_job_list,self.job_parameters,self.cluster_parameters)
 	def write_output_files(self, job_list_manager):
-		# writes trackfile and summaryfile for current object for each
-			# job in job_list_manager, which is a JobListManager object
+		"""
+		Writes trackfile and summaryfile for current object for each
+		job in job_list_manager, which is a JobListManager object
+		"""
 		self._write_trackfile(job_list_manager)
 		self._write_summaryfile(job_list_manager)
 	def _get_complete_status_list(self):
-		# gets entire list of possible statuses from JobStatus class
+		""" Gets entire list of possible statuses from JobStatus class """
 		status_list = [getattr(JobStatus, attr) for attr in vars(JobStatus) \
 			if not attr.startswith("__")]
 		return(status_list)
 	def _write_trackfile(self, job_list_manager):
-		# writes a csv containing the status of each job in job_list_manager,
-			# as well as the time and memory allocated to it
+		"""
+		Writes a csv containing the status of each job in
+		job_list_manager, as well as the time and memory allocated to it
+		"""
 		complete_status_list = self._get_complete_status_list()
 		job_list_contents = job_list_manager.extract_contents(complete_status_list)
 		with open(self.trackfile_path, 'wb') as trackfile_opened:
@@ -780,7 +850,10 @@ class TrackfileManager(object):
 			for current_job in job_list_contents:
 				trackfile_writer.writerow(current_job)
 	def _write_summaryfile(self, job_list_manager):
-		# writes a csv file counting the number of jobs of each status in job_list_manager
+		"""
+		Writes a csv file counting the number of jobs of each status in
+		job_list_manager
+		"""
 		with open(self.summaryfile_path, 'wb') as summaryfile_opened:
 			summaryfile_writer = csv.writer(summaryfile_opened)
 			summaryfile_writer.writerow(['Status','# of jobs','job indices'])
@@ -792,18 +865,21 @@ class TrackfileManager(object):
 				summaryfile_writer.writerow([status,current_n,indices_concat])
 
 class RInputProcessor(object):
-	# Generates proper submission string properties for submitting R jobs
+	""" Generates proper submission string properties for submitting R jobs """
 	def __init__(self, code_name):
 		self.code_name = code_name
 		self.set_code_run_argument_string([])
 
 class MatlabInputProcessor(object):
-	# Generates proper submission string properties for submitting matlab jobs
+	"""
+	Generates proper submission string properties for submitting
+	matlab jobs
+	"""
 	def __init__(self, code_name):
 		self.code_name = code_name
 		self.set_code_run_argument_string([])
 	def set_code_run_argument_string(self, code_input_arguments):
-		# gets a list of arguments and creates a submission string from them
+		""" Gets a list of arguments and creates a submission string from them """
 		self.code_run_arguments = '\"\",\"\"'.join(code_input_arguments)
 	def set_full_code_run_string(self, cluster_architecture):
 		if cluster_architecture == 'slurm':
@@ -821,9 +897,11 @@ class MatlabInputProcessor(object):
 	def get_code_run_string(self):
 		return(self.code_run_string)
 	def convert_mixed_list(self, current_list):
-		# checks type of every element of current_list and converts it
-			# to a string
-		# joins elements into single string
+		"""
+		Checks type of every element of current_list and converts it
+		to a string
+		Joins elements into single string
+		"""
 		converted_by_part_list = []
 		for current_value in current_list:
 			current_val_converted = self.convert_val(current_value)
@@ -892,28 +970,34 @@ class MatlabInputProcessor(object):
 
 #######################################################
 def parse_setup_file(filename):
-	# parses setup file and creates a list of the parameters therein
-    f = open(filename)
-    lines = f.readlines()
-    f.close()
-    lines.pop(0)
-    parameters = []
-    for l in lines:
-        spl = l.rstrip().split(",")
-        if len(spl) != 4:
-            raise ValueError("needs 4 values: " + l)
-        parameters.append(Parameter(spl[0], spl[1], spl[2], spl[3].lstrip().rstrip()))
-    return Parameters(parameters)
+	"""
+	Parses setup file and creates a list of the parameters therein
+	"""
+	f = open(filename)
+	lines = f.readlines()
+	f.close()
+	lines.pop(0)
+	parameters = []
+	for l in lines:
+		spl = l.rstrip().split(",")
+		if len(spl) != 4:
+			raise ValueError("needs 4 values: " + l)
+		parameters.append(Parameter(spl[0], spl[1], spl[2], spl[3].lstrip().rstrip()))
+	return Parameters(parameters)
 
 def _create_job_list(job_name, job_numbers, initial_time, initial_mem, \
 		job_parameters, cluster_parameters):
-	# create a list of jobs sharing name, and number from 'numbers' list
-	# all new jobs will have 'TO_PROCESS' status
+	"""
+	Create a list of jobs sharing name, and number from 'numbers' list
+	All new jobs will have 'TO_PROCESS' status
+	"""
 	current_job_list = []
+
 	for n in job_numbers:
 		if type(n) is not int:
 			raise TypeError("numbers contains non-integers: " + l)
-		current_job = Job(n,JobStatus.TO_PROCESS,initial_time,initial_mem)
+		current_job = Job(n, JobStatus.TO_PROCESS, initial_time, \
+			initial_mem*job_parameters.parallel_processors)
 		current_job_list.append(current_job)
 	return JobListManager(current_job_list,job_parameters,cluster_parameters)
 
@@ -922,8 +1006,10 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 	additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 	parallel_processors, completefile_path):
-	# Handles entire flow of job, from creation of new trackfile to
-		# submission of jobs to updating trackfile
+	"""
+	Handles entire flow of job, from creation of new trackfile to
+	submission of jobs to updating trackfile
+	"""
 	completefile_manager = CompletefileManager(completefile_path)
 	# check completeness and only run other code if job is not complete
 	jobs_complete = completefile_manager.check_completeness()

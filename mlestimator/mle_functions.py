@@ -205,7 +205,7 @@ class MLEParameters(object):
 				self.current_profile_point_list[self.current_fixed_parameter_idx]
 		self.output_id_parameter = self.output_identifier + '_' + self.current_fixed_parameter
 		# identify how many dimensions are being used in multistart
-		self.current_ms_grid_dimensions = sum([x == self.current_fixed_parameter \
+		self.current_ms_grid_dimensions = sum([x != self.current_fixed_parameter \
 			for x in self.current_ms_grid_parameters])
 		self.current_parallel_processors = min(self.parallel_processors,
 			self.current_ms_positions**self.current_ms_grid_dimensions)
@@ -650,10 +650,14 @@ class CombinedResultSummary(object):
 			# self.runtime_percentile-th estimates within a parameter's
 			# estimated profile points
 		runtime_CI_bounds = {}
-		runtime_CI_bounds['lower'] = \
-			numpy.percentile(self.runtime_quant_list,self.pval/2*100)
-		runtime_CI_bounds['upper'] = \
-			numpy.percentile(self.runtime_quant_list,(1-self.pval/2)*100)
+		if self.runtime_quant_list:
+			runtime_CI_bounds['lower'] = \
+				numpy.percentile(self.runtime_quant_list,self.pval/2*100)
+			runtime_CI_bounds['upper'] = \
+				numpy.percentile(self.runtime_quant_list,(1-self.pval/2)*100)
+		else:
+			runtime_CI_bounds['lower'] = numpy.NaN
+			runtime_CI_bounds['upper'] = numpy.NaN
 		return(runtime_CI_bounds)
 	def _add_line_to_combined_df(self,fixed_param_name, current_results_dict):
 		# creates self.combined_summary or adds a line to it
