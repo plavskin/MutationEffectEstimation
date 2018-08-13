@@ -140,8 +140,14 @@ class OneSidedCIBound(object):
 		dist_to_target = target_y-y_vals
 		distances_below_target = dist_to_target[(dist_to_target <= 0)]
 		distances_above_target = dist_to_target[(dist_to_target > 0)]
-		closest_index_below_target = np.where(dist_to_target == np.amax(distances_below_target))[0]
-		closest_index_above_target = np.where(dist_to_target == np.amin(distances_above_target))[0]
+		if distances_below_target.size > 0:
+			closest_index_below_target = np.where(dist_to_target == np.amax(distances_below_target))[0]
+		else:
+			closest_index_below_target = np.array([])
+		if distances_above_target.size > 0:	
+			closest_index_above_target = np.where(dist_to_target == np.amin(distances_above_target))[0]
+		else:
+			closest_index_above_target = np.array([])
 		indices_to_keep = np.append(closest_index_above_target,closest_index_below_target)
 		return(indices_to_keep)
 	def _id_proximal_points(self,target_y, y_vals, num_points):
@@ -162,7 +168,7 @@ class OneSidedCIBound(object):
 			nonflanking_distances = np.delete(dist_to_target, indices_flanking_target)
 			abs_dist = np.absolute(nonflanking_distances)
 			sorted_abs_indices = np.argsort(abs_dist)
-			nonflanking_indices = sorted_abs_indices[0:(num_points-2)]
+			nonflanking_indices = sorted_abs_indices[0:(num_points-indices_flanking_target.size)]
 			closest_nonflanking_distances = nonflanking_distances[nonflanking_indices]
 			closest_nonflanking_indices = np.argwhere(np.isin(dist_to_target,closest_nonflanking_distances))
 			closest_indices = np.sort(np.append(closest_nonflanking_indices, indices_flanking_target))
@@ -309,7 +315,7 @@ class OneSidedCIBoundLower(OneSidedCIBound):
 		y_diffs = np.diff(self.one_sided_LL_df['LL'])
 		monotonicity_state = np.all(y_diffs >= 0)
 		if not monotonicity_state:
-			self.warnings.set_non_monotonic()
+			self.warning.set_non_monotonic()
 
 class OneSidedCIBoundUpper(OneSidedCIBound):
 	def __init__(self, pval, LL_df, df, fixed_param_MLE_val, fixed_param, \

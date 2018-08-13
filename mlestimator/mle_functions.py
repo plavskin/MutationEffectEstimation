@@ -81,6 +81,8 @@ class MLEParameters(object):
 			parameter_list["profile_lower_limits_by_mode"]
 		self.profile_upper_limits_by_mode = \
 			parameter_list["profile_upper_limits_by_mode"]
+		self.scaling_arrays_by_mode = \
+			parameter_list["scaling_arrays_by_mode"]
 		self.ms_positions = parameter_list["multistart_positions"]
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
 		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
@@ -161,6 +163,9 @@ class MLEParameters(object):
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_upper_limit_list = \
 			numpy.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
+				mode_idx,self.current_mode,self.total_param_num))
+		self.current_scaling_val_list = \
+			numpy.array(self._retrieve_current_values(self.scaling_arrays_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		# identify list of parameters that are permanently fixed
 		self.current_permafixed_parameter_bool = \
@@ -270,7 +275,8 @@ class MLEstimation(object):
 			'parameter_list','output_file', \
 			'parallel_processors','ms_positions','combined_profile_ub_array', \
 			'combined_profile_lb_array','ms_grid_parameter_array', \
-			'combined_logspace_parameters','datafile_path','output_id_parameter']
+			'combined_logspace_parameters','datafile_path', \
+			'output_id_parameter', 'combined_scaling_array']
 		value_list = [self.within_batch_counter_call, \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
@@ -289,7 +295,8 @@ class MLEstimation(object):
 			self.mle_parameters.current_profile_lower_limit_list, \
 			self.mle_parameters.current_ms_grid_parameters, \
 			self.mle_parameters.current_logspace_profile_list,
-			self.output_path, self.mle_parameters.output_id_parameter]
+			self.output_path, self.mle_parameters.output_id_parameter, \
+			self.mle_parameters.current_scaling_val_list]
 		# take values from self.additional_code_run_keys and
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
@@ -639,18 +646,17 @@ class CombinedResultSummary(object):
 			self.runtime_quant_list = numpy.append(self.runtime_quant_list,runtime_quantile)
 	def _correct_LL_profiles(self):
 		# updates LL_profiles
-		parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(False)
-		ml_params_to_include = pandas.concat(self.unfixed_ll_param_df, \
-			self.true_max_param_df)
+		parameters_to_loop_over = self.mle_parameters.get_fitted_parameter_list(False)
+		ml_params_to_include = pandas.concat([self.unfixed_ll_param_df, \
+			self.true_max_param_df])
 		for current_fixed_parameter in parameters_to_loop_over:
-			self._update_LL_profile(self.unfixed_ll_param_df,
-				ml_params_to_include)
+			self._update_LL_profile(ml_params_to_include, current_fixed_parameter)
 	def _get_runtime_CI(self):
 		# creates 'confidence intervals' across parameters for the
 			# self.runtime_percentile-th estimates within a parameter's
 			# estimated profile points
 		runtime_CI_bounds = {}
-		if self.runtime_quant_list:
+		if not self.runtime_quant_list.size == 0:
 			runtime_CI_bounds['lower'] = \
 				numpy.percentile(self.runtime_quant_list,self.pval/2*100)
 			runtime_CI_bounds['upper'] = \

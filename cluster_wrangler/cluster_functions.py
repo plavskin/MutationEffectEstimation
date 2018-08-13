@@ -366,7 +366,8 @@ class BatchSubmissionManager(object):
 		while len(job_sublist) > 0 and self.batches_remaining > 0:
 			if self.remaining_jobs_in_batch > 0:
 				# move number of jobs that can be from job_sublist to current_job_sublist
-				current_job_sublist = job_sublist[0:self.remaining_jobs_in_batch]
+				num_jobs_to_run = int(min(len(job_sublist),self.remaining_jobs_in_batch))
+				current_job_sublist = job_sublist[0:num_jobs_to_run]
 				# create a string that can be used to submit those jobs
 					# to SLURM, and count the number of characters in that string
 				current_job_string = self._job_list_string_converter(current_job_sublist)

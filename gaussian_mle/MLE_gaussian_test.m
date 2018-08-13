@@ -15,17 +15,18 @@ function MLE_gaussian_test(key_list, value_list)
 
     external_counter = str2num(parameter_dict('external_counter'));
     combined_fixed_parameter_array = parameter_dict('combined_fixed_parameter_array');
-    combined_min_array = parameter_dict('combined_min_array');
-    combined_max_array = parameter_dict('combined_max_array');
+    combined_min_array_unscaled = parameter_dict('combined_min_array');
+    combined_max_array_unscaled = parameter_dict('combined_max_array');
     combined_length_array = parameter_dict('combined_length_array');
     combined_position_array = cellfun(@str2num,parameter_dict('combined_position_array'));
-    combined_start_values_array = parameter_dict('combined_start_values_array');
+    combined_start_values_array_unscaled = parameter_dict('combined_start_values_array');
+    combined_scaling_array = parameter_dict('combined_scaling_array');
     parameter_list = parameter_dict('parameter_list');
     output_file = parameter_dict('output_file');
     parallel_processors = parameter_dict('parallel_processors');
     ms_positions = parameter_dict('ms_positions');
-    combined_profile_ub_array = parameter_dict('combined_profile_ub_array');
-    combined_profile_lb_array = parameter_dict('combined_profile_lb_array');
+    combined_profile_ub_array_unscaled = parameter_dict('combined_profile_ub_array');
+    combined_profile_lb_array_unscaled = parameter_dict('combined_profile_lb_array');
     ms_grid_parameter_array = parameter_dict('ms_grid_parameter_array');
     combined_logspace_parameters = parameter_dict('combined_logspace_parameters');
     % optional parameters
@@ -34,6 +35,13 @@ function MLE_gaussian_test(key_list, value_list)
     % process parameter name arrays into bool arrays
     combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
+
+    % rescale parameters and convert to logspace as needed
+    combined_min_array = value_rescaler(combined_min_array_unscaled,combined_logspace_array,combined_scaling_array);
+    combined_max_array = value_rescaler(combined_max_array_unscaled,combined_logspace_array,combined_scaling_array);
+    combined_start_values_array = value_rescaler(combined_start_values_array_unscaled,combined_logspace_array,combined_scaling_array);
+    combined_profile_ub_array = value_rescaler(combined_profile_ub_array_unscaled,combined_logspace_array,combined_scaling_array);
+    combined_profile_lb_array = value_rescaler(combined_profile_lb_array_unscaled,combined_logspace_array,combined_scaling_array);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get data
     data_table = readtable(phenotype_file);
@@ -64,7 +72,11 @@ function MLE_gaussian_test(key_list, value_list)
         combined_profile_lb_array(1:global_param_number);
     global_profile_ub_array = ...
         combined_profile_ub_array(1:global_param_number);
-    global_logspace_array = combined_logspace_array(1:global_param_number);
+
+    global_logspace_array = ...
+        combined_logspace_array(1:global_param_number);
+    global_scaling_array = ...
+        combined_scaling_array(1:global_param_number);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Set up a list of fixed effect values for 'global' parameters
 
@@ -72,8 +84,7 @@ function MLE_gaussian_test(key_list, value_list)
         % created on a log scale, rather than a linear scale
     global_fixed_parameter_values = ...
         fixed_parameter_processor(global_fixed_parameter_array,global_profile_lb_array,...
-            global_profile_ub_array,global_length_array,global_position_array,...
-            global_logspace_array);
+            global_profile_ub_array,global_length_array,global_position_array);
 
     global_fixed_parameter_indices = logical(global_fixed_parameter_array);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -89,10 +100,12 @@ function MLE_gaussian_test(key_list, value_list)
     global_profile_ub_fitted = global_profile_ub_array(~global_fixed_parameter_indices);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Set up global search structure
+    tolx_val = 10^-4;
+    tolfun_val = 10^-3;
 
     gs = GlobalSearch;
-    gs.TolFun = 10^-4;
-    gs.TolX = 10^-5;
+    gs.TolFun = tolfun_val;
+    gs.TolX = tolx_val;
     gs.NumStageOnePoints = 2^global_param_number; % default = 200; sufficient is 50
     gs.NumTrialPoints = 3^global_param_number; % default = 1000; sufficient is 200
     gs.StartPointsToRun='bounds';
@@ -106,7 +119,7 @@ function MLE_gaussian_test(key_list, value_list)
         ms.UseParallel = 0;
     end
 
-    fmincon_opts = optimoptions('fmincon','TolX',10^-5,'TolFun',10^-4,...
+    fmincon_opts = optimoptions('fmincon','TolX',tolx_val,'TolFun',tolfun_val,...
         'Algorithm','interior-point','MaxIter',5000,'MaxFunEvals',12000,...
         'SpecifyObjectiveGradient',true,'CheckGradients',false,'Display','off');
 
@@ -121,7 +134,7 @@ function MLE_gaussian_test(key_list, value_list)
     min_problem_fixed_params = createOptimProblem('fmincon','objective',...
         @(v) LL_calculator_gaussian_test(v,...
             global_fixed_parameter_indices,global_fixed_parameter_values,...
-            test_data,max_neg_LL_val),...
+            test_data,max_neg_LL_val,global_logspace_array,global_scaling_array),...
         'x0',global_start_vals_fitted,'lb',global_lower_bounds_fitted,'ub',global_upper_bounds_fitted,...
         'options',fmincon_opts);
     
@@ -151,6 +164,7 @@ function MLE_gaussian_test(key_list, value_list)
     vout_current_corrected = zeros(size(global_fixed_parameter_indices));
     vout_current_corrected(global_fixed_parameter_indices) = global_fixed_parameter_values(~isnan(global_fixed_parameter_values));
     vout_current_corrected(~global_fixed_parameter_indices) = vout_current;
+    vout_current_corrected = reverse_value_scaler(vout_current_corrected,global_logspace_array,global_scaling_array);
 
     runtime = toc(global_start_time);
     
@@ -173,10 +187,10 @@ function MLE_gaussian_test(key_list, value_list)
     T = table(table_data{:},'VariableNames',table_headers);
     writetable(T,output_file);
 
-    if runtime < 120
-        pausetime=120-runtime;
-        pause(pausetime)
-    end
+%    if runtime < 120
+%        pausetime=120-runtime;
+%        pause(pausetime)
+%    end
 
 end
 
