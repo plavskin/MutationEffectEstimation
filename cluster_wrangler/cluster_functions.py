@@ -528,7 +528,8 @@ class JobListManager(object):
 		current_job = self.jobs[job_num]
 		most_recent_time = current_job.time
 		most_recent_mem = current_job.mem
-		if most_recent_time == max_time or most_recent_mem == max_mem:
+		if (most_recent_time == max_time and time_multiplier > 1) or \
+			(most_recent_mem == max_mem and mem_multiplier > 1):
 			self.batch_status_change([job_num],JobStatus.ABORTED_FOREVER)
 		else:
 			self.batch_status_change([job_num],JobStatus.ABORTED_TO_RESTART)
