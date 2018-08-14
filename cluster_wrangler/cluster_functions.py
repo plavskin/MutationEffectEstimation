@@ -117,7 +117,7 @@ class ClusterParameters(object):
 	""" holds parameters general to the system """
 	def __init__(self,parameter_list):
 		self.code_path = parameter_list["code_folder"]
-		self.home_path = parameter_list["home_folder"]
+#		self.home_path = parameter_list["home_folder"]
 		self.composite_data_path = parameter_list["composite_data_folder"]
 		self.max_mem = parameter_list["max_mem"]
 		self.max_time = parameter_list["max_time"]
