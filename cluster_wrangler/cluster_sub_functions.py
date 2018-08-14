@@ -54,9 +54,9 @@ class JobSubmissionManager(object):
 		""" Parses contents of job submission run error file """
 		error_status_dict = dict()
 		error_status_dict['time_limit_check'] = \
-			'time limit' in latest_errorfile_contents
+			'DUE TO TIME' in latest_errorfile_contents
 		error_status_dict['memory_limit_check'] = \
-			'memory limit' in latest_errorfile_contents
+			'DUE TO MEMORY' in latest_errorfile_contents
 		error_status_dict['cluster_error_check'] = \
 			'bus error' in latest_errorfile_contents \
 			or 'fatal error on startup' in latest_errorfile_contents \
