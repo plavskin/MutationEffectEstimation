@@ -52,11 +52,14 @@ class JobSubmissionManager(object):
 		self._submit_job()
 	def error_status_check(self, latest_errorfile_contents):
 		""" Parses contents of job submission run error file """
+		latest_errorfile_contents = latest_errorfile_contents.lower()
 		error_status_dict = dict()
 		error_status_dict['time_limit_check'] = \
-			'DUE TO TIME' in latest_errorfile_contents
+			'due to time' in latest_errorfile_contents or \
+			'job time limit' in latest_errorfile_contents
 		error_status_dict['memory_limit_check'] = \
-			'DUE TO MEMORY' in latest_errorfile_contents
+			'due to memory' in latest_errorfile_contents or \
+			'job memory limit' in latest_errorfile_contents
 		error_status_dict['cluster_error_check'] = \
 			'bus error' in latest_errorfile_contents \
 			or 'fatal error on startup' in latest_errorfile_contents \

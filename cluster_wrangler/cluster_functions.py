@@ -521,7 +521,7 @@ class JobListManager(object):
 				latest_errorfile_contents = ''
 		else:
 			latest_errorfile_contents = ''
-		return(latest_errorfile_contents.lower())
+		return(latest_errorfile_contents)
 	def _aborted_job_processor(self, max_mem, max_time, time_multiplier,
 		mem_multiplier, job_num):
 		""" For aborted jobs, updates job memory or time, and changes job status """
@@ -588,7 +588,7 @@ class JobListManager(object):
 						# abort job forever
 					time_multiplier = 1
 					mem_multiplier = 1.5
-					self._aborted_job_processor(self.cluster_parameters.max_mem, \
+					self._aborted_job_processor(self.cluster_parameters.max_mem*self.job_parameters.parallel_processors, \
 						self.cluster_parameters.max_time, time_multiplier, \
 						mem_multiplier, current_missing_job)
 				elif error_status_dict['time_limit_check']:
@@ -598,7 +598,7 @@ class JobListManager(object):
 						# abort job forever
 					time_multiplier = 2
 					mem_multiplier = 1
-					self._aborted_job_processor(self.cluster_parameters.max_mem, \
+					self._aborted_job_processor(self.cluster_parameters.max_mem*self.job_parameters.parallel_processors, \
 						self.cluster_parameters.max_time, time_multiplier, \
 						mem_multiplier, current_missing_job)
 				elif error_status_dict['unidentified_error_check']:
