@@ -5,7 +5,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	% Takes list of parameter values, as well as cdf values based on
 		% LRT corresponding to each of these parameter values, and fits
 		% the parameter value corresponding to cdf_bound
-	
+	tic;
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get parameter values
     parameter_dict = containers.Map(key_list,value_list);
@@ -81,6 +81,8 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	dlmwrite(output_file,parameter_bound,'delimiter',',','precision',9);
 	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
 
+	runtime = toc;
+	
     if runtime < 120
         pausetime=120-runtime;
         pause(pausetime)
