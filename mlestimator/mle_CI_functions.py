@@ -96,7 +96,8 @@ class OneSidedCIBound(object):
 			self._asymptotic_pval_calc()
 			self._find_CI_proximal_LL_points()
 			self._set_output_filenames()
-			self._create_code_run_input()
+			if self.one_sided_LL_df.shape[0] > 1:
+				self._create_code_run_input()
 	def _set_output_filenames(self):
 		self.output_prename = '-'.join(['CI_bound', self.profile_side, \
 			self.CI_type])
@@ -340,7 +341,7 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 		y_diffs = np.diff(self.one_sided_LL_df['LL'])
 		monotonicity_state = np.all(y_diffs <= 0)
 		if not monotonicity_state:
-			self.warnings.set_non_monotonic()
+			self.warning.set_non_monotonic()
 
 class TwoSidedCI(object):
 	# compiles two-sided CI
