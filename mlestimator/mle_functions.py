@@ -317,8 +317,8 @@ class MLEstimation(object):
 		job_numbers = [x + 1 for x in \
 			list(range(self.mle_parameters.current_profile_point_num))]
 		initial_time = self.cluster_parameters.current_time
-		initial_mem = self.cluster_parameters.current_mem * \
-			self.mle_parameters.current_parallel_processors
+		initial_mem = self.cluster_parameters.current_mem
+			# initial_mem scaled for multiple parallel clusters at a later stage
 		cluster_parameters = self.cluster_parameters
 		output_folder = self.output_path
 		output_extension = self.output_extension
