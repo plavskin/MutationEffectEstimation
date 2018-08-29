@@ -8,7 +8,7 @@ from cluster_wrangler import cluster_functions
 import copy
 import pandas
 import csv
-from mle_filenaming_functions import generate_file_label, generate_filename
+from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
 import mle_CI_functions
 
 class FolderManager(object):
@@ -83,6 +83,10 @@ class MLEParameters(object):
 			parameter_list["profile_upper_limits_by_mode"]
 		self.scaling_arrays_by_mode = \
 			parameter_list["scaling_arrays_by_mode"]
+		self.x_tolerance_by_mode = \
+			parameter_list["x_tolerance_by_mode"]
+		self.fun_tolerance_by_mode = \
+			parameter_list["fun_tolerance_by_mode"]
 		self.ms_positions = parameter_list["multistart_positions"]
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
 		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
@@ -140,6 +144,8 @@ class MLEParameters(object):
 		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx]
 		self.current_logspace_profile_list = self.logspace_profile_list_by_mode[mode_idx]
 		self.current_parameter_list = self.parameters_by_mode[mode_idx]
+		self.current_x_tolerance = self.x_tolerance_by_mode[mode_idx]
+		self.current_fun_tolerance = self.fun_tolerance_by_mode[mode_idx]
 		# find the total number of parameters, including fixed ones
 		self.total_param_num = len(self.current_parameter_list)
 		# create lists, of length total_param_num, of settings for each
@@ -276,7 +282,8 @@ class MLEstimation(object):
 			'parallel_processors','ms_positions','combined_profile_ub_array', \
 			'combined_profile_lb_array','ms_grid_parameter_array', \
 			'combined_logspace_parameters','datafile_path', \
-			'output_id_parameter', 'combined_scaling_array']
+			'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
+			'tolfun_val']
 		value_list = [self.within_batch_counter_call, \
 			self.mle_parameters.current_tempfixed_parameter_bool, \
 			self.mle_parameters.current_min_parameter_val_list, \
@@ -296,7 +303,9 @@ class MLEstimation(object):
 			self.mle_parameters.current_ms_grid_parameters, \
 			self.mle_parameters.current_logspace_profile_list,
 			self.output_path, self.mle_parameters.output_id_parameter, \
-			self.mle_parameters.current_scaling_val_list]
+			self.mle_parameters.current_scaling_val_list, \
+			self.mle_parameters.current_x_tolerance, \
+			self.mle_parameters.current_fun_tolerance]
 		# take values from self.additional_code_run_keys and
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
@@ -426,7 +435,7 @@ class LLProfile(object):
 		self._set_LL_df()
 		self._write_LL_df()
 		self._id_max_LL()
-	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders):
+	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders, mle_parameters):
 		# when LL_profile complete, get lower and upper asymptotic CI
 		# if asymptotic CI identification is complete:
 		#	- identify position at which sims need to happen
@@ -436,9 +445,11 @@ class LLProfile(object):
 		deg_freedom = 1
 			# 1 df for chi-square test for LL profile comparisons
 		CI_type = 'asymptotic'
-		self.asymptotic_CI = mle_CI_functions.TwoSidedCI(pval, self.LL_df_sorted, deg_freedom, \
-			self.fixed_param_MLE_val, self.fixed_param, self.max_LL, CI_type, \
-			mle_folders, cluster_parameters, cluster_folders, self.output_identifier)
+		self.asymptotic_CI = mle_CI_functions.TwoSidedCI(pval, \
+			self.LL_df_sorted, deg_freedom, self.fixed_param_MLE_val, \
+			self.fixed_param, self.max_LL, CI_type, mle_folders, \
+			cluster_parameters, cluster_folders, self.output_identifier, \
+			mle_parameters)
 		self.asymptotic_CI.find_CI()
 		self.asymptotic_CI_dict = self.asymptotic_CI.get_CI()
 		if self.asymptotic_CI_dict:
@@ -794,7 +805,8 @@ class CombinedResultSummary(object):
 							pandas.DataFrame())
 						ll_profile.run_LL_profile_compilation()
 						ll_profile.run_CI(self.pval, self.mle_folders, \
-							self.cluster_parameters, self.cluster_folders)
+							self.cluster_parameters, self.cluster_folders, \
+							self.mle_parameters)
 						asymptotic_CI_dict = ll_profile.get_asymptotic_CI()
 							# if jobs to calculate both CI bounds have not yet been
 								# completed, returns None

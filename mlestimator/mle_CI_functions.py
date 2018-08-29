@@ -5,10 +5,13 @@
 import os
 import pandas as pd
 import numpy as np
-from mle_filenaming_functions import generate_file_label, generate_filename
+from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
 from cluster_wrangler import cluster_functions
 from scipy.stats import chi2
 import csv
+import math
+import copy
+from itertools import compress
 
 class CIWarning(object):
 	# stores warnings for OneSidedCIBound objects
@@ -294,12 +297,12 @@ class OneSidedCIBound(object):
 		return(warning_string)
 
 class OneSidedCIBoundLower(OneSidedCIBound):
-	def __init__(self, pval, LL_df, df, fixed_param_MLE_val, fixed_param, \
-		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
-		output_identifier):
-		super(OneSidedCIBoundLower, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
-			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
-			cluster_folders, output_identifier)
+#	def __init__(self, pval, LL_df, df, fixed_param_MLE_val, fixed_param, \
+#		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
+#		output_identifier):
+#		super(OneSidedCIBoundLower, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
+#			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
+#			cluster_folders, output_identifier)
 	def _select_profile_side(self, LL_df):
 		# selects data from correct side of likelihood profile
 		self.default_CI_bound = float("-inf")
@@ -319,12 +322,12 @@ class OneSidedCIBoundLower(OneSidedCIBound):
 			self.warning.set_non_monotonic()
 
 class OneSidedCIBoundUpper(OneSidedCIBound):
-	def __init__(self, pval, LL_df, df, fixed_param_MLE_val, fixed_param, \
-		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
-		output_identifier):
-		super(OneSidedCIBoundUpper, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
-			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
-			cluster_folders, output_identifier)
+#	def __init__(self, pval, LL_df, df, fixed_param_MLE_val, fixed_param, \
+#		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
+#		output_identifier):
+#		super(OneSidedCIBoundUpper, self).__init__(pval, LL_df, df, fixed_param_MLE_val, \
+#			fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
+#			cluster_folders, output_identifier)
 	def _select_profile_side(self, LL_df):
 		# selects data from correct side of likelihood profile
 		LL_df_one_side = LL_df[(LL_df[self.fixed_param] >= self.fixed_param_MLE_val)]
@@ -343,26 +346,122 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 		if not monotonicity_state:
 			self.warning.set_non_monotonic()
 
+class BoundAbuttingPointRemover(object):
+	"""
+	Identifies and removes points from LL_df in which at least one
+	parameter value abutts a parameter from a list of boundary values
+	"""
+	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
+		scaling_array, logspace_parameters, parameter_names, fixed_param):
+		self.LL_df_prefilter = LL_df_prefilter
+		self.x_tolerance = x_tolerance
+		self.bound_array = bound_array
+		self.scaling_array = scaling_array
+		self.logspace_parameters = logspace_parameters
+		self.parameter_names = parameter_names
+		self.fixed_param = fixed_param
+		self.parameter_val_df = LL_df_prefilter[parameter_names]
+		self.num_rows = LL_df_prefilter.shape[0]
+		self.scaling_matrix = np.tile(scaling_array, (self.num_rows, 1))
+		# get abs val of difference between rescaled
+			# self.parameter_val_df and rescaled bound_array
+		self._get_scaled_array_diff()
+		self._remove_abutting_points()
+	def _rescale_df(self, df):
+		# rescales df by converting necessary columns to logspace and
+		# then multipying by scaling_array
+		logspace_df = copy.copy(df)
+		if any(self.logspace_parameters):
+			logspace_df[self.logspace_parameters] = \
+				math.log(logspace_df[self.logspace_parameters])
+		scaled_df = logspace_df * self.scaling_matrix
+		return(scaled_df)
+	def _get_scaled_array_diff(self):
+		# rescales columns in parameter_val_df and finds abs val of the
+		# difference between each row and a rescaled comparison_array
+		bound_matrix = np.tile(self.bound_array, (self.num_rows, 1))
+		bound_df = pd.DataFrame(bound_matrix, \
+			index = self.parameter_val_df.index.values, \
+			columns = self.parameter_names)
+		bound_df_rescaled = self._rescale_df(bound_df)
+		parameter_val_df_rescaled = self._rescale_df(self.parameter_val_df)
+		self.LL_df_diff = abs(parameter_val_df_rescaled - bound_df_rescaled)
+	def _remove_abutting_points(self):
+		# identify indices to remove from df, remove them, and save
+		# removed vals of fixed_param as self.removed_param_vals
+		comparison_df = self.LL_df_diff < self.x_tolerance
+		indices_to_remove_bool = comparison_df.any(axis = 'columns')
+		indices_to_remove = list(compress(comparison_df.index.values, \
+			indices_to_remove_bool))
+		self.removed_param_vals = \
+			np.array(self.LL_df_prefilter[self.fixed_param].loc[indices_to_remove])
+		self.LL_df = self.LL_df_prefilter.drop(indices_to_remove)
+	def get_LL_df(self):
+		return(self.LL_df)
+	def get_removed_param_vals(self):
+		return(self.removed_param_vals)
+
 class TwoSidedCI(object):
 	# compiles two-sided CI
-	def __init__(self, pval, LL_df, deg_freedom, fixed_param_MLE_val, \
+	def __init__(self, pval, LL_df_prefilter, deg_freedom, fixed_param_MLE_val, \
 		fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
-		cluster_folders, output_identifier):
+		cluster_folders, output_identifier, mle_parameters):
 		self.CI_sides = ['lower','upper']
 		self.CI_object_dictionary = dict()
 		self.CI_dictionary = dict()
 		self.CI_completeness_tracker = cluster_functions.CompletenessTracker(self.CI_sides)
 		self.CI_complete = False
 		self.CI_warning_list = []
+		self._remove_bound_abutting_points(LL_df_prefilter, \
+			mle_parameters.current_x_tolerance, \
+			mle_parameters.current_max_parameter_val_list, \
+			mle_parameters.current_min_parameter_val_list, \
+			mle_parameters.current_scaling_val_list, \
+			mle_parameters.current_logspace_profile_list, \
+			mle_parameters.current_parameter_list,
+			mle_parameters.current_fixed_parameter)
 		self.CI_object_dictionary = {}
 		self.CI_object_dictionary['lower'] = OneSidedCIBoundLower(pval/2, \
-				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
+				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
 		self.CI_object_dictionary['upper'] = OneSidedCIBoundUpper(pval/2, \
-				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
+				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
+	def _remove_bound_abutting_points(self, LL_df_prefilter, x_tolerance, \
+		parameter_max_vals, parameter_min_vals, scaling_array, \
+		logspace_parameters, parameter_names, fixed_param):
+		# identifies points that abutt parameter_max_vals or
+		# parameter_min_vals at a parameter point, and removes them
+		# from LL_df
+		bound_abutting_point_remover_min = \
+			BoundAbuttingPointRemover(LL_df_prefilter, x_tolerance, \
+				parameter_min_vals, scaling_array, logspace_parameters, \
+				parameter_names, fixed_param)
+		LL_df_minfilter = bound_abutting_point_remover_min.get_LL_df()
+		min_removed_param_vals = \
+			bound_abutting_point_remover_min.get_removed_param_vals()
+		bound_abutting_point_remover_max = \
+			BoundAbuttingPointRemover(LL_df_minfilter, x_tolerance, \
+				parameter_max_vals, scaling_array, logspace_parameters, \
+				parameter_names, fixed_param)
+		LL_df_postfilter = bound_abutting_point_remover_max.get_LL_df()
+		self.LL_df = LL_df_postfilter
+		max_removed_param_vals = \
+			bound_abutting_point_remover_max.get_removed_param_vals()
+		self.removed_param_vals = {'lower' : min_removed_param_vals, \
+			'upper' : max_removed_param_vals}
+		self._check_bound_abutting_point_warning(fixed_param)
+	def _check_bound_abutting_point_warning(self, fixed_param):
+		for key, val in self.removed_param_vals.iteritems():
+			if not val.size == 0:
+				current_list_as_str = ';'.join([str(i) for i in val])
+				current_warning_string = \
+					'datapoints for the following values of ' + \
+					fixed_param + 'were removed for abutting the ' + \
+					key + ' parameter bounds: ' + current_list_as_str
+				self.CI_warning_list.append(current_warning_string)
 	def find_CI(self):
 		# identifies confidence interval
 		for current_CI_side in self.CI_sides:
