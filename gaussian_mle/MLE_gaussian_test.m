@@ -29,6 +29,8 @@ function MLE_gaussian_test(key_list, value_list)
     combined_profile_lb_array_unscaled = parameter_dict('combined_profile_lb_array');
     ms_grid_parameter_array = parameter_dict('ms_grid_parameter_array');
     combined_logspace_parameters = parameter_dict('combined_logspace_parameters');
+    tolx_val = parameter_dict('tolx_val');
+    tolfun_val = parameter_dict('tolfun_val');
     % optional parameters
     phenotype_file = parameter_dict('phenotype_file');
     petite_file = parameter_dict('petite_file');
@@ -100,8 +102,6 @@ function MLE_gaussian_test(key_list, value_list)
     global_profile_ub_fitted = global_profile_ub_array(~global_fixed_parameter_indices);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Set up global search structure
-    tolx_val = 10^-4;
-    tolfun_val = 10^-3;
 
     gs = GlobalSearch;
     gs.TolFun = tolfun_val;
