@@ -27,6 +27,8 @@ multistart_positions,1,int_list,number of positions per dimension at which to st
 multistart_grid_parameters,mu;sigma,nested_str_list,list of parameters across which multistart selects grid points
 logspace_profile_list,sigma,nested_str_list,parameters whose profiles (and MLE runs!) should be done in log rather than in linear space
 scaling_arrays_by_mode,0.16;0.25,nested_float_list,values that scale the approximate CI of each parameter to a consistent value (e.g. 1); for parameters estimated in logspace the scaling occurs after converting the parameter to logspace; so the distance between the natural log of the CI bounds should be scaled to the consistent value
+x_tolerance_by_mode,0.001,float_list,tolerance on ML-identified values in scaled and if needed log-transformed parameter space
+fun_tolerance_by_mode,0.01,float_list,tolerance on ML-identified LL or gradient
 ,,,
 log_likelihood_profile_and_CI_variables,,,
 profile_points_by_mode,5;5,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile
@@ -41,3 +43,8 @@ starting_L,2,float,(For mutation effect estimation only) Size of x-axis (ln(mut 
 starting_gridpower,16,float,(For mutation effect estimation only) log2(number of gridpoints for pdf determination) used for initial MLE
 pdf_points,100,int,(For mutation effect estimation only) gridpoints in empirical pdf (for mut
 lambda_SNM,3.956,float,(For mutation effect estimation only) empirically determined mean number of SNMs per strain
+,,,
+,,,
+,,,
+,,,
+,,,
