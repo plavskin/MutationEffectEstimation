@@ -242,7 +242,7 @@ class OneSidedCIBound(object):
 			'-'.join([self.mle_folders.get_path('experiment_folder_name'), \
 				self.CI_bound_name])
 		job_numbers = [1]
-		initial_time = 30
+		initial_time = 5
 		initial_mem = 1024
 		cluster_parameters = self.cluster_parameters
 		output_folder = self.mle_folders.get_path('CI_bound_path')
