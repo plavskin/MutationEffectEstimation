@@ -64,7 +64,7 @@ class JobSubmissionManager(object):
 			'bus error' in latest_errorfile_contents \
 			or 'fatal error on startup' in latest_errorfile_contents \
 			or 'reload' in latest_errorfile_contents \
-			or 'MatlabException' in latest_errorfile_contents
+			or 'matlabexception' in latest_errorfile_contents
 		error_status_dict['unidentified_error_check'] = \
 			len(latest_errorfile_contents) > self.empty_errorfile_size and \
 			not any([error_status_dict['time_limit_check'], \
