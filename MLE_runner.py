@@ -14,6 +14,7 @@ import re
 from shutil import copyfile
 from cluster_wrangler import cluster_functions
 from mlestimator import mle_functions
+from mlestimator import mle_run_functions
 import warnings as war
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
@@ -79,7 +80,7 @@ setup_file = Check_Input()
 initial_parameter_list = cluster_functions.parse_setup_file(setup_file)
 
 # path of file that determines whether MLE_runner already running
-currently_running_checkfile = os.path.join(initial_parameter_list['home_folder'],\
+currently_running_checkfile = os.path.join(initial_parameter_list['composite_data_folder'],\
 	'MLE_running.txt')
 
 # Loop through all directories in composite_data_dir
@@ -193,7 +194,7 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 
 				# run MLE and LL profile creation, as well as CI
 					# identification, for the current mode
-				mle_functions.loop_over_modes(mle_parameters, \
+				mle_run_functions.loop_over_modes(mle_parameters, \
 					cluster_parameters, cluster_folders, mle_folders, \
 					experiment_path, additional_code_run_keys, \
 					additional_code_run_values, output_id_string_start)
