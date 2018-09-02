@@ -4,6 +4,8 @@
 
 import pandas as pd
 import numpy as np
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
 # Need to:
@@ -106,5 +108,43 @@ class SimKeyOrganizer(object):
 		''' Writes self.sim_key_df to self.sim_key_file '''
 		self.sim_key_df.to_csv(path_or_buf = self.sim_key_file, index = True)
 
+#####################################################################
+# Pipeline for sim-LRT-based p-val
+
+# Inputs:
+# optimal_param_vector is fixed_param_mle
+# fixed_parameter_indices include parameter for which LRT is being calculated (just as in asymptotic search)
+# original_LL - likelihood value at MLE
+# sim_number
+# cutoff_pval
+# parameter lower and upper bounds
+# idealized_cutoff - x-val of asymptotic CI bound
+
+# ID 3 points at which to find LRs--maybe, 2*(idealized_cutoff-optimal_param_vector(current_param))?
+#	- one option is to ID these points stepwise: i.e. first try asymptotic bound, then go from there
+#		- example flow:
+#			a. measure LR p-val at asymptotic value
+#			b. use this value and x-position of MLE to approximate a normal(? or t?) distribution,
+#				and find second x-val to try based on where desired p-val would be on that distribution
+#			c. Linear interpolate between the p-vals and x-vals measured so far to ID a third x-position to try
+#			d. Quad-fit the 3 values
+#		The problem with this approach is if the initial values randomly happen to go in wrong directions
+#		(i.e. p-val increases, not decreases, with x-distance from optimum), linear interpolation will take
+#		next value further from target
+#		However, this could either be explicitly dealt with, or it could be assumed that if this happens, all
+#		values are close enough together and to target for exact x-values to not matter much
+#		Also need to deal with what to do when p-val at both points is identical...
+
+# To calculate p-val at a given point:
+#	1. 	a. Calculate H1: unfixed LL (presumably we already have this)
+#		b. Calculate H0: LL at fixed point
+#		c. 'True' log likelihood ratio 'Lambda' is LL(H0)-LL(H1)
+#			# actually to make the p-vals easier to understand, it's easier to work with negative Lambdas
+#		d. MLE parameter values for ALL parameters from (b) will be used as sim starting values!
+#	2. Run sim_number simulations using starting parameter values from (1d)
+#	3. For each sim, repeat and record (1)
+
+
 
 			
+#####################################################################
