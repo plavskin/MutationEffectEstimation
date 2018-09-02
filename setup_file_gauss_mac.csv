@@ -15,7 +15,7 @@ starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant 
 starting_time,1200,float,time (in mins) alotted for running single MLE (not relevant on macosx mode)
 max_mem,10000,float,max memory (in Mb) a job is allowed to request (not relevant on macosx mode)
 max_time,2400,float,max time (in minutes) a job is allowed to request (not relevant on macosx mode)
-max_jobs_per_batch,1,int,"maximum number of jobs that can be submitted in a single batch job (if set to very high number, will default to the maximum number the system allows)"
+max_jobs_per_batch,1,int,"maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)"
 ,,,
 general_mle_variables,,,
 mode_list,gaussian_test,str_list,list of 'modes' in which MLE fitting happens separated by vertical bars ('|'); matlab code for performing MLE for a given mode should be called 'MLE_<mode_name>.m' and matlab code for simulating data for a given mode should be called 'sim_<mode_name>.m'
