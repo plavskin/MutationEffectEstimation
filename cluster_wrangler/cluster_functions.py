@@ -986,7 +986,8 @@ def parse_setup_file(filename):
 		spl = l.rstrip().split(",")
 		if len(spl) != 4:
 			raise ValueError("needs 4 values: " + l)
-		parameters.append(Parameter(spl[0], spl[1], spl[2], spl[3].lstrip().rstrip()))
+		if not spl[1] == spl[2] == '':
+			parameters.append(Parameter(spl[0], spl[1], spl[2], spl[3].lstrip().rstrip()))
 	return Parameters(parameters)
 
 def _create_job_list(job_name, job_numbers, initial_time, initial_mem, \
