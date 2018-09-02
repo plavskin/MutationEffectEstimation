@@ -14,6 +14,8 @@ import re
 from shutil import copyfile
 from cluster_wrangler import cluster_functions
 from mlestimator import mle_functions
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 usage = '''
 

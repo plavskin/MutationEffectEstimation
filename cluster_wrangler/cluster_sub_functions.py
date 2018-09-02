@@ -7,6 +7,8 @@ import os
 import re
 import subprocess
 import math
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 class JobSubmissionManager(object):
 	"""

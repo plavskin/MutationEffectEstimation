@@ -12,6 +12,8 @@ import numpy
 import copy
 import re
 import cluster_sub_functions
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 class Job(object):
 	""" job object that stores properties of individual jobs in queue """

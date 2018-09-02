@@ -10,6 +10,8 @@ import pandas
 import csv
 from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
 import mle_CI_functions
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \

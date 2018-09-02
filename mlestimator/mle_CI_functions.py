@@ -12,6 +12,8 @@ import csv
 import math
 import copy
 from itertools import compress
+import warnings as war
+war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 class CIWarning(object):
 	# stores warnings for OneSidedCIBound objects
