@@ -28,8 +28,10 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 	# if it does, use the key number corresponding to that sim for trackfiles, completefiles, etc (i.e. in sim output_id)
 
 #####################################################################
+class SimFolders(object):
+	pass()
 
-class SimParams(object):
+class SimKeyHolder(object):
 	'''
 	Stores and compares individual simulation keys as a pandas Series
 	'''
@@ -75,33 +77,33 @@ class SimKeyOrganizer(object):
 		''' Creates new sim_key_df '''
 		self.sim_key_df = pandas.DataFrame(columns = \
 			['sim_mode', 'fixed_params', 'fixed_param_vals'])
-	def _find_matching_key(self, sim_params):
+	def _find_matching_key(self, sim_key_holder):
 		'''
-		Takes in a SimParams object and identifies the row in
+		Takes in a SimKeyHolder object and identifies the row in
 		self.sim_key_df that matches it, if any do
 		'''
 		current_keys = self.sim_key_df.index.values.tolist()
-		row_match_boolean_list = [sim_params.equals(self.sim_key_df.loc[i]) for i in current_keys]
+		row_match_boolean_list = [sim_key_holder.get_params().equals(self.sim_key_df.loc[i]) for i in current_keys]
 		matching_keys = self.sim_key_df.index[row_match_boolean_list].tolist()
 		if matching_keys:
 			key_val = matching_keys[0]
 		else:
 			key_val = None
 		return(key_val)
-	def get_sim_key(self, sim_params):
+	def get_sim_key(self, sim_key_holder):
 		'''
-		Takes in a SimParams object and determines whether it's already
+		Takes in a SimKeyHolder object and determines whether it's already
 		in self.sim_key_df
 		If not, adds it, and writes updated file to self.sim_key_file
-		Either way, returns the sim_key for this set of SimParams
+		Either way, returns the sim_key for this set of SimKeyHolder
 		(i.e. the index of the line in sim_key_df holding these params)
 		'''
-		current_key = self._find_matching_key(sim_params)
+		current_key = self._find_matching_key(sim_key_holder)
 		if not current_key:
 			self.sim_key_df = \
-				self.sim_key_df.append(sim_params, sort = False, \
+				self.sim_key_df.append(sim_key_holder.get_params(), sort = False, \
 					ignore_index = True)
-			current_key = self._find_matching_key(sim_params)
+			current_key = self._find_matching_key(sim_key_holder)
 			self.write_key_df()
 		return(current_key)
 	def write_key_df(self):
@@ -135,14 +137,88 @@ class SimKeyOrganizer(object):
 #		values are close enough together and to target for exact x-values to not matter much
 #		Also need to deal with what to do when p-val at both points is identical...
 
-# To calculate p-val at a given point:
-#	1. 	a. Calculate H1: unfixed LL (presumably we already have this)
-#		b. Calculate H0: LL at fixed point
-#		c. 'True' log likelihood ratio 'Lambda' is LL(H0)-LL(H1)
-#			# actually to make the p-vals easier to understand, it's easier to work with negative Lambdas
-#		d. MLE parameter values for ALL parameters from (b) will be used as sim starting values!
-#	2. Run sim_number simulations using starting parameter values from (1d)
-#	3. For each sim, repeat and record (1)
+class HypothesisTestingInfo(object):
+	'''
+	Holds information for performing MLE on a pair of null and alternative
+	hypotheses in a pandas DF
+	Hypotheses are 'H0' (null) and 'H1' (alternative)
+	'''
+	def __init__(self):
+		self.hypotheses = ['H0','H1']
+		self.hypothesis_info = \
+			pd.DataFrame(columns = \
+				['mode', 'fixed_param', 'starting_param_vals'],
+				index = self.hypotheses)
+	def set_hypothesis_parameters(self, Hnum, mode, fixed_param, \
+		starting_param_vals):
+		'''
+		Sets the mode, fixed_param ('unfixed' if none) and
+		starting_param_vals (None if default should be used) that will
+		be used for hypothesis Hnum ('H0' or 'H1')
+		'''
+		if Hnum in self.hypotheses:
+			self.hypothesis_info.loc[Hnum] = \
+				[mode, fixed_param, starting_param_vals]
+		else:
+			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
+				'; Hnum may only be one of the following: ' + \
+				', '.join(self.hypotheses))
+	def get_hypothesis_info(self, Hnum, desired_var):
+		if Hnum in self.hypotheses:
+			return(self.hypothesis_info.loc[Hnum][desired_var])
+		else:
+			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
+				'; Hnum may only be one of the following: ' + \
+				', '.join(self.hypotheses))
+	def get_hypotheses(self):
+		return(self.hypotheses)
+
+class LLRCalculator(object):
+	'''
+	For self.data (which can be real or come from a sim) and fixed_param_val:
+		1. Calculates H1: 'unfixed' LL (all unknown parameters freely
+			estimated)
+		2. Calculates H0: LL at fixed_param_val
+		3. Calculates LL(H0)-LL(H1)
+	'''
+	def __init__(self, output_id_sim, data_folder, sim_key, sim_number_list, \
+		sim_parameters, hypothesis_testing_info):
+		self.output_id_sim = output_id_sim
+			# output_id_sim needs to include sim key but not sim number; fixed parameter will be added to filenames by mleparameters, and sim number will be added in MLE
+		self.sim_number_list = sim_number_list
+		self.sim_key = sim_key
+		self.sim_parameters = copy.deepcopy(sim_parameters)
+		self.hypothesis_testing_info = hypothesis_testing_info
+		self.hypotheses = hypothesis_testing_info.get_hypotheses()
+	def _run_MLE(self, )
+	def _find_LLs(self, Hnum, current_fixed_param):
+		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
+		current_output_id = output_id_sim + '_' + Hnum
+		self.mle_parameters.set_mode(mode, current_output_id)
+		self.mle_parameters.set_parameter(current_fixed_param)
+	def _calculate_LLR(self):
+
+######## ??? #######
+# Before running LLRCalculator on original data, a copy of it needs to
+# be created in the same place where simulation folders are stored;
+# The 'unfixed' output file for this data should be placed in this folder
+######## ??? #######
+class FixedPointPvalCalculator(object):
+	'''
+	To calculate p-val at a given point:
+		1. 	a. Calculate H1: 'unfixed' LL (all unknown parameters
+			freely estimated)
+			b. Calculate H0: LL at fixed point in parameter space
+			c. 'True' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
+				(actually to make the p-vals easier to understand, it's
+				easier to work with the negative of LLR values)
+			d. MLE parameter values for all parameters estimated in (b)
+			will be used as sim starting values!
+		2. Run sim_number simulations using starting parameter values
+		from (1d)
+		3. Repeat and record (1) but with sim data rather than real data
+	'''
+	def __init__(self, fixed_param, mode):
 
 
 
