@@ -375,7 +375,7 @@ class BoundAbuttingPointRemover(object):
 		logspace_df = copy.copy(df)
 		if any(self.logspace_parameters):
 			logspace_df[self.logspace_parameters] = \
-				math.log(logspace_df[self.logspace_parameters])
+				np.log(logspace_df[self.logspace_parameters])
 		scaled_df = logspace_df * self.scaling_matrix
 		return(scaled_df)
 	def _get_scaled_array_diff(self):
