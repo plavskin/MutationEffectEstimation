@@ -62,6 +62,7 @@ class FolderManager(object):
 
 
 class MLEParameters(object):
+	# mle_sim_functions.SimParameters inherits from this list
 	############### ??? TO DO ??? ###############
 	# Check that each mode or parameter is in the list once?
 		# (currently only pays attention to the first time mode or parameter listed)
@@ -69,7 +70,7 @@ class MLEParameters(object):
 	def __init__(self,parameter_list):
 		self.runtime_percentile = parameter_list["runtime_percentile"]
 		self.CI_pval_by_mode = parameter_list['CI_pval_by_mode']
-		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
+#		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
 		self.profile_points_by_mode = parameter_list["profile_points_by_mode"]
 		self.mode_list = parameter_list["mode_list"]
 		self.parameters_by_mode = parameter_list["parameters_by_mode"]
