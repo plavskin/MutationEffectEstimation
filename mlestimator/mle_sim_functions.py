@@ -5,6 +5,7 @@
 import pandas as pd
 import numpy as np
 import warnings as war
+import mle_functions
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
@@ -30,6 +31,126 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 #####################################################################
 class SimFolders(object):
 	pass()
+
+class SimParameters(mle_functions.MLEParameters):
+	'''
+	This class inherits from mle_functions.MLEParameters, but allows
+	modification of the mode and parameter variable assignments
+	initially made for running hypothesis testing MLE:
+		1.	Selecting only one of the modes orignally specified to be
+			kept by the object, to simplify completeness tracking
+		2.	Changing the starting_param_vals for that mode, if necessary
+		3.	If a parameter in a simulation mle mode is meant to be
+			fixed, it is forced to be treated as a fixed parameter by
+			setting the min and max values for that parameter to its
+			starting value, and the mle is then treated as 'unfixed'
+			-	Although MLE is 'unfixed', multiple points to loop over
+				are set
+	It also reads in and processes parameters specific to simulations
+	'''
+	def __init__(self, parameter_list):
+		super(mle_functions.MLEParameters, self).__init__(parameter_list)
+		self.sim_CI_parameters_by_mode = \
+			parameter_list["sim_CI_parameters_by_mode"]
+		self.simulation_repeats_by_mode = \
+			parameter_list["simulation_repeats_by_mode"]
+	def set_mode(self, mode_name, output_identifier):
+		super(mle_functions.MLEParameters, self).set_mode(mode_name, \
+				output_identifier)
+		mode_idx = self.mode_list.index(mode_name)
+		self.current_sim_rep_num = self.simulation_repeats_by_mode[mode_idx]
+		self.current_sim_CI_parameters = \
+			self.sim_CI_parameters_by_mode[mode_idx]
+	def _id_parameters_to_loop_over(self):
+		'''
+		Replaces same function in mle_functions.MLEParameters
+		Since there are no profile calculations, and any fixed
+		parameters in the MLE are fixed by setting their min and max
+		values equal to their starting vals, run all MLEs as 'unfixed'
+		and set point_numbers_to_loop_over to the number of sim reps
+		'''
+		self.current_parameters_to_loop_over = ['unfixed']
+		self.point_numbers_to_loop_over = numpy.array(self.current_sim_rep_num)
+	def _select_mode_to_keep(self, mode_name):
+		'''
+		Keeps only one of the original modes specified in the object,
+		resets mode_completeness_tracker accordingly
+		'''
+		# only allows for one mode to be kept
+		mode_idx = self.mode_list.index(mode_name)
+		self.CI_pval_by_mode = [self.CI_pval_by_mode[mode_idx]]
+		self.sim_repeats_by_mode = [self.sim_repeats_by_mode[mode_idx]]
+		self.ms_positions = [self.ms_positions[mode_idx]]
+		self.multistart_grid_parameters = \
+			[self.multistart_grid_parameters[mode_idx]]
+		self.logspace_profile_list_by_mode = \
+			[self.logspace_profile_list_by_mode[mode_idx]]
+		self.parameters_by_mode = [self.parameters_by_mode[mode_idx]]
+		self.x_tolerance_by_mode = [self.x_tolerance_by_mode[mode_idx]]
+		self.fun_tolerance_by_mode = [self.fun_tolerance_by_mode[mode_idx]]
+		self.min_parameter_vals_by_mode = \
+			[self.min_parameter_vals_by_mode[mode_idx]]
+		self.max_parameter_vals_by_mode = \
+			[self.max_parameter_vals_by_mode[mode_idx]]
+		self.starting_parameter_vals_by_mode = \
+			[self.starting_parameter_vals_by_mode[mode_idx]]
+		self.profile_points_by_mode = [self.profile_points_by_mode[mode_idx]]
+		self.profile_lower_limits_by_mode = \
+			[self.profile_lower_limits_by_mode[mode_idx]]
+		self.profile_upper_limits_by_mode = \
+			[self.profile_upper_limits_by_mode[mode_idx]]
+		self.scaling_arrays_by_mode = [self.scaling_arrays_by_mode[mode_idx]]
+		self.simulation_repeats_by_mode = \
+			[self.simulation_repeats_by_mode[mode_idx]]
+		self.sim_CI_parameters_by_mode = \
+			[self.sim_CI_parameters_by_mode[mode_idx]]
+		# reset mode_completeness_tracker
+		self.mode_completeness_tracker = cluster_functions.CompletenessTracker(self.mode_list)
+		self.all_modes_complete = False
+	def _change_starting_param_vals(self, mode_name, new_starting_param_vals):
+		mode_idx = self.mode_list.index(mode_name)
+		self.starting_parameter_vals_by_mode[mode_idx] = \
+			new_starting_param_vals
+	def _set_permafixed_parameter(self, mode_name, fixed_param):
+		'''
+		Sets fixed_param to 'fixed' (i.e. not fitted by the MLE) in
+		mode_name by setting the min_parameter_val and max_parameter_val
+		associated with that parameter equal to its starting_param_val
+		'''
+		mode_idx = self.mode_list.index(mode_name)
+		current_parameter_list = self.parameters_by_mode[mode_idx]
+		fixed_param_idx = current_parameter_list.index(fixed_param)
+		# run _retrieve_current_values on min, max, and starting
+			# parameter vals for this mode in case any of these lists
+			# were inputted as single elements (i.e. all elements of list
+			# are the same)
+		self.min_parameter_vals_by_mode[mode_idx] = \
+			np.array(self._retrieve_current_values(self.min_parameter_vals_by_mode,\
+				mode_idx,mode_name,len(current_parameter_list)))
+		self.max_parameter_vals_by_mode[mode_idx] = \
+			np.array(self._retrieve_current_values(self.max_parameter_vals_by_mode,\
+				mode_idx,mode_name,len(current_parameter_list)))
+		self.starting_parameter_vals_by_mode[mode_idx] = \
+			np.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
+				mode_idx,mode_name,len(current_parameter_list)))
+		# change min and max vals for fixed_param
+		new_min_max_val = \
+			self.starting_parameter_vals_by_mode[mode_idx][fixed_param_idx]
+		self.min_parameter_vals_by_mode[mode_idx][fixed_param_idx] = \
+			new_min_max_val
+		self.max_parameter_vals_by_mode[mode_idx][fixed_param_idx] = \
+			new_min_max_val
+	def respecify_for_hypothesis_testing(self, sim_number, mode_name, fixed_param, starting_vals):
+		self._select_mode_to_keep(mode_name)
+		self._change_starting_param_vals(mode_name, starting_vals)
+		if fixed_param:
+			self._set_permafixed_parameter(mode_name, fixed_param)
+		self.current_sim_rep_num = sim_number
+		
+
+		
+
+
 
 class SimKeyHolder(object):
 	'''
@@ -152,7 +273,7 @@ class HypothesisTestingInfo(object):
 	def set_hypothesis_parameters(self, Hnum, mode, fixed_param, \
 		starting_param_vals):
 		'''
-		Sets the mode, fixed_param ('unfixed' if none) and
+		Sets the mode, fixed_param (None if no parameter is fixed) and
 		starting_param_vals (None if default should be used) that will
 		be used for hypothesis Hnum ('H0' or 'H1')
 		'''
@@ -182,15 +303,34 @@ class LLRCalculator(object):
 		3. Calculates LL(H0)-LL(H1)
 	'''
 	def __init__(self, output_id_sim, data_folder, sim_key, sim_number_list, \
-		sim_parameters, hypothesis_testing_info):
+		sim_parameters, hypothesis_testing_info, cluster_parameters, cluster_folders, sim_folders):
 		self.output_id_sim = output_id_sim
 			# output_id_sim needs to include sim key but not sim number; fixed parameter will be added to filenames by mleparameters, and sim number will be added in MLE
 		self.sim_number_list = sim_number_list
 		self.sim_key = sim_key
 		self.sim_parameters = copy.deepcopy(sim_parameters)
+		self.sim_folders = sim_folders
+		self.cluster_parameters = cluster_parameters
+		self.cluster_folders = cluster_folders
 		self.hypothesis_testing_info = hypothesis_testing_info
 		self.hypotheses = hypothesis_testing_info.get_hypotheses()
-	def _run_MLE(self, )
+	def _run_MLE(self, additional_code_run_keys, additional_code_run_values):
+		'''
+		Runs MLE for getting LL values to be used in hypothesis testing
+		'''
+		# create MLEstimation object
+		ml_estimator = mle_functions.MLEstimation(self.sim_parameters, \
+			self.cluster_parameters, self.cluster_folders, self.sim_folders, \
+			additional_code_run_keys, additional_code_run_values)
+		# submit and track current set of jobs
+		ml_estimator.run_job_submission()
+		# track completeness within current mode
+		mle_completefile = ml_estimator.get_completefile_path()
+		sim_parameters.update_parameter_completeness(mle_completefile)
+		# if all parameters for this mode are complete, update mode completeness
+		# this also updates completeness across modes
+		current_mode_mle_complete_status = \
+			mle_parameters.check_completeness_within_mode()
 	def _find_LLs(self, Hnum, current_fixed_param):
 		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
 		current_output_id = output_id_sim + '_' + Hnum
