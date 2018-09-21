@@ -877,8 +877,7 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 		mle_parameters.update_parameter_completeness(mle_completefile)
 		# if all parameters for this mode are complete, update mode completeness
 		# this also updates completeness across modes
-		current_mode_mle_complete_status = \
-			mle_parameters.check_completeness_within_mode()
+		mle_parameters.check_completeness_within_mode()
 
 
 
