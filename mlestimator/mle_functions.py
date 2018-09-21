@@ -853,7 +853,8 @@ def _get_MLE_params(current_param_datafile):
 	return(current_param_df)
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
-	additional_code_run_keys, additional_code_run_values):
+	additional_code_run_keys, additional_code_run_values, \
+	include_unfixed_parameter):
 	# Handles all of MLE for a particular mode, including confidence
 		# interval identification
 	# Loops through parameters for particular mode, finding ML
@@ -862,7 +863,8 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 		# chi-sq distribution of 2*log(LR))
 	# Runs through simulations to find simulation-based CI values
 	# mle_parameters must have the mode already set
-	parameters_to_loop_over = mle_parameters.get_fitted_parameter_list(True)
+	parameters_to_loop_over = \
+		mle_parameters.get_fitted_parameter_list(include_unfixed_parameter)
 	for current_fixed_parameter in parameters_to_loop_over:
 		# set current parameter
 		mle_parameters.set_parameter(current_fixed_parameter)
