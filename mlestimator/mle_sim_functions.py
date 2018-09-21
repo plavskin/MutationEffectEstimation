@@ -265,9 +265,8 @@ class HypothesisTestingInfo(object):
 			pd.DataFrame(columns = \
 				['mode', 'fixed_param', 'starting_param_vals'],
 				index = self.hypotheses)
-		self.sim_params = dict()
 	def set_hypothesis_parameters(self, Hnum, mode, fixed_param, \
-		starting_param_vals, sim_parameters):
+		starting_param_vals):
 		'''
 		Sets the mode, fixed_param (None if no parameter is fixed) and
 		starting_param_vals (None if default should be used) that will
@@ -276,10 +275,6 @@ class HypothesisTestingInfo(object):
 		if Hnum in self.hypotheses:
 			self.hypothesis_info.loc[Hnum] = \
 				[mode, fixed_param, starting_param_vals]
-			current_sim_param = copy.deepcopy(sim_parameters)
-			current_sim_params.respecify_for_hypothesis_testing(mode, \
-				fixed_param, starting_param_vals)
-			self.sim_params[Hnum] = current_sim_params
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
@@ -297,8 +292,6 @@ class HypothesisTestingInfo(object):
 		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
 	def get_starting_param_vals(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
-	def get_sim_parameters(self, Hnum):
-		return(self.sim_params[Hnum])
 	def get_hypotheses(self):
 		return(self.hypotheses)
 
@@ -311,7 +304,9 @@ class LLRCalculator(object):
 		3. Calculates LL(H0)-LL(H1)
 	'''
 	def __init__(self, output_id_sim, data_folder, sim_key, \
-		sim_parameters, hypothesis_testing_info, cluster_parameters, cluster_folders, sim_folders):
+		sim_parameters, hypothesis_testing_info, cluster_parameters, \
+		cluster_folders, sim_folders, additional_code_run_keys, \
+		additional_code_run_values):
 		self.output_id_sim = output_id_sim
 			# output_id_sim needs to include sim key but not sim
 				# number; fixed parameter will be added to filenames
@@ -322,14 +317,39 @@ class LLRCalculator(object):
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
 		self.hypothesis_testing_info = hypothesis_testing_info
-	def _run_MLE(self, additional_code_run_keys, additional_code_run_values):
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
+		self._set_up_sim_parameters()
+	def _set_up_sim_parameters(self):
+		'''
+		Uses info in self.hypothesis_testing_info to respecify
+		SimParameters object for hypothesis testing
+		'''
+		# It's important to keep sim_parameters object as attribute of
+			# LRCalculator so that the objects can be modified to keep
+			# track of modes and parameters
+		self.sim_param_dict = dict()
+		for current_Hnum in self.hypothesis_testing_info.get_hypotheses():
+			current_sim_param = copy.deepcopy(self.sim_parameters)
+			current_mode = self.hypothesis_testing_info.get_mode(Hnum)
+			current_fixed_param = \
+				self.hypothesis_testing_info.get_fixed_param(Hnum)
+			current_starting_param_vals = \
+				self.hypothesis_testing_info.get_starting_param_vals(Hnum)
+			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
+				current_fixed_param, current_starting_param_vals)
+			self.sim_param_dict[Hnum] = current_sim_params
+	def _run_MLE(self, Hnum):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
 		'''
+		# get current hypothesis sim parameters
+		current_sim_parameters = \
+			self.hypothesis_testing_info.get_sim_parameters(Hnum)
 		# create MLEstimation object
-		ml_estimator = mle_functions.MLEstimation(self.sim_parameters, \
+		ml_estimator = mle_functions.MLEstimation(current_sim_parameters, \
 			self.cluster_parameters, self.cluster_folders, self.sim_folders, \
-			additional_code_run_keys, additional_code_run_values)
+			self.additional_code_run_keys, self.additional_code_run_values)
 		# submit and track current set of jobs
 		ml_estimator.run_job_submission()
 		# track completeness within current mode
@@ -339,12 +359,20 @@ class LLRCalculator(object):
 		# this also updates completeness across modes
 		current_mode_mle_complete_status = \
 			mle_parameters.check_completeness_within_mode()
-	def _find_LLs(self, Hnum, current_fixed_param):
+	def _find_LLs(self, Hnum):
 		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
 		current_output_id = output_id_sim + '_' + Hnum
-		self.sim_parameters.set_mode(mode, current_output_id)
+		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
+		current_fixed_param = self.hypothesis_testing_info.get_fixed_param(Hnum)
+		self.sim_parameters.set_mode(current_mode, current_output_id)
 		self.sim_parameters.set_parameter(current_fixed_param)
+	def _compile_LL(self, Hnum):
+
 	def _calculate_LLR(self):
+		# check for LL file
+			# if not there, check for MLE completefile
+				# if not there, run MLE
+				# if there, compile LL
 
 ######## ??? #######
 # Before running LLRCalculator on original data, a copy of it needs to
