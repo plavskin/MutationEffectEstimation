@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import warnings as war
 import mle_functions
+import copy
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
@@ -140,18 +141,12 @@ class SimParameters(mle_functions.MLEParameters):
 			new_min_max_val
 		self.max_parameter_vals_by_mode[mode_idx][fixed_param_idx] = \
 			new_min_max_val
-	def respecify_for_hypothesis_testing(self, sim_number, mode_name, fixed_param, starting_vals):
+	def respecify_for_hypothesis_testing(self, mode_name, fixed_param, starting_vals):
 		self._select_mode_to_keep(mode_name)
 		self._change_starting_param_vals(mode_name, starting_vals)
 		if fixed_param:
 			self._set_permafixed_parameter(mode_name, fixed_param)
-		self.current_sim_rep_num = sim_number
 		
-
-		
-
-
-
 class SimKeyHolder(object):
 	'''
 	Stores and compares individual simulation keys as a pandas Series
@@ -265,13 +260,14 @@ class HypothesisTestingInfo(object):
 	Hypotheses are 'H0' (null) and 'H1' (alternative)
 	'''
 	def __init__(self):
-		self.hypotheses = ['H0','H1']
+		self.hypotheses = ['H0', 'H1']
 		self.hypothesis_info = \
 			pd.DataFrame(columns = \
 				['mode', 'fixed_param', 'starting_param_vals'],
 				index = self.hypotheses)
+		self.sim_params = dict()
 	def set_hypothesis_parameters(self, Hnum, mode, fixed_param, \
-		starting_param_vals):
+		starting_param_vals, sim_parameters):
 		'''
 		Sets the mode, fixed_param (None if no parameter is fixed) and
 		starting_param_vals (None if default should be used) that will
@@ -280,17 +276,29 @@ class HypothesisTestingInfo(object):
 		if Hnum in self.hypotheses:
 			self.hypothesis_info.loc[Hnum] = \
 				[mode, fixed_param, starting_param_vals]
+			current_sim_param = copy.deepcopy(sim_parameters)
+			current_sim_params.respecify_for_hypothesis_testing(mode, \
+				fixed_param, starting_param_vals)
+			self.sim_params[Hnum] = current_sim_params
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
 				', '.join(self.hypotheses))
-	def get_hypothesis_info(self, Hnum, desired_var):
+	def _get_hypothesis_info(self, Hnum, desired_var):
 		if Hnum in self.hypotheses:
 			return(self.hypothesis_info.loc[Hnum][desired_var])
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
 				', '.join(self.hypotheses))
+	def get_mode(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'mode'))
+	def get_fixed_param(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
+	def get_starting_param_vals(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
+	def get_sim_parameters(self, Hnum):
+		return(self.sim_params[Hnum])
 	def get_hypotheses(self):
 		return(self.hypotheses)
 
@@ -302,18 +310,18 @@ class LLRCalculator(object):
 		2. Calculates H0: LL at fixed_param_val
 		3. Calculates LL(H0)-LL(H1)
 	'''
-	def __init__(self, output_id_sim, data_folder, sim_key, sim_number_list, \
+	def __init__(self, output_id_sim, data_folder, sim_key, \
 		sim_parameters, hypothesis_testing_info, cluster_parameters, cluster_folders, sim_folders):
 		self.output_id_sim = output_id_sim
-			# output_id_sim needs to include sim key but not sim number; fixed parameter will be added to filenames by mleparameters, and sim number will be added in MLE
-		self.sim_number_list = sim_number_list
+			# output_id_sim needs to include sim key but not sim
+				# number; fixed parameter will be added to filenames
+				# by SimParameters, and sim number will be added in MLE
 		self.sim_key = sim_key
 		self.sim_parameters = copy.deepcopy(sim_parameters)
 		self.sim_folders = sim_folders
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
 		self.hypothesis_testing_info = hypothesis_testing_info
-		self.hypotheses = hypothesis_testing_info.get_hypotheses()
 	def _run_MLE(self, additional_code_run_keys, additional_code_run_values):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
@@ -334,8 +342,8 @@ class LLRCalculator(object):
 	def _find_LLs(self, Hnum, current_fixed_param):
 		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
 		current_output_id = output_id_sim + '_' + Hnum
-		self.mle_parameters.set_mode(mode, current_output_id)
-		self.mle_parameters.set_parameter(current_fixed_param)
+		self.sim_parameters.set_mode(mode, current_output_id)
+		self.sim_parameters.set_parameter(current_fixed_param)
 	def _calculate_LLR(self):
 
 ######## ??? #######
