@@ -331,14 +331,14 @@ class LLRCalculator(object):
 		self.sim_param_dict = dict()
 		for current_Hnum in self.hypothesis_testing_info.get_hypotheses():
 			current_sim_param = copy.deepcopy(self.sim_parameters)
-			current_mode = self.hypothesis_testing_info.get_mode(Hnum)
+			current_mode = self.hypothesis_testing_info.get_mode(current_Hnum)
 			current_fixed_param = \
-				self.hypothesis_testing_info.get_fixed_param(Hnum)
+				self.hypothesis_testing_info.get_fixed_param(current_Hnum)
 			current_starting_param_vals = \
-				self.hypothesis_testing_info.get_starting_param_vals(Hnum)
+				self.hypothesis_testing_info.get_starting_param_vals(current_Hnum)
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
-			self.sim_param_dict[Hnum] = current_sim_params
+			self.sim_param_dict[current_Hnum] = current_sim_params
 	def _run_MLE(self, Hnum):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
