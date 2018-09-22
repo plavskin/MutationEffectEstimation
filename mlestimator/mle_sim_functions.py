@@ -45,10 +45,11 @@ class SimParameters(mle_functions.MLEParameters):
 		2.	Changing the starting_param_vals for that mode, if necessary
 		3.	If a parameter in a simulation mle mode is meant to be
 			fixed, it is forced to be treated as a fixed parameter by
-			setting the min and max values for that parameter to its
-			starting value, and the mle is then treated as 'unfixed'
-			-	Although MLE is 'unfixed', multiple points to loop over
-				are set
+			setting the min and max values, as well as the lower and
+			upper profile limits for that parameter,to its starting
+			value, and the mle is then only run for that parameter
+			-	The number of profile points is reset to the number of
+				simulation_repeats
 	It also reads in and processes parameters specific to simulations
 	'''
 	def __init__(self, parameter_list):
@@ -57,6 +58,10 @@ class SimParameters(mle_functions.MLEParameters):
 			parameter_list["sim_CI_parameters_by_mode"]
 		self.simulation_repeats_by_mode = \
 			parameter_list["simulation_repeats_by_mode"]
+		# reset profile_points_by_mode to number of sim repeats by mode
+		self.profile_points_by_mode = self.simulation_repeats_by_mode
+		# set default parameter_to_select for looping over parameters
+		self.parameter_to_select = 'unfixed'
 	def set_mode(self, mode_name, output_identifier):
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_sim_rep_num = self.simulation_repeats_by_mode[mode_idx]
@@ -69,10 +74,14 @@ class SimParameters(mle_functions.MLEParameters):
 		Replaces same function in mle_functions.MLEParameters
 		Since there are no profile calculations, and any fixed
 		parameters in the MLE are fixed by setting their min and max
-		values equal to their starting vals, run all MLEs as 'unfixed'
-		and set point_numbers_to_loop_over to the number of sim reps
+		values equal to their starting vals, run all MLEs as
+		parameter_to_select (defaults to 'unfixed', but should be
+		changed to the name of the fixed parameter for the sim mode if
+		respecify_for_hypothesis_testing has been run with a specified
+		fixed_param) and set point_numbers_to_loop_over to the number of
+		sim reps
 		'''
-		self.current_parameters_to_loop_over = ['unfixed']
+		self.current_parameters_to_loop_over = [self.parameter_to_select]
 		self.point_numbers_to_loop_over = numpy.array(self.current_sim_rep_num)
 	def _select_mode_to_keep(self, mode_name):
 		'''
@@ -119,12 +128,15 @@ class SimParameters(mle_functions.MLEParameters):
 		Sets fixed_param to 'fixed' (i.e. not fitted by the MLE) in
 		mode_name by setting the min_parameter_val and max_parameter_val
 		associated with that parameter equal to its starting_param_val
+		Sets 'parameter_to_select' to fixed_param; this will be the only
+		parameter looped over during mle with these SimParameters
 		'''
 		mode_idx = self.mode_list.index(mode_name)
 		current_parameter_list = self.parameters_by_mode[mode_idx]
 		fixed_param_idx = current_parameter_list.index(fixed_param)
 		# run _retrieve_current_values on min, max, and starting
-			# parameter vals for this mode in case any of these lists
+			# parameter vals, as well as profile lower and upper
+			# limits, for this mode in case any of these lists
 			# were inputted as single elements (i.e. all elements of list
 			# are the same)
 		self.min_parameter_vals_by_mode[mode_idx] = \
@@ -136,6 +148,12 @@ class SimParameters(mle_functions.MLEParameters):
 		self.starting_parameter_vals_by_mode[mode_idx] = \
 			np.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
 				mode_idx,mode_name,len(current_parameter_list)))
+		self.profile_lower_limits_by_mode[mode_idx] = \
+			np.array(self._retrieve_current_values(self.profile_lower_limits_by_mode,\
+				mode_idx,mode_name,len(current_parameter_list)))
+		self.profile_upper_limits_by_mode[mode_idx] = \
+			np.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
+				mode_idx,mode_name,len(current_parameter_list)))
 		# change min and max vals for fixed_param
 		new_min_max_val = \
 			self.starting_parameter_vals_by_mode[mode_idx][fixed_param_idx]
@@ -143,6 +161,11 @@ class SimParameters(mle_functions.MLEParameters):
 			new_min_max_val
 		self.max_parameter_vals_by_mode[mode_idx][fixed_param_idx] = \
 			new_min_max_val
+		self.profile_lower_limits_by_mode[mode_idx][fixed_param_idx] = \
+			new_min_max_val
+		self.profile_upper_limits_by_mode[mode_idx][fixed_param_idx] = \
+			new_min_max_val
+		self.parameter_to_select = fixed_param
 	def respecify_for_hypothesis_testing(self, mode_name, fixed_param, starting_vals):
 		self._select_mode_to_keep(mode_name)
 		self._change_starting_param_vals(mode_name, starting_vals)
