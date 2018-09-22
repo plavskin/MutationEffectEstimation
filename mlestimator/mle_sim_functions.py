@@ -34,6 +34,9 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 class SimFolders(object):
 	pass()
 	# needs to have a get_experiment_path method, as MLEFolders does
+	# needs to have all the same folder types as MLEFolders does
+	# also needs:
+	#	current_sim_folder
 
 class SimParameters(mle_functions.MLEParameters):
 	'''
@@ -117,7 +120,7 @@ class SimParameters(mle_functions.MLEParameters):
 		self.sim_CI_parameters_by_mode = \
 			[self.sim_CI_parameters_by_mode[mode_idx]]
 		# reset mode_completeness_tracker
-		self.mode_completeness_tracker = cluster_functions.CompletenessTracker(self.mode_list)
+		self.mode_completeness_tracker = CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
 	def _change_starting_param_vals(self, mode_name, new_starting_param_vals):
 		mode_idx = self.mode_list.index(mode_name)
@@ -328,7 +331,7 @@ class LLRCalculator(object):
 		2. Calculates H0: LL at fixed_param_val
 		3. Calculates LL(H0)-LL(H1)
 	'''
-	def __init__(self, output_id_sim, data_folder, sim_key, \
+	def __init__(self, output_id_sim, sim_key, \
 		sim_parameters, hypothesis_testing_info, cluster_parameters, \
 		cluster_folders, sim_folders, additional_code_run_keys, \
 		additional_code_run_values):
@@ -341,6 +344,8 @@ class LLRCalculator(object):
 		self.sim_folders = sim_folders
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
+		self.mle_datafile_path = sim_folders.get_path('current_output_subfolder')
+		self.LL_list_folder = sim_folders.get_path('LL_list_path')
 		self.hypothesis_testing_info = hypothesis_testing_info
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
@@ -381,16 +386,21 @@ class LLRCalculator(object):
 			self.cluster_folders, self.sim_folders, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
 			include_unfixed_parameter)
-	def _compile_LL(self, Hnum):
+	def _compile_LL_list(self, current_sim_parameters):
 		'''
 		Compiles and writes LL_list for each hypothesis
 		'''
-		# Follow pattern for generating LL_profile in mle_functions to read in each file
+		ll_list = LLHolder(current_sim_parameters, \
+			self.mle_datafile_path, self.LL_list_folder)
+		ll_profile.run_LL_list_compilation()
+		current_ll_df = ll_profile.get_LL_df()
+		return(current_ll_df)
 	def _find_LLs(self, Hnum):
 		'''
-		Runs MLE and, once that is complete, compiles LL_list for each hypothesis
+		Respecifies sim_parameters for current hypothesis being tested;
+		runs MLE and, once that is complete, compiles LL_list for
+		hypothesis
 		'''
-		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
 		current_output_id = output_id_sim + '_' + Hnum
 		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
 		current_sim_parameters = self.sim_param_dict[Hnum]
@@ -398,12 +408,12 @@ class LLRCalculator(object):
 		self._run_MLE(current_sim_parameters)
 		mle_complete = current_sim_parameters.check_completeness_within_mode()
 		if mle_complete:
-			self.completeness_tracker.switch_key_completeness('initialization', \
+			self.completeness_tracker_dict[Hnum].switch_key_completeness('MLE', \
 				True)
-			self._compile_LL(Hnum)
-
-
-
+			self.LL_list_dict[Hnum] = \
+				self._compile_LL_list(current_sim_parameters)
+			self.completeness_tracker_dict[Hnum].switch_key_completeness('LL_list', \
+				True)
 	def _calculate_LLR(self):
 		# check for LL file
 			# if not there, check for MLE completefile
