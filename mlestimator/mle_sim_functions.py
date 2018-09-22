@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import warnings as war
 import mle_functions
+from cluster_wrangler.cluster_functions import CompletenessTracker
 import copy
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
@@ -32,6 +33,7 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 #####################################################################
 class SimFolders(object):
 	pass()
+	# needs to have a get_experiment_path method, as MLEFolders does
 
 class SimParameters(mle_functions.MLEParameters):
 	'''
@@ -56,12 +58,12 @@ class SimParameters(mle_functions.MLEParameters):
 		self.simulation_repeats_by_mode = \
 			parameter_list["simulation_repeats_by_mode"]
 	def set_mode(self, mode_name, output_identifier):
-		super(mle_functions.MLEParameters, self).set_mode(mode_name, \
-				output_identifier)
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_sim_rep_num = self.simulation_repeats_by_mode[mode_idx]
 		self.current_sim_CI_parameters = \
 			self.sim_CI_parameters_by_mode[mode_idx]
+		super(mle_functions.MLEParameters, self).set_mode(mode_name, \
+				output_identifier)
 	def _id_parameters_to_loop_over(self):
 		'''
 		Replaces same function in mle_functions.MLEParameters
@@ -320,6 +322,7 @@ class LLRCalculator(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self._set_up_sim_parameters()
+		self.LL_list_dict = dict()
 	def _set_up_sim_parameters(self):
 		'''
 		Uses info in self.hypothesis_testing_info to respecify
@@ -329,7 +332,9 @@ class LLRCalculator(object):
 			# LRCalculator so that the objects can be modified to keep
 			# track of modes and parameters
 		self.sim_param_dict = dict()
+		self.completeness_tracker_dict = dict()
 		for current_Hnum in self.hypothesis_testing_info.get_hypotheses():
+			# respecify SimParameter object for each hypothesis
 			current_sim_param = copy.deepcopy(self.sim_parameters)
 			current_mode = self.hypothesis_testing_info.get_mode(current_Hnum)
 			current_fixed_param = \
@@ -339,34 +344,42 @@ class LLRCalculator(object):
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
 			self.sim_param_dict[current_Hnum] = current_sim_params
-	def _run_MLE(self, Hnum):
+			# create CompletenessTracker object for each hypothesis
+			self.completeness_tracker_dict[current_Hnum] = \
+				CompletenessTracker(['MLE', 'LL_list'])
+	def _run_MLE(self, current_sim_parameters):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
 		'''
-		# get current hypothesis sim parameters
-		current_sim_parameters = \
-			self.hypothesis_testing_info.get_sim_parameters(Hnum)
-		# create MLEstimation object
-		ml_estimator = mle_functions.MLEstimation(current_sim_parameters, \
-			self.cluster_parameters, self.cluster_folders, self.sim_folders, \
-			self.additional_code_run_keys, self.additional_code_run_values)
-		# submit and track current set of jobs
-		ml_estimator.run_job_submission()
-		# track completeness within current mode
-		mle_completefile = ml_estimator.get_completefile_path()
-		sim_parameters.update_parameter_completeness(mle_completefile)
-		# if all parameters for this mode are complete, update mode completeness
-		# this also updates completeness across modes
-		current_mode_mle_complete_status = \
-			mle_parameters.check_completeness_within_mode()
+		# run MLE; completeness of current_sim_parameters will
+			# automatically be updated
+		include_unfixed_parameter = False
+		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
+			self.cluster_folders, self.sim_folders, \
+			self.additional_code_run_keys, self.additional_code_run_values, \
+			include_unfixed_parameter)
+	def _compile_LL(self, Hnum):
+		'''
+		Compiles and writes LL_list for each hypothesis
+		'''
+		# Follow pattern for generating LL_profile in mle_functions to read in each file
 	def _find_LLs(self, Hnum):
+		'''
+		Runs MLE and, once that is complete, compiles LL_list for each hypothesis
+		'''
 		# use mleparameters and set mode and fixed_param; change starting vals to whatever was used in simulation
 		current_output_id = output_id_sim + '_' + Hnum
 		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
-		current_fixed_param = self.hypothesis_testing_info.get_fixed_param(Hnum)
-		self.sim_parameters.set_mode(current_mode, current_output_id)
-		self.sim_parameters.set_parameter(current_fixed_param)
-	def _compile_LL(self, Hnum):
+		current_sim_parameters = self.sim_param_dict[Hnum]
+		current_sim_parameters.set_mode(current_mode, current_output_id)
+		self._run_MLE(current_sim_parameters)
+		mle_complete = current_sim_parameters.check_completeness_within_mode()
+		if mle_complete:
+			self.completeness_tracker.switch_key_completeness('initialization', \
+				True)
+			self._compile_LL(Hnum)
+
+
 
 	def _calculate_LLR(self):
 		# check for LL file
