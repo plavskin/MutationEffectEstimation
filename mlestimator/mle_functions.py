@@ -405,8 +405,8 @@ class LLHolder(object):
 		else:
 			self._populate_LL_df()
 		self._sort_by_profiled_param()
-	def run_LL_profile_compilation(self):
-		''' Compiles and writes LL_profile '''
+	def run_LL_list_compilation(self):
+		''' Compiles and writes LL_df '''
 		self._set_LL_df()
 		self._write_LL_df()
 	def get_LL_df(self):
@@ -463,10 +463,10 @@ class LLProfile(LLHolder):
 		if not self.additional_param_df.empty:
 			self._add_vals(self.additional_param_df)
 		self._sort_by_profiled_param()
-	def run_LL_profile_compilation(self):
+	def run_LL_list_compilation(self):
 		'''
-		Compiles and writes LL_profile; Identifies and sets max LL
-		parameters
+		Compiles and writes LL_df;
+		Identifies and sets max LL parameters
 		'''
 		self._set_LL_df()
 		self._write_LL_df()
@@ -668,7 +668,7 @@ class CombinedResultSummary(object):
 		ll_profile = LLProfile(self.mle_parameters, \
 			self.mle_datafile_path, self.LL_profile_folder, \
 			non_profile_max_params)
-		ll_profile.run_LL_profile_compilation()
+		ll_profile.run_LL_list_compilation()
 		warning_line = ll_profile.get_warnings()
 		ML_params = ll_profile.get_ML_params()
 		runtime_quantile = ll_profile.get_runtime(self.runtime_percentile)
@@ -836,7 +836,7 @@ class CombinedResultSummary(object):
 						ll_profile = LLProfile(self.mle_parameters, \
 							self.mle_datafile_path, self.LL_profile_folder, \
 							pandas.DataFrame())
-						ll_profile.run_LL_profile_compilation()
+						ll_profile.run_LL_list_compilation()
 						ll_profile.run_CI(self.pval, self.mle_folders, \
 							self.cluster_parameters, self.cluster_folders, \
 							self.mle_parameters)
