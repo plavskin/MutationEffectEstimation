@@ -29,7 +29,7 @@ class FolderManager(object):
 				experiment_folder_name,'MLE_output')
 		self.path_dict['completefile_folder'] = \
 			cluster_folders.get_path('completefile_path')
-		self.path_dict['LL_profile_path'] = \
+		self.path_dict['LL_list_path'] = \
 			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
 		self.path_dict['CI_bound_path'] = \
 			os.path.join(self.path_dict['experiment_path'],'CI_bounds')
@@ -604,7 +604,7 @@ class CombinedResultSummary(object):
 		self.mle_folders = copy.deepcopy(mle_folders)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
-		self.LL_profile_folder = mle_folders.get_path('LL_profile_path')
+		self.LL_profile_folder = mle_folders.get_path('LL_list_path')
 		self.runtime_percentile = mle_parameters.runtime_percentile
 		self.pval = mle_parameters.current_CI_pval
 		self._create_combined_output_file()
