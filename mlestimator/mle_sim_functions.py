@@ -428,21 +428,37 @@ class LLRCalculator(object):
 class FixedPointPvalCalculator(object):
 	'''
 	To calculate p-val at a given point:
-		1. 	a. Calculate H1: 'unfixed' LL (all unknown parameters
-			freely estimated)
-			b. Calculate H0: LL at fixed point in parameter space
-			c. 'True' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
+		1. 	a.	Calculate H1: 'unfixed' LL (all unknown parameters
+				freely estimated)
+			b.	Calculate H0: LL at fixed point in parameter space
+			c. 	'True' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
 				(actually to make the p-vals easier to understand, it's
 				easier to work with the negative of LLR values)
-			d. MLE parameter values for all parameters estimated in (b)
-			will be used as sim starting values!
-		2. Run sim_number simulations using starting parameter values
-		from (1d)
+			d. 	MLE parameter values for all parameters estimated in (b)
+				will be used as sim starting values!
+		2. 	Run sim_number simulations using starting parameter values
+			from (1d)
 		3. Repeat and record (1) but with sim data rather than real data
 	'''
 	def __init__(self, fixed_param, mode):
+		pass()
 
-
-
+class FixedPointIdentifier(object):
+	'''
+	To determine which point to calculate p-vals at:
+		1. 	Calculate p-val at asymptotic CI value
+		2. 	Taking p-val from (1) as a p-val on a normal curve,
+			determine at which point on fixed parameter axis
+			1/2*(target p-val) would be, and calculate the p-val at
+			that point
+		3. 	a. 	If point (2) has a lower empirical p-val than the target
+				p-val, interpolate between points (2) and (1) to id the
+				best candidate for the target p-val
+			b. 	If point (2) has a higher empirical p-val than the
+				target p-val, determine at which point on the fixed
+				parameter axis 1/4*(target p-val) would be, taking the
+				p-val from (2) as a p-val on a normal curve, and
+				calculate the p-val at that point
+	'''
 			
 #####################################################################
