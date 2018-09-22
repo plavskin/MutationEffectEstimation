@@ -351,14 +351,73 @@ class MLEstimation(object):
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, parallel_processors, completefile_path)
 
-class LLProfile(object):
-	# Gets, holds, and updates log likelihood profile
-	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
+class LLHolder(object):
+	'''
+	Populates, holds, and saves a dataframe containing outputs of MLE
+	'''
+	def __init__(self, mle_parameters, datafile_path, LL_list_folder):
 		self.profile_points = mle_parameters.current_profile_point_num
 		self.output_identifier = mle_parameters.output_identifier
-		self.current_fixed_parameter = mle_parameters.current_fixed_parameter
 		self.datafile_path = datafile_path
 		self.fixed_param = mle_parameters.current_fixed_parameter
+		self.LL_file = os.path.join(LL_list_folder, \
+			('_'.join(['LL_file', self.output_identifier, \
+				self.fixed_param]) + '.csv'))
+		self.LL_df = pandas.DataFrame()
+	def _populate_LL_df(self):
+		''' Fills in data in LL_df '''
+		for current_pp in range(1,(self.profile_points+1)):
+			current_datafile = generate_filename(self.datafile_path, \
+				str(current_pp), self.output_identifier, \
+				self.fixed_param, 'data')
+			if os.path.isfile(current_datafile):
+				current_data_df = _get_MLE_params(current_datafile)
+				# add current_data_np to LL array and update max likelihood value
+				self._add_vals(current_data_df)
+	def _sort_by_profiled_param(self):
+		'''
+		Returns order of rows in self.LL_df sorted by the parameter
+		being profiled
+		'''
+		if not self.LL_df.empty:
+			self.LL_df_sorted = self.LL_df.sort_values(self.fixed_param)
+		else:
+			self.LL_df_sorted = self.LL_df
+	def _write_LL_df(self):
+		'''
+		Writes LL_df to file regardless of whether file already exists
+		'''
+		self.LL_df_sorted.to_csv(path_or_buf=self.LL_file,index=False)
+	def _read_LL_df(self):
+		''' Reads self.LL_df from a pre-recorded file '''
+		try:
+			self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
+		except pandas.io.common.EmptyDataError:
+			# if file is empty, just create an empty df for self.LL_df
+			self.LL_df = pandas.DataFrame()
+		self._sort_by_profiled_param()
+	def _set_LL_df(self):
+		'''
+		Gets LL_df, either from a pre-recorded file, or from MLE outputs
+		'''
+		if os.path.isfile(self.LL_file):
+			self._read_LL_df()
+		else:
+			self._populate_LL_df()
+		self._sort_by_profiled_param()
+	def run_LL_profile_compilation(self):
+		''' Compiles and writes LL_profile '''
+		self._set_LL_df()
+		self._write_LL_df()
+	def get_LL_df(self):
+		''' Returns sorted LL_df '''
+		return(self.LL_df_sorted)
+
+
+class LLProfile(LLHolder):
+	# Gets, holds, and updates log likelihood profile
+	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
+		super(LLHolder, self).__init__(mle_parameters, datafile_path, LL_profile_folder)
 		self.warning_line = ''
 		self.additional_param_df = copy.copy(additional_param_df)
 		self.max_LL = None
@@ -366,7 +425,7 @@ class LLProfile(object):
 		self.fixed_param_MLE_val = None
 		self.LL_file = os.path.join(LL_profile_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
-				self.current_fixed_parameter]) + '.csv'))
+				self.fixed_param]) + '.csv'))
 		self.LL_df = pandas.DataFrame()
 	def _set_ML_params(self, ml_param_df):
 		self.ML_params = copy.copy(ml_param_df)
@@ -391,39 +450,12 @@ class LLProfile(object):
 				# idxmax OK here because indices are reset during appending
 			# set this row to be the ML parameters
 			self._set_ML_params(ml_param_df)
-	def _populate_LL_df(self):
-		# fill in data in LL_df
-		for current_pp in range(1,(self.profile_points+1)):
-			current_datafile = generate_filename(self.datafile_path, \
-				str(current_pp), self.output_identifier, \
-				self.current_fixed_parameter, 'data')
-			if os.path.isfile(current_datafile):
-				current_data_df = _get_MLE_params(current_datafile)
-				# add current_data_np to LL array and update max likelihood value
-				self._add_vals(current_data_df)
-	def _sort_by_profiled_param(self):
-		# returns order of rows in self.LL_df sorted by the
-			# parameter being profiled
-		if not self.LL_df.empty:
-			self.LL_df_sorted = self.LL_df.sort_values(self.fixed_param)
-		else:
-			self.LL_df_sorted = self.LL_df
-	def _write_LL_df(self):
-		# write LL_df to file regardless of whether file already
-			# exists, since LL_df may have been updated
-		self.LL_df_sorted.to_csv(path_or_buf=self.LL_file,index=False)
-	def _read_LL_df(self):
-		# reads self.LL_df from a pre-recorded file
-		try:
-			self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
-		except pandas.io.common.EmptyDataError:
-			# if file is empty, just create an empty df for self.LL_df
-			self.LL_df = pandas.DataFrame()
-		self._sort_by_profiled_param()
 	def _set_LL_df(self):
-		# gets LL_df, either from a pre-recorded file, or from MLE outputs
-		# if true_max_param_df is non-empty, add it to LL_df and update
-			# max LL-related parameters
+		'''
+		Gets LL_df, either from a pre-recorded file, or from MLE outputs
+		If true_max_param_df is non-empty, add it to LL_df and update
+		max LL-related parameters
+		'''
 		if os.path.isfile(self.LL_file):
 			self._read_LL_df()
 		else:
@@ -432,9 +464,10 @@ class LLProfile(object):
 			self._add_vals(self.additional_param_df)
 		self._sort_by_profiled_param()
 	def run_LL_profile_compilation(self):
-		# compiles and writes LL_profile;
-			# identifies and sets max LL parameters;
-			# checks monotonicity
+		'''
+		Compiles and writes LL_profile; Identifies and sets max LL
+		parameters
+		'''
 		self._set_LL_df()
 		self._write_LL_df()
 		self._id_max_LL()
@@ -457,9 +490,6 @@ class LLProfile(object):
 		self.asymptotic_CI_dict = self.asymptotic_CI.get_CI()
 		if self.asymptotic_CI_dict:
 			self.warning_line = self.asymptotic_CI.get_CI_warning()
-	def get_LL_df(self):
-		# returns sorted LL_df
-		return(self.LL_df_sorted)
 	def get_fixed_param_MLE_val(self):
 		# returns MLE value of current fixed parameter
 		return(self.fixed_param_MLE_val)
