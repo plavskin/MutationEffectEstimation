@@ -177,7 +177,7 @@ class SimParameters(mle_functions.MLEParameters):
 		
 class SimKeyHolder(object):
 	'''
-	Stores and compares individual simulation keys as a pandas Series
+	Stores individual simulation keys as a pandas Series
 	'''
 	def __init__(self, mode, fixed_params, fixed_param_vals):
 		'''
@@ -197,62 +197,117 @@ class SimKeyHolder(object):
 	def get_params(self):
 		return(self.params)
 
-class SimKeyOrganizer(object):
+class HypothesisKeyHolder(object):
 	'''
-	Organizes simulation keys and checks if sim with current
-	properties already exists; index in self.sim_key_df serves as
-	simulation key
+	Stores individual hypothesis keys as a pandas Series
 	'''
-	def __init__(self, sim_key_file):
-		self.sim_key_file = sim_key_file
-		self._read_sim_key_file()
-	def _read_sim_key_file(self):
-		# if self.sim_key_file exists, reads it in;
+	def __init__(self, mode, fixed_param, starting_param_vals, sim_key):
+		### ??? ###
+		# Insert a test that fixed_param is one string element?
+		### ??? ###
+		self.params = \
+			pd.Series([mode, fixed_param, starting_param_vals, sim_key],
+				index = ['mode', 'fixed_param', 'starting_param_vals', 'sim_key'])
+	def get_params(self):
+		return(self.params)
+
+class KeyOrganizer(object):
+	'''
+	Organizes keys and checks if key with current properties already
+	exists; index in self.key_df serves as key
+	'''
+	def __init__(self, key_file, col_names):
+		self.key_file = key_file
+		self._read_key_file()
+	def _read_key_file(self):
+		# if self.key_file exists, reads it in;
 		# otherwise, creates one
 		if os.path.isfile(self.LL_file):
 			try:
-				self.sim_key_df = pd.read_csv(filepath_or_buffer=self.LL_file)
+				self.key_df = pd.read_csv(filepath_or_buffer=self.key_file)
 			except pd.io.common.EmptyDataError:
 				# if file is empty, just create an empty df for self.LL_df
-				self._create_sim_key_df()
+				self._create_key_df()
 		else:
-			self._create_sim_key_df()
-	def _create_sim_key_df(self):
-		''' Creates new sim_key_df '''
-		self.sim_key_df = pandas.DataFrame(columns = \
-			['sim_mode', 'fixed_params', 'fixed_param_vals'])
-	def _find_matching_key(self, sim_key_holder):
+			self._create_key_df()
+	def _create_key_df(self):
+		''' Creates new key_df '''
+		self.key_df = pandas.DataFrame()
+	def _find_matching_key(self, key_holder):
 		'''
-		Takes in a SimKeyHolder object and identifies the row in
-		self.sim_key_df that matches it, if any do
+		Takes in a KeyHolder object and identifies the row in
+		self.key_df that matches it, if any do
 		'''
-		current_keys = self.sim_key_df.index.values.tolist()
-		row_match_boolean_list = [sim_key_holder.get_params().equals(self.sim_key_df.loc[i]) for i in current_keys]
-		matching_keys = self.sim_key_df.index[row_match_boolean_list].tolist()
+		current_keys = self.key_df.index.values.tolist()
+		row_match_boolean_list = [key_holder.get_params().equals(self.key_df.loc[i]) for i in current_keys]
+		matching_keys = self.key_df.index[row_match_boolean_list].tolist()
 		if matching_keys:
 			key_val = matching_keys[0]
 		else:
 			key_val = None
 		return(key_val)
-	def get_sim_key(self, sim_key_holder):
+	def get_key(self, key_holder):
 		'''
-		Takes in a SimKeyHolder object and determines whether it's already
-		in self.sim_key_df
-		If not, adds it, and writes updated file to self.sim_key_file
-		Either way, returns the sim_key for this set of SimKeyHolder
-		(i.e. the index of the line in sim_key_df holding these params)
+		Takes in a KeyHolder object and determines whether it's already
+		in self.key_df
+		If not, adds it, and writes updated file to self.key_file
+		Either way, returns the key for this set of KeyHolder
+		(i.e. the index of the line in key_df holding these params)
 		'''
-		current_key = self._find_matching_key(sim_key_holder)
+		current_key = self._find_matching_key(key_holder)
 		if not current_key:
-			self.sim_key_df = \
-				self.sim_key_df.append(sim_key_holder.get_params(), sort = False, \
+			self.key_df = \
+				self.key_df.append(key_holder.get_params(), sort = False, \
 					ignore_index = True)
-			current_key = self._find_matching_key(sim_key_holder)
+			current_key = self._find_matching_key(key_holder)
 			self.write_key_df()
 		return(current_key)
 	def write_key_df(self):
-		''' Writes self.sim_key_df to self.sim_key_file '''
-		self.sim_key_df.to_csv(path_or_buf = self.sim_key_file, index = True)
+		''' Writes self.key_df to self.key_file '''
+		self.key_df.to_csv(path_or_buf = self.key_file, index = True)
+
+class HypothesisTestingInfo(object):
+	'''
+	Holds information for performing MLE on a pair of null and alternative
+	hypotheses in a pandas DF
+	Hypotheses are 'H0' (null) and 'H1' (alternative)
+	'''
+	def __init__(self):
+		self.hypotheses = ['H0', 'H1']
+		self.hypothesis_info = \
+			pd.DataFrame(columns = \
+				['mode', 'fixed_param', 'starting_param_vals', 'sim_key'],
+				index = self.hypotheses)
+	def set_hypothesis_parameters(self, Hnum, hypothesis_key_holder):
+		'''
+		Sets the mode, fixed_param (None if no parameter is fixed) and
+		starting_param_vals (None if default should be used) that will
+		be used for hypothesis Hnum ('H0' or 'H1')
+		'''
+		if Hnum in self.hypotheses:
+			self.hypothesis_info.loc[Hnum] = 
+				hypothesis_key_holder.get_params()
+		else:
+			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
+				'; Hnum may only be one of the following: ' + \
+				', '.join(self.hypotheses))
+	def _get_hypothesis_info(self, Hnum, desired_var):
+		if Hnum in self.hypotheses:
+			return(self.hypothesis_info.loc[Hnum][desired_var])
+		else:
+			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
+				'; Hnum may only be one of the following: ' + \
+				', '.join(self.hypotheses))
+	def get_mode(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'mode'))
+	def get_fixed_param(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
+	def get_starting_param_vals(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
+	def get_sim_key(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'sim_key'))
+	def get_hypotheses(self):
+		return(self.hypotheses)
 
 #####################################################################
 # Pipeline for sim-LRT-based p-val
@@ -281,48 +336,6 @@ class SimKeyOrganizer(object):
 #		values are close enough together and to target for exact x-values to not matter much
 #		Also need to deal with what to do when p-val at both points is identical...
 
-class HypothesisTestingInfo(object):
-	'''
-	Holds information for performing MLE on a pair of null and alternative
-	hypotheses in a pandas DF
-	Hypotheses are 'H0' (null) and 'H1' (alternative)
-	'''
-	def __init__(self):
-		self.hypotheses = ['H0', 'H1']
-		self.hypothesis_info = \
-			pd.DataFrame(columns = \
-				['mode', 'fixed_param', 'starting_param_vals'],
-				index = self.hypotheses)
-	def set_hypothesis_parameters(self, Hnum, mode, fixed_param, \
-		starting_param_vals):
-		'''
-		Sets the mode, fixed_param (None if no parameter is fixed) and
-		starting_param_vals (None if default should be used) that will
-		be used for hypothesis Hnum ('H0' or 'H1')
-		'''
-		if Hnum in self.hypotheses:
-			self.hypothesis_info.loc[Hnum] = \
-				[mode, fixed_param, starting_param_vals]
-		else:
-			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
-				'; Hnum may only be one of the following: ' + \
-				', '.join(self.hypotheses))
-	def _get_hypothesis_info(self, Hnum, desired_var):
-		if Hnum in self.hypotheses:
-			return(self.hypothesis_info.loc[Hnum][desired_var])
-		else:
-			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
-				'; Hnum may only be one of the following: ' + \
-				', '.join(self.hypotheses))
-	def get_mode(self, Hnum):
-		return(self._get_hypothesis_info(Hnum, 'mode'))
-	def get_fixed_param(self, Hnum):
-		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
-	def get_starting_param_vals(self, Hnum):
-		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
-	def get_hypotheses(self):
-		return(self.hypotheses)
-
 class LLRCalculator(object):
 	'''
 	For self.data (which can be real or come from a sim) and fixed_param_val:
@@ -346,11 +359,23 @@ class LLRCalculator(object):
 		self.cluster_folders = cluster_folders
 		self.mle_datafile_path = sim_folders.get_path('current_output_subfolder')
 		self.LL_list_folder = sim_folders.get_path('LL_list_path')
+		### ??? ###
+		# Each hypothesis will need a unique title, likely incorporating fixed param, fixed param val, and mode setting
+		# LLR file should include, in order, titles for these parameters?
+		### ??? ###
 		self.hypothesis_testing_info = hypothesis_testing_info
+		#self.hypothesis_list = self.hypothesis_testing_info.get_hypotheses()
+		# Hard-code hypotheses to be H0 and H1
+		self.hypothesis_list = ['H0','H1']
+		self.LLR_file = os.path.join(self.LL_list_folder, \
+			('_'.join(['LLR_file', self.output_id_sim) + '.csv'))
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self._set_up_sim_parameters()
 		self.LL_list_dict = dict()
+		# create CompletenessTracker object to track whether each LL
+			# list is complete
+		self.LL_list_completeness_tracker = CompletenessTracker(hypothesis_list)
 	def _set_up_sim_parameters(self):
 		'''
 		Uses info in self.hypothesis_testing_info to respecify
@@ -360,8 +385,7 @@ class LLRCalculator(object):
 			# LRCalculator so that the objects can be modified to keep
 			# track of modes and parameters
 		self.sim_param_dict = dict()
-		self.completeness_tracker_dict = dict()
-		for current_Hnum in self.hypothesis_testing_info.get_hypotheses():
+		for current_Hnum in self.hypothesis_list:
 			# respecify SimParameter object for each hypothesis
 			current_sim_param = copy.deepcopy(self.sim_parameters)
 			current_mode = self.hypothesis_testing_info.get_mode(current_Hnum)
@@ -372,9 +396,6 @@ class LLRCalculator(object):
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
 			self.sim_param_dict[current_Hnum] = current_sim_params
-			# create CompletenessTracker object for each hypothesis
-			self.completeness_tracker_dict[current_Hnum] = \
-				CompletenessTracker(['MLE', 'LL_list'])
 	def _run_MLE(self, current_sim_parameters):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
@@ -386,39 +407,62 @@ class LLRCalculator(object):
 			self.cluster_folders, self.sim_folders, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
 			include_unfixed_parameter)
-	def _compile_LL_list(self, current_sim_parameters):
+	def _compile_LL_list(self, Hnum, current_sim_parameters):
 		'''
 		Compiles and writes LL_list for each hypothesis
 		'''
 		ll_list = LLHolder(current_sim_parameters, \
 			self.mle_datafile_path, self.LL_list_folder)
-		ll_profile.run_LL_list_compilation()
-		current_ll_df = ll_profile.get_LL_df()
-		return(current_ll_df)
+		ll_list.run_LL_list_compilation()
+			# compiles ll_list and writes it to a file
+		current_ll_df = ll_list.get_LL_df()
+		current_ll_file = ll_list.get_LL_file()
+		self.LL_list_dict[Hnum] = current_ll_df
+		self.LL_list_completeness_tracker.update_key_status(Hnum, \
+			current_ll_file)
 	def _find_LLs(self, Hnum):
 		'''
 		Respecifies sim_parameters for current hypothesis being tested;
 		runs MLE and, once that is complete, compiles LL_list for
 		hypothesis
 		'''
-		current_output_id = output_id_sim + '_' + Hnum
+		current_output_id = self.output_id_sim + '_' + Hnum
 		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
 		current_sim_parameters = self.sim_param_dict[Hnum]
 		current_sim_parameters.set_mode(current_mode, current_output_id)
 		self._run_MLE(current_sim_parameters)
 		mle_complete = current_sim_parameters.check_completeness_within_mode()
 		if mle_complete:
-			self.completeness_tracker_dict[Hnum].switch_key_completeness('MLE', \
-				True)
-			self.LL_list_dict[Hnum] = \
-				self._compile_LL_list(current_sim_parameters)
-			self.completeness_tracker_dict[Hnum].switch_key_completeness('LL_list', \
-				True)
+			self._compile_LL_list(Hnum, current_sim_parameters)
 	def _calculate_LLR(self):
-		# check for LL file
-			# if not there, check for MLE completefile
-				# if not there, run MLE
-				# if there, compile LL
+		'''
+		Matches MLE results for each hypothesis by simulation point and
+		calculates log(likelihood ratio) (LLR) for each point
+		'''
+		abbreviated_LL_df_dict = {}
+		for current_Hnum in self.hypothesis_list:
+			current_full_df = self.LL_list_dict[current_Hnum]
+			abbreviated_LL_df_dict[current_Hnum] = \
+				current_full_df[['LL', 'point_num']]
+		self.LLR_df = pd.merge(abbreviated_LL_df_dict['H0'], \
+			abbreviated_LL_df_dict['H1'], how='outer', left_on = 'point_num', \
+			right_on = 'point_num', suffixes = (['_H0','_H1']))
+		self.LLR_df['LLR'] = self.LLR_df['LL_H0'] - self.LLR_df['LL_H1']
+
+	def run_LLR(self):
+		'''
+		Runs through steps to submit MLE jobs on simulations, compile
+		LL lists, and compute LLR
+		'''
+		for current_Hnum in self.hypothesis_list:
+			self._find_LLs(current_Hnum)
+		ll_list_completeness = \
+			self.LL_list_completeness_tracker.get_completeness()
+		if ll_list_completeness:
+			self._calculate_LLR()
+
+
+
 
 ######## ??? #######
 # Before running LLRCalculator on original data, a copy of it needs to
