@@ -364,6 +364,16 @@ class LLHolder(object):
 			('_'.join(['LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
 		self.LL_df = pandas.DataFrame()
+	def _add_vals(self, ll_param_df):
+		# adds values to self.LL_df from current_param_datafile
+		# if current LL is max, updates max_LL, ML_params, and
+			# fixed_param_MLE_val
+		if not self.LL_df.empty:
+			# concatenate data frames, dropping any duplicate rows and
+				# resetting indices
+			self.LL_df = self.LL_df.append(ll_param_df).drop_duplicates().reset_index(drop=True)
+		else:
+			self.LL_df = ll_param_df
 	def _populate_LL_df(self):
 		''' Fills in data in LL_df '''
 		for current_pp in range(1,(self.profile_points+1)):
@@ -412,6 +422,9 @@ class LLHolder(object):
 	def get_LL_df(self):
 		''' Returns sorted LL_df '''
 		return(self.LL_df_sorted)
+	def get_LL_file(self):
+		''' Returns the filepath containing the LL list '''
+		return(self.LL_file)
 
 
 class LLProfile(LLHolder):
@@ -431,16 +444,6 @@ class LLProfile(LLHolder):
 		self.ML_params = copy.copy(ml_param_df)
 		self.max_LL = ml_param_df.iloc[0]['LL']
 		self.fixed_param_MLE_val = ml_param_df.iloc[0][self.fixed_param]
-	def _add_vals(self, ll_param_df):
-		# adds values to self.LL_df from current_param_datafile
-		# if current LL is max, updates max_LL, ML_params, and
-			# fixed_param_MLE_val
-		if not self.LL_df.empty:
-			# concatenate data frames, dropping any duplicate rows and
-				# resetting indices
-			self.LL_df = self.LL_df.append(ll_param_df).drop_duplicates().reset_index(drop=True)
-		else:
-			self.LL_df = ll_param_df
 	def _id_max_LL(self):
 		# identifies and sets the parameter values corresponding to the
 			# max likelihood
