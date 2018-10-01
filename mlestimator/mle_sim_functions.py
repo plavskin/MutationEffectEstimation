@@ -276,9 +276,11 @@ class HypothesisTestingInfo(object):
 		self.hypotheses = ['H0', 'H1']
 		self.hypothesis_info = \
 			pd.DataFrame(columns = \
-				['mode', 'fixed_param', 'starting_param_vals', 'sim_key'],
+				['mode', 'fixed_param', 'starting_param_vals', 'sim_key', \
+					'hypothesis_key'],
 				index = self.hypotheses)
-	def set_hypothesis_parameters(self, Hnum, hypothesis_key_holder):
+	def set_hypothesis_parameters(self, Hnum, hypothesis_key_holder, \
+		hypothesis_key_organizer):
 		'''
 		Sets the mode, fixed_param (None if no parameter is fixed) and
 		starting_param_vals (None if default should be used) that will
@@ -287,12 +289,29 @@ class HypothesisTestingInfo(object):
 		if Hnum in self.hypotheses:
 			self.hypothesis_info.loc[Hnum] = 
 				hypothesis_key_holder.get_params()
+			current_h_key = \
+				hypothesis_key_organizer.get_key(hypothesis_key_holder)
+			self.hypothesis_info.at[Hnum, 'hypothesis_key'] = current_h_key
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
 				', '.join(self.hypotheses))
+	def _check_sim_key(self):
+		'''
+		Check that hypothesis testing info hypotheses all have a single
+		common sim_key (i.e. are performing MLE with different parameter
+		settings on the same set of simulated data)
+		'''
+		unique_sim_key_vals = \
+			self.hypothesis_info['sim_key'].nunique(dropna = False)
+		if unique_sim_key_vals not 1:
+			raise ValueError("All hypotheses being compared must be using " + \
+				"the same simulation data. The following " + \
+				"HypothesisTestingInfo object lists multiple unique " + \
+				"sim_keys:\n" + self.hypothesis_info.to_string())
 	def _get_hypothesis_info(self, Hnum, desired_var):
 		if Hnum in self.hypotheses:
+			self._check_sim_key()
 			return(self.hypothesis_info.loc[Hnum][desired_var])
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
@@ -306,6 +325,8 @@ class HypothesisTestingInfo(object):
 		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
 	def get_sim_key(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'sim_key'))
+	def get_hypothesis_key(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'hypothesis_key'))
 	def get_hypotheses(self):
 		return(self.hypotheses)
 
@@ -367,8 +388,7 @@ class LLRCalculator(object):
 		#self.hypothesis_list = self.hypothesis_testing_info.get_hypotheses()
 		# Hard-code hypotheses to be H0 and H1
 		self.hypothesis_list = ['H0','H1']
-		self.LLR_file = os.path.join(self.LL_list_folder, \
-			('_'.join(['LLR_file', self.output_id_sim) + '.csv'))
+		self._generate_LLR_filename()
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self._set_up_sim_parameters()
@@ -376,6 +396,17 @@ class LLRCalculator(object):
 		# create CompletenessTracker object to track whether each LL
 			# list is complete
 		self.LL_list_completeness_tracker = CompletenessTracker(hypothesis_list)
+	def _generate_LLR_filename(self):
+		''' Generates name for combined LLR file '''
+		hypothesis_key_string = ''
+		for current_Hnum in self.hypothesis_list:
+			current_h_key = \
+				self.hypothesis_testing_info.get_hypothesis_key(current_Hnum)
+			hypothesis_key_string = '_'.join([hypothesis_key_string, \
+				current_Hnum, str(current_h_key)])
+		LLR_file_name = 'LLR_file' + '_' + str(self.output_id_sim) + \
+			hypothesis_key_string + '.csv'
+		self.LLR_file = os.path.join(self.LL_list_folder, LLR_file_name)
 	def _set_up_sim_parameters(self):
 		'''
 		Uses info in self.hypothesis_testing_info to respecify
@@ -426,8 +457,9 @@ class LLRCalculator(object):
 		runs MLE and, once that is complete, compiles LL_list for
 		hypothesis
 		'''
-		current_output_id = self.output_id_sim + '_' + Hnum
 		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
+		current_h_key = self.hypothesis_testing_info.get_hypothesis_key(Hnum)
+		current_output_id = '_'.join([self.output_id_sim, Hnum, str(current_h_key)])
 		current_sim_parameters = self.sim_param_dict[Hnum]
 		current_sim_parameters.set_mode(current_mode, current_output_id)
 		self._run_MLE(current_sim_parameters)
@@ -442,13 +474,19 @@ class LLRCalculator(object):
 		abbreviated_LL_df_dict = {}
 		for current_Hnum in self.hypothesis_list:
 			current_full_df = self.LL_list_dict[current_Hnum]
-			abbreviated_LL_df_dict[current_Hnum] = \
-				current_full_df[['LL', 'point_num']]
+			current_fixed_param = \
+				self.hypothesis_testing_info.get_fixed_param(current_Hnum)
+			if current_fixed_param = 'unfixed':
+				abbreviated_LL_df_dict[current_Hnum] = \
+					current_full_df[['LL', 'point_num']]
+			else:
+				abbreviated_LL_df_dict[current_Hnum] = \
+					current_full_df[['LL', 'point_num', current_fixed_param]]
 		self.LLR_df = pd.merge(abbreviated_LL_df_dict['H0'], \
 			abbreviated_LL_df_dict['H1'], how='outer', left_on = 'point_num', \
 			right_on = 'point_num', suffixes = (['_H0','_H1']))
 		self.LLR_df['LLR'] = self.LLR_df['LL_H0'] - self.LLR_df['LL_H1']
-
+		self.LLR_df.to_csv(path_or_buf = self.LLR_file)
 	def run_LLR(self):
 		'''
 		Runs through steps to submit MLE jobs on simulations, compile
@@ -460,6 +498,12 @@ class LLRCalculator(object):
 			self.LL_list_completeness_tracker.get_completeness()
 		if ll_list_completeness:
 			self._calculate_LLR()
+	def get_LLR_filepath(self):
+		return(self.LLR_file)
+	def get_mean_LLR(self):
+		return(self.LLR_df['LLR'].mean())
+	def get_LLR(self):
+		return(self.LLR_df)
 
 
 
