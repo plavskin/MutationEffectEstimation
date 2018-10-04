@@ -179,21 +179,10 @@ class SimKeyHolder(object):
 	'''
 	Stores individual simulation keys as a pandas Series
 	'''
-	def __init__(self, mode, fixed_params, fixed_param_vals):
-		'''
-		Sorts fixed_params alphabetically, and rearranges
-		fixed_param_vals according to new fixed_param order, to
-		enable easy comparison to sim keys that may have been entered
-		in a different order
-		'''
-		sorted_indices = sorted(range(len(fixed_params)), \
-			key=lambda k: fixed_params[k])
-		fixed_params_sorted = [fixed_params[i] for i in sorted_indices]
-		fixed_param_vals_sorted = np.array([fixed_param_vals[i] \
-			for i in sorted_indices])
+	def __init__(self, mode, starting_param_vals):
 		self.params = \
-			pd.Series([mode, fixed_params_sorted, fixed_param_vals_sorted],
-				index = ['mode', 'fixed_params', 'fixed_param_vals'])
+			pd.Series([mode, starting_param_vals],
+				index = ['mode', 'starting_param_vals'])
 	def get_params(self):
 		return(self.params)
 
@@ -216,7 +205,7 @@ class KeyOrganizer(object):
 	Organizes keys and checks if key with current properties already
 	exists; index in self.key_df serves as key
 	'''
-	def __init__(self, key_file, col_names):
+	def __init__(self, key_file):
 		self.key_file = key_file
 		self._read_key_file()
 	def _read_key_file(self):
@@ -255,22 +244,27 @@ class KeyOrganizer(object):
 		(i.e. the index of the line in key_df holding these params)
 		'''
 		current_key = self._find_matching_key(key_holder)
-		if not current_key:
+		if current_key is None:
 			self.key_df = \
 				self.key_df.append(key_holder.get_params(), sort = False, \
 					ignore_index = True)
 			current_key = self._find_matching_key(key_holder)
 			self.write_key_df()
 		return(current_key)
+	def set_key(self, key_holder, key_idx):
+		''' Sets index key_idx in self.key_df to key_holder '''
+		self.key_df.loc[key_idx] = key_holder
 	def write_key_df(self):
 		''' Writes self.key_df to self.key_file '''
 		self.key_df.to_csv(path_or_buf = self.key_file, index = True)
 
 class HypothesisTestingInfo(object):
 	'''
-	Holds information for performing MLE on a pair of null and alternative
-	hypotheses in a pandas DF
+	Holds information for performing MLE on a pair of null and
+	alternative hypotheses in a pandas DF
 	Hypotheses are 'H0' (null) and 'H1' (alternative)
+	Need to first run set_hypothesis_parameters method with both H0 and
+	H1, then run set_up_sim_key method
 	'''
 	def __init__(self):
 		self.hypotheses = ['H0', 'H1']
@@ -296,35 +290,48 @@ class HypothesisTestingInfo(object):
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
 				', '.join(self.hypotheses))
-	def _check_sim_key(self):
+	def set_up_sim_key(self):
 		'''
 		Check that hypothesis testing info hypotheses all have a single
 		common sim_key (i.e. are performing MLE with different parameter
 		settings on the same set of simulated data)
 		'''
 		unique_sim_key_vals = \
-			self.hypothesis_info['sim_key'].nunique(dropna = False)
-		if unique_sim_key_vals not 1:
+			self.hypothesis_info['sim_key'].unique()
+		if len(unique_sim_key_vals) not 1:
 			raise ValueError("All hypotheses being compared must be using " + \
 				"the same simulation data. The following " + \
 				"HypothesisTestingInfo object lists multiple unique " + \
 				"sim_keys:\n" + self.hypothesis_info.to_string())
+		else:
+			self.sim_key = unique_sim_key_vals[0]
 	def _get_hypothesis_info(self, Hnum, desired_var):
 		if Hnum in self.hypotheses:
-			self._check_sim_key()
 			return(self.hypothesis_info.loc[Hnum][desired_var])
 		else:
 			raise ValueError("invalid hypothesis (Hnum): " + Hnum + \
 				'; Hnum may only be one of the following: ' + \
 				', '.join(self.hypotheses))
+	def get_hypothesis_key_holder(self, Hnum):
+		'''
+		Returns HypothesisKeyHolder object corresponding to values in
+		self.hypothesis_info.loc[Hnum]
+		'''
+		current_mode = self.get_mode(Hnum)
+		current_fixed_param = self.get_fixed_param(Hnum)
+		current_starting_param_vals = self.get_starting_param_vals(Hnum)
+		current_sim_key = self.sim_key
+		current_hypothesis_key = HypothesisKeyHolder(current_mode, \
+			current_fixed_param, current_starting_param_vals, current_sim_key)
+		return(current_hypothesis_key)
+	def get_sim_key(self):
+		return(self.sim_key)
 	def get_mode(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'mode'))
 	def get_fixed_param(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
 	def get_starting_param_vals(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'starting_param_vals'))
-	def get_sim_key(self, Hnum):
-		return(self._get_hypothesis_info(Hnum, 'sim_key'))
 	def get_hypothesis_key(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'hypothesis_key'))
 	def get_hypotheses(self):
@@ -500,10 +507,10 @@ class LLRCalculator(object):
 			self._calculate_LLR()
 	def get_LLR_filepath(self):
 		return(self.LLR_file)
-	def get_mean_LLR(self):
-		return(self.LLR_df['LLR'].mean())
-	def get_LLR(self):
-		return(self.LLR_df)
+	def get_LLRs(self):
+		return(self.LLR_df['LLR'])
+	def get_LL(self, Hnum):
+		return(self.LL_list_dict[Hnum])
 
 
 
@@ -513,12 +520,21 @@ class LLRCalculator(object):
 # be created in the same place where simulation folders are stored;
 # The 'unfixed' output file for this data should be placed in this folder
 ######## ??? #######
+
+### sim_key == 'original' for original data
+
 class FixedPointPvalCalculator(object):
 	'''
+	Performs simulations and MLEs to calculate p-val given parameters in
+	hypothesis_testing_info
 	To calculate p-val at a given point:
-		1. 	a.	Calculate H1: 'unfixed' LL (all unknown parameters
-				freely estimated)
-			b.	Calculate H0: LL at fixed point in parameter space
+		1. 	a.	Calculate H1: the hypothesis with the higher number of
+				degrees of freedom; for comparisons of hypothesis in one
+				of which a parameter is set to a predetermined value,
+				this corresponds to the 'unfixed' LL (all unknown
+				parameters freely estimated)
+			b.	Calculate H0: the hypothesis with the lower number of
+				degrees of freedom; LL at fixed point in parameter space
 			c. 	'True' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
 				(actually to make the p-vals easier to understand, it's
 				easier to work with the negative of LLR values)
@@ -528,8 +544,151 @@ class FixedPointPvalCalculator(object):
 			from (1d)
 		3. Repeat and record (1) but with sim data rather than real data
 	'''
-	def __init__(self, fixed_param, mode):
-		pass()
+	def __init__(self, H0_mode, H1_mode, H0_fixed_param, \
+		H1_fixed_param, H0_fixed_param_val, H1_fixed_param_val, \
+		sim_parameters, hypothesis_key_organizer, sim_folders,
+		sim_key_organizer):
+		self.sim_folders = copy.deepcopy(sim_folders)
+		self.hypothesis_key_organizer = hypothesis_key_organizer
+		self.sim_key_organizer = sim_key_organizer
+		self.hypotheses = ['H0','H1']
+		self.sim_parameters = copy.deepcopy(sim_parameters)
+		self._set_up_original_data_hypothesis(H0_mode, H1_mode, \
+			H0_fixed_param, H1_fixed_param, H0_fixed_param_vals, \
+			H1_fixed_param_vals)
+		self.original_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		self.sim_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		self.llr_calculator_dict = dict()
+		self.hypothesis_testing_info_dict = dict()
+	def _get_starting_params(self, current_mode, current_fixed_param, \
+		current_fixed_param_vals):
+		self.sim_parameters.set_mode(current_mode)
+		self.sim_parameters.set_parameter(current_fixed_param)
+		parameter_names = self.sim_parameters.get_complete_parameter_list()
+		starting_vals = \
+			copy.copy(self.sim_parameters.current_start_parameter_val_list())
+		if current_fixed_param not 'unfixed':
+			fixed_param_idx = parameter_names.index(current_fixed_param)
+			starting_vals[fixed_param_idx] = current_fixed_param_vals
+		return(starting_vals)
+	def _set_up_hypothesis_testing_info(self, data_type, H0_key_holder, \
+		H1_key_holder):
+		'''
+		Sets up HypothesisTestingInfo object with H0_key_holder and
+		H1_key_holder in self.hypothesis_testing_info_dict[data_type]
+		'''
+		current_hypothesis_testing_info = HypothesisTestingInfo()
+		current_hypothesis_testing_info.set_hypothesis_parameters('H0', \
+			H0_key_holder, self.hypothesis_key_organizer)
+		current_hypothesis_testing_info.set_hypothesis_parameters('H1', \
+			H1_key_holder, self.hypothesis_key_organizer)
+		current_hypothesis_testing_info..set_up_sim_key()
+		self.hypothesis_testing_info_dict[data_type] = \
+			current_hypothesis_testing_info
+	def _set_up_original_data(self, H0_mode, H1_mode, \
+			H0_fixed_param, H1_fixed_param, H0_fixed_param_vals, \
+			H1_fixed_param_vals):
+		''' Sets up hypothesis_testing_info for original data '''
+		sim_key = 'original'
+		H0_starting_param_vals = self._get_starting_params(H0_mode, H0_fixed_param, \
+			H0_fixed_param_vals)
+		H0_key_holder = self.HypothesisKeyHolder(H0_mode, H0_fixed_param, \
+			H0_starting_param_vals, sim_key)
+		H1_starting_param_vals = self._get_starting_params(H1_mode, H1_fixed_param, \
+			H1_fixed_param_vals)
+		H1_key_holder = self.HypothesisKeyHolder(H1_mode, H1_fixed_param, \
+			H1_starting_param_vals, sim_key)
+		# create sim_key_holder and get sim_key from
+			# sim_key_organizer
+		sim_key_holder = SimKeyHolder(H0_mode, H0_starting_param_vals)
+		self.sim_key_organizer.set_key(sim_key_holder, sim_key)
+		# set up hypothesis testing info for original data
+		self._set_up_hypothesis_testing_info('original', H0_key_holder, \
+			H1_key_holder)
+	def _get_original_MLE_param_vals(self, current_Hnum, current_mode, \
+		current_fixed_param):
+		'''
+		Returns MLE parameters from MLE on original data for
+		current_Hnum
+		'''
+		# set mode and fixed parameter in sim_parameters, get list
+			# of parameter names
+		self.sim_parameters.set_mode(current_mode)
+		self.sim_parameters.set_parameter(current_fixed_param)
+		parameter_names = self.sim_parameters.get_complete_parameter_list()
+		current_original_LL_df = \
+			self.llr_calculator_dict['original'].get_LL(current_Hnum)
+		current_original_MLE_param_vals = \
+			current_original_LL_df.loc[0][parameter_names].tolist()
+		return(current_original_MLE_param_vals)
+	def _set_up_sim_data(self):
+		self.sim_hypothesis_testing_info = HypothesisTestingInfo()
+		# first, get H0 results from original data MLE, since simulation
+			# will be based on MLE parameter values for those
+		H0_mode = self.original_hypothesis_testing_info.get_mode('H0')
+		H0_fixed_param = \
+			self.original_hypothesis_testing_info.get_fixed_param('H0')
+		# get MLE parameter values from LL_df, and use them as new
+			# starting vals
+		H0_starting_param_vals = \
+			self._get_original_MLE_param_vals('H0', H0_mode, H0_fixed_param)
+		# create sim_key_holder and get sim_key from
+			# sim_key_organizer
+		sim_key_holder = SimKeyHolder(H0_mode, H0_starting_param_vals)
+		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
+		# create hypothesis_key_holder
+		H0_key_holder = self.HypothesisKeyHolder(H0_mode, H0_fixed_param, \
+			H0_starting_param_vals, sim_key)
+		# now repeat for H1, using sim_key determined above
+		H1_mode = self.original_hypothesis_testing_info.get_mode('H1')
+		H1_fixed_param = \
+			self.original_hypothesis_testing_info.get_fixed_param('H1')
+		H1_starting_param_vals = \
+			self._get_original_MLE_param_vals('H1', H1_mode, H1_fixed_param)
+		# create hypothesis_key_holder
+		H1_key_holder = self.HypothesisKeyHolder(H1_mode, H1_fixed_param, \
+			H1_starting_param_vals, sim_key)
+		# pass hypothesis_key_holder to self.hypothesis_testing_info_dict['sim']
+		self._set_up_hypothesis_testing_info('sim', H0_key_holder, \
+			H1_key_holder)
+	def _run_sim(self, current_hypothesis_testing_info, \
+		current_completeness_tracker):
+		'''
+		Runs simulations based on parameters in
+		current_hypothesis_testing_info
+		'''
+	def _run_LLR_calc(self, current_hypothesis_testing_info, \
+		current_completeness_tracker):
+		'''
+		Estimates log likelihood ratios for given
+		current_hypothesis_testing_info based on sim outputs
+		'''
+	def _run_sim_and_LLR(self, current_hypothesis_testing_info, \
+		current_completeness_tracker):
+		'''
+		Based on current_hypothesis_testing_info, runs simulations (if
+		necessary) and LLR calculation
+		'''
+		self.original_llr_calculator = 
+
+		### Need to allow for option that original data MLE (or LLR) ran but did not successfully complete
+			# LLR value may be NaN or missing
+		### Need to change the way data inputs are handled in mle_functions--make separate dict of data input files (read in from setup_file) that gets added to submission keys and values during mle batch submission
+		return(LLR_list)
+	def run_fixed_pt_pval_estimation(self):
+		'''
+		Determine the p-val of the hypothesis comparison being performed
+		'''
+
+		LLR_list_original = \
+			self._run_sim_and_LLR(self.original_hypothesis_testing_info, \
+			self.original_data_completeness_tracker)
+		new_starting_vals = # read H0 MLE output file, extract values corresponding to parameter names of H0
+			# does this work for comparing different modes????? think about this.
+		self.sim_hypothesis_testing_info = copy.deepcopy(self.original_hypothesis_testing_info)
+
+
+
 
 class FixedPointIdentifier(object):
 	'''
@@ -549,4 +708,5 @@ class FixedPointIdentifier(object):
 				calculate the p-val at that point
 	'''
 			
+# For comparing models, don't run FixedPointIdentifier, just run FixedPointPvalCalculator on the two models
 #####################################################################
