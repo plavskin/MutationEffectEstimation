@@ -364,56 +364,32 @@ class HypothesisTestingInfo(object):
 #		values are close enough together and to target for exact x-values to not matter much
 #		Also need to deal with what to do when p-val at both points is identical...
 
-class LLRCalculator(object):
+class SimPreparer(object):
 	'''
-	For self.data (which can be real or come from a sim) and fixed_param_val:
-		1. Calculates H1: 'unfixed' LL (all unknown parameters freely
-			estimated)
-		2. Calculates H0: LL at fixed_param_val
-		3. Calculates LL(H0)-LL(H1)
+	Parent class for classes that run through hypotheses in a
+	HypothesisTestingInfo class object and perform some actions (e.g.
+	LLRCalculator, SimRunner)
 	'''
-	def __init__(self, output_id_sim, sim_key, \
-		sim_parameters, hypothesis_testing_info, cluster_parameters, \
-		cluster_folders, sim_folders, additional_code_run_keys, \
-		additional_code_run_values):
+	def __init__(self, output_id_sim, sim_parameters, hypothesis_testing_info, \
+		cluster_parameters, cluster_folders, sim_folders, datafile_keys, datafile_values, 
+		additional_code_run_keys, additional_code_run_values):
 		self.output_id_sim = output_id_sim
 			# output_id_sim needs to include sim key but not sim
 				# number; fixed parameter will be added to filenames
 				# by SimParameters, and sim number will be added in MLE
-		self.sim_key = sim_key
+		self.sim_key = self.hypothesis_testing_info.get_sim_key()
 		self.sim_parameters = copy.deepcopy(sim_parameters)
 		self.sim_folders = sim_folders
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
-		self.mle_datafile_path = sim_folders.get_path('current_output_subfolder')
-		self.LL_list_folder = sim_folders.get_path('LL_list_path')
-		### ??? ###
-		# Each hypothesis will need a unique title, likely incorporating fixed param, fixed param val, and mode setting
-		# LLR file should include, in order, titles for these parameters?
-		### ??? ###
-		self.hypothesis_testing_info = hypothesis_testing_info
-		#self.hypothesis_list = self.hypothesis_testing_info.get_hypotheses()
-		# Hard-code hypotheses to be H0 and H1
-		self.hypothesis_list = ['H0','H1']
-		self._generate_LLR_filename()
+		self.datafile_keys = datafile_keys
+		self.datafile_values = datafile_values
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
+		self.sim_datafile_path = sim_folders.get_path('current_sim_output_path')
+		self.hypothesis_testing_info = hypothesis_testing_info
+		self.hypothesis_list = ['H0','H1']
 		self._set_up_sim_parameters()
-		self.LL_list_dict = dict()
-		# create CompletenessTracker object to track whether each LL
-			# list is complete
-		self.LL_list_completeness_tracker = CompletenessTracker(hypothesis_list)
-	def _generate_LLR_filename(self):
-		''' Generates name for combined LLR file '''
-		hypothesis_key_string = ''
-		for current_Hnum in self.hypothesis_list:
-			current_h_key = \
-				self.hypothesis_testing_info.get_hypothesis_key(current_Hnum)
-			hypothesis_key_string = '_'.join([hypothesis_key_string, \
-				current_Hnum, str(current_h_key)])
-		LLR_file_name = 'LLR_file' + '_' + str(self.output_id_sim) + \
-			hypothesis_key_string + '.csv'
-		self.LLR_file = os.path.join(self.LL_list_folder, LLR_file_name)
 	def _set_up_sim_parameters(self):
 		'''
 		Uses info in self.hypothesis_testing_info to respecify
@@ -434,6 +410,40 @@ class LLRCalculator(object):
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
 			self.sim_param_dict[current_Hnum] = current_sim_params
+
+class LLRCalculator(SimPreparer):
+	'''
+	For self.data (which can be real or come from a sim) and fixed_param_val:
+		1. Calculates H1: 'unfixed' LL (all unknown parameters freely
+			estimated)
+		2. Calculates H0: LL at fixed_param_val
+		3. Calculates LL(H0)-LL(H1)
+	'''
+	def __init__(self, output_id_sim, \
+		sim_parameters, hypothesis_testing_info, cluster_parameters, \
+		cluster_folders, sim_folders, datafile_keys, datafile_values, \
+		additional_code_run_keys, additional_code_run_values):
+		super(SimPreparer, self).__init__(output_id_sim, sim_parameters, \
+			hypothesis_testing_info, cluster_parameters, cluster_folders, \
+			sim_folders, datafile_keys, datafile_values, \
+			additional_code_run_keys, additional_code_run_values)
+		self._generate_LLR_filename()
+		self.LL_list_dict = dict()
+		# create CompletenessTracker object to track whether each LL
+			# list is complete
+		self.LL_list_completeness_tracker = \
+			CompletenessTracker(self.hypothesis_list)
+	def _generate_LLR_filename(self):
+		''' Generates name for combined LLR file '''
+		hypothesis_key_string = ''
+		for current_Hnum in self.hypothesis_list:
+			current_h_key = \
+				self.hypothesis_testing_info.get_hypothesis_key(current_Hnum)
+			hypothesis_key_string = '_'.join([hypothesis_key_string, \
+				current_Hnum, str(current_h_key)])
+		LLR_file_name = 'LLR_file' + '_' + str(self.output_id_sim) + \
+			hypothesis_key_string + '.csv'
+		self.LLR_file = os.path.join(self.LL_list_folder, LLR_file_name)
 	def _run_MLE(self, current_sim_parameters):
 		'''
 		Runs MLE for getting LL values to be used in hypothesis testing
@@ -442,9 +452,9 @@ class LLRCalculator(object):
 			# automatically be updated
 		include_unfixed_parameter = False
 		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
-			self.cluster_folders, self.sim_folders, \
-			self.additional_code_run_keys, self.additional_code_run_values, \
-			include_unfixed_parameter)
+			self.cluster_folders, self.sim_folders, self.datafile_keys, \
+			self.datafile_values, self.additional_code_run_keys, \
+			self.additional_code_run_values, include_unfixed_parameter)
 	def _compile_LL_list(self, Hnum, current_sim_parameters):
 		'''
 		Compiles and writes LL_list for each hypothesis
@@ -512,6 +522,25 @@ class LLRCalculator(object):
 	def get_LL(self, Hnum):
 		return(self.LL_list_dict[Hnum])
 
+class SimRunner(SimPreparer):
+	'''
+	Runs simulations
+	'''
+	def __init__(self, output_id_sim, sim_parameters, hypothesis_testing_info, \
+		cluster_parameters, cluster_folders, sim_folders, additional_code_run_keys, \
+		additional_code_run_values):
+		# create CompletenessTracker object to track whether each LL
+			# list is complete
+		super(SimPreparer, self).__init__(output_id_sim, sim_parameters, \
+			hypothesis_testing_info, cluster_parameters, cluster_folders, \
+			sim_folders, datafile_keys, datafile_values, \
+			additional_code_run_keys, additional_code_run_values)
+		self.sim_completeness_tracker = CompletenessTracker(self.hypothesis_list)
+	def submit_sims(self):
+
+	# Base on run_MLE function
+	# Need Simulation class based on MLEstimation
+
 
 
 
@@ -544,32 +573,30 @@ class FixedPointPvalCalculator(object):
 			from (1d)
 		3. Repeat and record (1) but with sim data rather than real data
 	'''
-	def __init__(self, H0_mode, H1_mode, H0_fixed_param, \
-		H1_fixed_param, H0_fixed_param_val, H1_fixed_param_val, \
-		sim_parameters, hypothesis_key_organizer, sim_folders,
-		sim_key_organizer):
+	def __init__(self, mode_dict, fixed_param_dict, \
+		fixed_param_val_dict, sim_parameters, \
+		hypothesis_key_organizer, sim_folders, sim_key_organizer):
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = hypothesis_key_organizer
 		self.sim_key_organizer = sim_key_organizer
 		self.hypotheses = ['H0','H1']
 		self.sim_parameters = copy.deepcopy(sim_parameters)
-		self._set_up_original_data_hypothesis(H0_mode, H1_mode, \
-			H0_fixed_param, H1_fixed_param, H0_fixed_param_vals, \
-			H1_fixed_param_vals)
 		self.original_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
 		self.sim_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
 		self.llr_calculator_dict = dict()
 		self.hypothesis_testing_info_dict = dict()
-	def _get_starting_params(self, current_mode, current_fixed_param, \
-		current_fixed_param_vals):
-		self.sim_parameters.set_mode(current_mode)
-		self.sim_parameters.set_parameter(current_fixed_param)
+		self.mode_dict = mode_dict
+		self.fixed_param_dict = fixed_param_dict
+		self.fixed_param_val_dict = fixed_param_val_dict
+	def _get_starting_params(self, Hnum):
+		self.sim_parameters.set_mode(self.mode_dict[Hnum])
+		self.sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
 		parameter_names = self.sim_parameters.get_complete_parameter_list()
 		starting_vals = \
 			copy.copy(self.sim_parameters.current_start_parameter_val_list())
 		if current_fixed_param not 'unfixed':
-			fixed_param_idx = parameter_names.index(current_fixed_param)
-			starting_vals[fixed_param_idx] = current_fixed_param_vals
+			fixed_param_idx = parameter_names.index(self.fixed_param_dict[Hnum])
+			starting_vals[fixed_param_idx] = self.fixed_param_val_dict[Hnum]
 		return(starting_vals)
 	def _set_up_hypothesis_testing_info(self, data_type, H0_key_holder, \
 		H1_key_holder):
@@ -582,22 +609,25 @@ class FixedPointPvalCalculator(object):
 			H0_key_holder, self.hypothesis_key_organizer)
 		current_hypothesis_testing_info.set_hypothesis_parameters('H1', \
 			H1_key_holder, self.hypothesis_key_organizer)
-		current_hypothesis_testing_info..set_up_sim_key()
+		current_hypothesis_testing_info.set_up_sim_key()
 		self.hypothesis_testing_info_dict[data_type] = \
 			current_hypothesis_testing_info
-	def _set_up_original_data(self, H0_mode, H1_mode, \
-			H0_fixed_param, H1_fixed_param, H0_fixed_param_vals, \
-			H1_fixed_param_vals):
+	def _generate_hypothesis_key_holder(self, Hnum, sim_key, \
+		starting_param_vals):
+		''' Generates HypothesisKeyHolder for Hnum with sim_key '''
+		current_key_holder = self.HypothesisKeyHolder(self.mode_dict[Hnum], \
+			self.fixed_param_dict[Hnum], starting_param_vals, sim_key)
+		return(current_key_holder)
+	def _set_up_original_data(self):
 		''' Sets up hypothesis_testing_info for original data '''
 		sim_key = 'original'
-		H0_starting_param_vals = self._get_starting_params(H0_mode, H0_fixed_param, \
-			H0_fixed_param_vals)
-		H0_key_holder = self.HypothesisKeyHolder(H0_mode, H0_fixed_param, \
-			H0_starting_param_vals, sim_key)
-		H1_starting_param_vals = self._get_starting_params(H1_mode, H1_fixed_param, \
-			H1_fixed_param_vals)
-		H1_key_holder = self.HypothesisKeyHolder(H1_mode, H1_fixed_param, \
-			H1_starting_param_vals, sim_key)
+		H0_starting_param_vals = \
+			self._get_starting_params('H0')
+		H0_key_holder = self._generate_hypothesis_key_holder('H0', sim_key, \
+			H0_starting_param_vals)
+		H1_starting_param_vals = self._get_starting_params('H1')
+		H1_key_holder = self._generate_hypothesis_key_holder('H0', sim_key, \
+			H1_starting_param_vals)
 		# create sim_key_holder and get sim_key from
 			# sim_key_organizer
 		sim_key_holder = SimKeyHolder(H0_mode, H0_starting_param_vals)
@@ -605,46 +635,35 @@ class FixedPointPvalCalculator(object):
 		# set up hypothesis testing info for original data
 		self._set_up_hypothesis_testing_info('original', H0_key_holder, \
 			H1_key_holder)
-	def _get_original_MLE_param_vals(self, current_Hnum, current_mode, \
-		current_fixed_param):
+	def _get_original_MLE_param_vals(self, Hnum):
 		'''
 		Returns MLE parameters from MLE on original data for
 		current_Hnum
 		'''
 		# set mode and fixed parameter in sim_parameters, get list
 			# of parameter names
-		self.sim_parameters.set_mode(current_mode)
-		self.sim_parameters.set_parameter(current_fixed_param)
+		self.sim_parameters.set_mode(self.mode_dict[Hnum])
+		self.sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
 		parameter_names = self.sim_parameters.get_complete_parameter_list()
 		current_original_LL_df = \
-			self.llr_calculator_dict['original'].get_LL(current_Hnum)
+			self.llr_calculator_dict['original'].get_LL(Hnum)
 		current_original_MLE_param_vals = \
 			current_original_LL_df.loc[0][parameter_names].tolist()
 		return(current_original_MLE_param_vals)
 	def _set_up_sim_data(self):
 		self.sim_hypothesis_testing_info = HypothesisTestingInfo()
-		# first, get H0 results from original data MLE, since simulation
-			# will be based on MLE parameter values for those
-		H0_mode = self.original_hypothesis_testing_info.get_mode('H0')
-		H0_fixed_param = \
-			self.original_hypothesis_testing_info.get_fixed_param('H0')
 		# get MLE parameter values from LL_df, and use them as new
 			# starting vals
-		H0_starting_param_vals = \
-			self._get_original_MLE_param_vals('H0', H0_mode, H0_fixed_param)
-		# create sim_key_holder and get sim_key from
-			# sim_key_organizer
-		sim_key_holder = SimKeyHolder(H0_mode, H0_starting_param_vals)
+		H0_starting_param_vals = self._get_original_MLE_param_vals('H0')
+		# create sim_key_holder and get sim_key from sim_key_organizer
+		sim_key_holder = SimKeyHolder(self.mode_dict['H0'], \
+			H0_starting_param_vals)
 		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
 		# create hypothesis_key_holder
-		H0_key_holder = self.HypothesisKeyHolder(H0_mode, H0_fixed_param, \
-			H0_starting_param_vals, sim_key)
+		H0_key_holder = self._generate_hypothesis_key_holder('H0', sim_key, \
+			H0_starting_param_vals)
 		# now repeat for H1, using sim_key determined above
-		H1_mode = self.original_hypothesis_testing_info.get_mode('H1')
-		H1_fixed_param = \
-			self.original_hypothesis_testing_info.get_fixed_param('H1')
-		H1_starting_param_vals = \
-			self._get_original_MLE_param_vals('H1', H1_mode, H1_fixed_param)
+		H1_starting_param_vals = self._get_original_MLE_param_vals('H1')
 		# create hypothesis_key_holder
 		H1_key_holder = self.HypothesisKeyHolder(H1_mode, H1_fixed_param, \
 			H1_starting_param_vals, sim_key)
@@ -663,8 +682,7 @@ class FixedPointPvalCalculator(object):
 		Estimates log likelihood ratios for given
 		current_hypothesis_testing_info based on sim outputs
 		'''
-	def _run_sim_and_LLR(self, current_hypothesis_testing_info, \
-		current_completeness_tracker):
+	def _run_sim_and_LLR(self, data_type):
 		'''
 		Based on current_hypothesis_testing_info, runs simulations (if
 		necessary) and LLR calculation
@@ -679,13 +697,9 @@ class FixedPointPvalCalculator(object):
 		'''
 		Determine the p-val of the hypothesis comparison being performed
 		'''
+		self._set_up_original_data()
+		self._run_sim_and_LLR('original')
 
-		LLR_list_original = \
-			self._run_sim_and_LLR(self.original_hypothesis_testing_info, \
-			self.original_data_completeness_tracker)
-		new_starting_vals = # read H0 MLE output file, extract values corresponding to parameter names of H0
-			# does this work for comparing different modes????? think about this.
-		self.sim_hypothesis_testing_info = copy.deepcopy(self.original_hypothesis_testing_info)
 
 
 
