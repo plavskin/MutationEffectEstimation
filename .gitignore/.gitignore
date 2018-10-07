@@ -13,6 +13,8 @@
 ~$*.ppt*
 # Prevent mac users to commit .DS_Store files
 *.DS_Store
+# Prevent git from tracking pyc files
+*.pyc
 # Prevent users to commit the README files created by RStudio
 *README.html
 *README_cache/
