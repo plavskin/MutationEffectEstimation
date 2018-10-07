@@ -171,25 +171,24 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 				# set subfolder to be in current rep
 				mle_folders.set_current_output_subfolder('rep_' + rep)
 
-				current_petite_file = os.path.join(cluster_folders.get_path('experiment_path'), \
-					current_growth_condition + '_petite_GR_data.csv')
+#				current_petite_file = os.path.join(cluster_folders.get_path('experiment_path'), \
+#					current_growth_condition + '_petite_GR_data.csv')
 
-				# For 'sim', mat_phenotype_file needs to include the job iteration
-				if rep == 'sim':
-					########### FIX PATH AND ALSO SLURM PART HERE!!!!!!
-					current_phenotype_file = os.path.join(cluster_folders.get_path('experiment_path'), \
-						(current_growth_condition + '_phenotype_file_' + '${SLURM_ARRAY_TASK_ID}.csv'))
-				else:
-					current_phenotype_file = os.path.join(cluster_folders.get_path('experiment_path'), \
-						(current_growth_condition + '_phenotype_file.csv'))
+#				# For 'sim', mat_phenotype_file needs to include the job iteration
+#				if rep == 'sim':
+#					########### FIX PATH AND ALSO SLURM PART HERE!!!!!!
+#					current_phenotype_file = os.path.join(cluster_folders.get_path('experiment_path'), \
+#						(current_growth_condition + '_phenotype_file_' + '${SLURM_ARRAY_TASK_ID}.csv'))
+#				else:
+#					current_phenotype_file = os.path.join(cluster_folders.get_path('experiment_path'), \
+#						(current_growth_condition + '_phenotype_file.csv'))
 
 				# use additional_code_run_keys and values to specify where input
 					# data comes from (and any other extra information that
 					# doesn't come from setup_file)
-				additional_code_run_keys = ['phenotype_file','petite_file','L', \
-					'gridpower']
-				additional_code_run_values = [current_phenotype_file, \
-					current_petite_file,current_L,current_gridpower]
+				
+				additional_code_run_keys = ['L', 'gridpower']
+				additional_code_run_values = [current_L, current_gridpower]
 				output_id_string_start = '_'.join([current_growth_condition, rep])
 
 				# run MLE and LL profile creation, as well as CI

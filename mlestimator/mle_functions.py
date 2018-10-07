@@ -17,7 +17,7 @@ class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
 		experiment_folder_name):
 		self.path_dict = {}
-		self.path_dict['experiment_folder_name'] = experiment_folder_name
+		self.experiment_folder_name = experiment_folder_name
 		self.path_dict['experiment_path'] = \
 			os.path.join(cluster_parameters.composite_data_path, \
 				experiment_folder_name)
@@ -47,6 +47,8 @@ class FolderManager(object):
 				if not os.path.isdir(current_path):
 					os.makedirs(current_path)
 			open(setup_complete_file,'a').close()
+	def get_experiment_folder_name(self):
+		return(self.experiment_folder_name)
 	def get_path(self, folder_name):
 		return(self.path_dict[folder_name])
 	def set_current_output_subfolder(self,current_subfolder):
@@ -68,7 +70,10 @@ class MLEParameters(object):
 		# (currently only pays attention to the first time mode or parameter listed)
 	############### ??? TO DO ??? ###############
 	def __init__(self,parameter_list):
+		self.input_datafile_keys = parameter_list["input_datafile_keys"]
+		self.input_datafile_values = parameter_list["input_datafile_values"]
 		self.runtime_percentile = parameter_list["runtime_percentile"]
+		self.input_datafile_keys = parameter_list["input_datafile_keys"]
 		self.CI_pval_by_mode = parameter_list['CI_pval_by_mode']
 #		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
 		self.profile_points_by_mode = parameter_list["profile_points_by_mode"]
@@ -250,10 +255,15 @@ class MLEstimation(object):
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['MLE',mle_parameters.output_id_parameter, \
 					'completefile.txt']))
-		self.job_name = '-'.join([mle_folders.get_path('experiment_folder_name'),'MLE', \
+		self.job_name = '-'.join([mle_folders.get_experiment_folder_name,'MLE', \
 			mle_parameters.output_id_parameter])
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
+		self.input_datafile_keys = mle_parameters.input_datafile_keys
+		self.input_datafile_paths = \
+			[os.path.join(mle_folders.get_path('experiment_path'), \
+				current_input_datafile for current_input_datafile in \
+				self.mle_parameters.input_datafile_values)]
 		job_submission_manager = cluster_parameters.get_job_sub_manager()
 		self.within_batch_counter = \
 			job_submission_manager.get_within_batch_counter()
@@ -313,8 +323,10 @@ class MLEstimation(object):
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
 			# and add remaining values to key_list and value_list
-		for current_key, current_val in \
-			zip(self.additional_code_run_keys,self.additional_code_run_values):
+		keys_to_add = self.additional_code_run_keys + self.input_datafile_keys
+		vals_to_add = self.additional_code_run_values + \
+			self.input_datafile_paths
+		for current_key, current_val in zip(keys_to_add, vals_to_add):
 			if not current_key in key_list:
 				key_list.append(current_key)
 				value_list.append(current_val)
