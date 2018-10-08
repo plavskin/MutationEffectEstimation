@@ -264,11 +264,8 @@ class MLEstimation(object):
 			[os.path.join(mle_folders.get_path('experiment_path'), \
 				current_input_datafile for current_input_datafile in \
 				self.mle_parameters.input_datafile_values)]
-		job_submission_manager = cluster_parameters.get_job_sub_manager()
-		self.within_batch_counter = \
-			job_submission_manager.get_within_batch_counter()
 		self.within_batch_counter_call = \
-			'${' + self.within_batch_counter + '}'
+			cluster_parameters.get_batch_counter_call()
 		self.output_path = mle_folders.get_path('current_output_subfolder')
 		self.output_filename = generate_filename(self.output_path, \
 			self.within_batch_counter_call, mle_parameters.output_identifier, \
