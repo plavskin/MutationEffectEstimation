@@ -150,6 +150,12 @@ class ClusterParameters(object):
 				int(round(min(forced_max_jobs_per_batch, self.max_jobs_per_batch)))
 	def get_job_sub_manager(self):
 		return(copy.deepcopy(self.job_submission_manager))
+	def get_batch_counter_call(self):
+		within_batch_counter = \
+			self.job_submission_manager.get_within_batch_counter()
+		within_batch_counter_call = \
+			'${' + within_batch_counter + '}'
+		return(within_batch_counter_call)
 	def set_current_time(self, new_time):
 		self.current_time = new_time
 	def set_current_mem(self, new_mem):
