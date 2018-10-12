@@ -246,7 +246,8 @@ class MLEParameters(object):
 
 class MLEstimation(object):
 	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
-		mle_folders, additional_code_run_keys, additional_code_run_values):
+		mle_folders, additional_code_run_keys, additional_code_run_values, \
+		input_data_folder):
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
@@ -260,10 +261,7 @@ class MLEstimation(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.input_datafile_keys = mle_parameters.input_datafile_keys
-		self.input_datafile_paths = \
-			[os.path.join(mle_folders.get_path('experiment_path'), \
-				current_input_datafile for current_input_datafile in \
-				self.mle_parameters.input_datafile_values)]
+		self._generate_input_datafile_paths(input_data_folder)
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()
 		self.output_path = mle_folders.get_path('current_output_subfolder')
@@ -280,6 +278,11 @@ class MLEstimation(object):
 		self.additional_end_lines_in_job_sub = []
 			# don't include lines specific to matlab parallelization here
 		self._create_code_run_input()
+	def _generate_input_datafile_paths(self, input_data_folder):
+		self.input_datafile_paths = \
+			[os.path.join(input_data_folder, \
+				current_input_datafile for current_input_datafile in \
+				self.mle_parameters.input_datafile_values)]
 	def get_output_path(self):
 		return(self.output_path)
 	def get_completefile_path(self):
@@ -896,7 +899,7 @@ def _get_MLE_params(current_param_datafile):
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	additional_code_run_keys, additional_code_run_values, \
-	include_unfixed_parameter):
+	include_unfixed_parameter, input_data_folder):
 	# Handles all of MLE for a particular mode, including confidence
 		# interval identification
 	# Loops through parameters for particular mode, finding ML
@@ -913,7 +916,7 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 		# create MLEstimation object
 		ml_estimator = MLEstimation(mle_parameters, cluster_parameters, \
 			cluster_folders, mle_folders, additional_code_run_keys, \
-			additional_code_run_values)
+			additional_code_run_values, input_data_folder)
 		# submit and track current set of jobs
 		ml_estimator.run_job_submission()
 		# track completeness within current mode

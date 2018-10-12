@@ -18,6 +18,7 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 #			'_'.join([output_id_string,'MLE_file.csv']))
 		# run MLE for current set of parameters
 		include_unfixed_param = True
+		input_data_folder = mle_folders.get_path('experiment_path')
 		run_MLE(mle_parameters, cluster_parameters, cluster_folders, \
 			mle_folders, additional_code_run_keys, additional_code_run_values, \
 			include_unfixed_param)
