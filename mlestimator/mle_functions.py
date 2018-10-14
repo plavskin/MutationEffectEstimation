@@ -289,7 +289,11 @@ class MLEstimation(object):
 		return(self.output_path)
 	def get_completefile_path(self):
 		return(self.completefile)
-	def _create_code_run_input(self):
+	def _create_code_run_input_lists():
+		'''
+		Creates list of keys and their values to be submitted to
+		external code being run
+		'''
 		key_list = ['external_counter','combined_fixed_parameter_array', \
 			'combined_min_array','combined_max_array','combined_length_array', \
 			'combined_position_array','combined_start_values_array', \
@@ -321,6 +325,8 @@ class MLEstimation(object):
 			self.mle_parameters.current_scaling_val_list, \
 			self.mle_parameters.current_x_tolerance, \
 			self.mle_parameters.current_fun_tolerance]
+	def _create_code_run_input(self):
+		self._create_code_run_input_lists()
 		# take values from self.additional_code_run_keys and
 			# self.additional_code_run_values where
 			# self.additional_code_run_keys isn't already in key_list,
