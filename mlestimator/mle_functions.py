@@ -294,7 +294,7 @@ class MLEstimation(object):
 			'parameter_list','output_file', \
 			'parallel_processors','ms_positions','combined_profile_ub_array', \
 			'combined_profile_lb_array','ms_grid_parameter_array', \
-			'combined_logspace_parameters','datafile_path', \
+			'combined_logspace_parameters', \
 			'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
 			'tolfun_val']
 		value_list = [self.within_batch_counter_call, \
@@ -315,7 +315,7 @@ class MLEstimation(object):
 			self.mle_parameters.current_profile_lower_limit_list, \
 			self.mle_parameters.current_ms_grid_parameters, \
 			self.mle_parameters.current_logspace_profile_list,
-			self.output_path, self.mle_parameters.output_id_parameter, \
+			self.mle_parameters.output_id_parameter, \
 			self.mle_parameters.current_scaling_val_list, \
 			self.mle_parameters.current_x_tolerance, \
 			self.mle_parameters.current_fun_tolerance]
