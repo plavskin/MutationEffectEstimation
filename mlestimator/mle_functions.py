@@ -278,6 +278,8 @@ class MLEstimation(object):
 		self.additional_end_lines_in_job_sub = []
 			# don't include lines specific to matlab parallelization here
 		self._create_code_run_input()
+		self.initial_sub_time = cluster_parameters.current_time
+		self.initial_sub_mem = cluster_parameters.current_mem
 	def _generate_input_datafile_paths(self, input_data_folder):
 		self.input_datafile_paths = \
 			[os.path.join(input_data_folder, \
@@ -340,8 +342,8 @@ class MLEstimation(object):
 		job_name = self.job_name
 		job_numbers = [x + 1 for x in \
 			list(range(self.mle_parameters.current_profile_point_num))]
-		initial_time = self.cluster_parameters.current_time
-		initial_mem = self.cluster_parameters.current_mem
+		initial_time = self.initial_sub_time
+		initial_mem = self.initial_sub_mem
 			# initial_mem scaled for multiple parallel clusters at a later stage
 		cluster_parameters = self.cluster_parameters
 		output_folder = self.output_path
