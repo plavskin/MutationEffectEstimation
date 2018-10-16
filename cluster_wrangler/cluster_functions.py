@@ -978,6 +978,62 @@ class MatlabInputProcessor(object):
 			print(current_value)
 		return(converted_value)
 
+class CodeSubmitter(object):
+	'''
+	Class that combines inputs necessary for submission of jobs using
+	some external_function, and submits those jobs
+	'''
+	def __init__(self, cluster_parameters, cluster_folders, completefile, job_name, \
+		job_numbers, module, parallel_processors, experiment_folder, output_extension, code_name, \
+		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
+		initial_sub_time, initial_sub_mem, output_path, output_file_label):
+		self.cluster_parameters = copy.deepcopy(cluster_parameters)
+		self.cluster_folders = copy.deepcopy(cluster_folders)
+		self.parallel_processors = parallel_processors
+		# The following should likely be generated in the classes
+			# inheriting from CodeSubmitter and then passed to
+			# CodeSubmitter's __init__ method
+		self.completefile = completefile
+		self.job_name = job_name
+		self.job_numbers = job_numbers
+		self.module = module
+		self.output_extension = output_extension
+		self.code_name = code_name
+		self.additional_beginning_lines_in_job_sub = additional_beginning_lines_in_job_sub
+		self.additional_end_lines_in_job_sub = additional_end_lines_in_job_sub
+		self.initial_sub_time = initial_sub_time
+		self.initial_sub_mem = initial_sub_mem
+		self.output_path = output_path
+		self.output_file_label = output_file_label
+		self.experiment_folder = experiment_folder
+		self._create_code_run_input()
+	def get_completefile_path(self):
+		return(self.completefile)
+	def _create_code_run_input_lists():
+		'''
+		Creates list of keys and their values to be submitted to
+		external code being run
+		'''
+		self.key_list = []
+		self.value_list = []
+	def _create_code_run_input(self):
+		self._create_code_run_input_lists()
+		# process key_list and value_list into a submission string
+		submission_string_processor = \
+			cluster_functions.SubmissionStringProcessor(self.module, \
+				self.key_list, self.value_list, self.code_name)
+		self.code_run_input = submission_string_processor.get_code_run_input()
+	def run_job_submission(self):
+		# handles submission of the job
+		cluster_job_submission_folder = \
+			self.cluster_folders.get_path('cluster_job_submission_path')
+		# set up and run batch jobs
+		job_flow_handler(self.job_name, self.job_numbers, self.initial_sub_time, \
+			self.initial_sub_mem, self.cluster_parameters, self.output_path, self.output_extension, \
+			self.output_file_label, cluster_job_submission_folder, self.experiment_folder, \
+			self.module, self.code_run_input, self.additional_beginning_lines_in_job_sub, \
+			self.additional_end_lines_in_job_sub, self.parallel_processors, self.completefile)
+
 #######################################################
 def parse_setup_file(filename):
 	"""

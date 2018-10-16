@@ -244,132 +244,104 @@ class MLEParameters(object):
 		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
 		return(self.all_modes_complete)
 
-class MLEstimation(object):
+class MLEstimation(cluster_functions.CodeSubmitter):
+	'''
+	Submits info to cluster_wrangler.cluster_functions.job_flow_handler
+	to run matlab code that performs Maximum Likelihood Estimation
+	'''
 	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
 		mle_folders, additional_code_run_keys, additional_code_run_values, \
 		input_data_folder):
 		self.mle_parameters = copy.deepcopy(mle_parameters)
-		self.cluster_parameters = copy.deepcopy(cluster_parameters)
-		self.cluster_folders = copy.deepcopy(cluster_folders)
-		self.mle_folders = copy.deepcopy(mle_folders)
-		self.completefile = \
+		experiment_folder = mle_folders.get_path('experiment_path')
+		completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['MLE',mle_parameters.output_id_parameter, \
 					'completefile.txt']))
-		self.job_name = '-'.join([mle_folders.get_experiment_folder_name,'MLE', \
+		job_name = '-'.join([mle_folders.get_experiment_folder_name,'MLE', \
 			mle_parameters.output_id_parameter])
-		self.additional_code_run_keys = additional_code_run_keys
-		self.additional_code_run_values = additional_code_run_values
-		self.input_datafile_keys = mle_parameters.input_datafile_keys
-		self._generate_input_datafile_paths(input_data_folder)
+		job_numbers = [x + 1 for x in \
+			list(range(mle_parameters.current_profile_point_num))]
+		module = 'matlab'
+		parallel_processors = mle_parameters.current_parallel_processors
+		output_extension = 'csv'
+		code_name = '_'.join(['MLE',mle_parameters.current_mode])
+		additional_beginning_lines_in_job_sub = []
+		additional_end_lines_in_job_sub = []
+		initial_sub_time = cluster_parameters.current_time
+		initial_sub_mem = cluster_parameters.current_mem
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()
-		self.output_path = mle_folders.get_path('current_output_subfolder')
-		self.output_filename = generate_filename(self.output_path, \
-			self.within_batch_counter_call, mle_parameters.output_identifier, \
-			mle_parameters.current_fixed_parameter, 'data')
-		self.output_file_label = generate_file_label('data', \
+		output_path = mle_folders.get_path('current_output_subfolder')
+		output_file_label = generate_file_label('data', \
 			mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter)
-		self.module = 'matlab'
-		self.output_extension = 'csv'
-		self.code_name = '_'.join(['MLE',mle_parameters.current_mode])
-		self.additional_beginning_lines_in_job_sub = []
-		self.additional_end_lines_in_job_sub = []
-			# don't include lines specific to matlab parallelization here
-		self._create_code_run_input()
-		self.initial_sub_time = cluster_parameters.current_time
-		self.initial_sub_mem = cluster_parameters.current_mem
-	def _generate_input_datafile_paths(self, input_data_folder):
+		self.output_filename = generate_filename(output_path, \
+			self.within_batch_counter_call, mle_parameters.output_identifier, \
+			mle_parameters.current_fixed_parameter, 'data')
+		# set up input_datafile_keys and input_datafile_paths
+			# attributes, which will be used by
+			# _create_code_run_input_lists
+		self.input_datafile_keys = mle_parameters.input_datafile_keys
 		self.input_datafile_paths = \
 			[os.path.join(input_data_folder, \
-				current_input_datafile for current_input_datafile in \
-				self.mle_parameters.input_datafile_values)]
-	def get_output_path(self):
-		return(self.output_path)
-	def get_completefile_path(self):
-		return(self.completefile)
+				current_input_datafile) for current_input_datafile in \
+				mle_parameters.input_datafile_values]
+		# run __init__ from parent class, which in turn runs
+			# _create_code_run_input_lists
+		super(cluster_wrangler.cluster_functions.CodeSubmitter, \
+			self).__init__(cluster_parameters, \
+			cluster_folders, completefile, job_name, \
+			job_numbers, module, parallel_processors, \
+			experiment_folder, output_extension, code_name, \
+			additional_beginning_lines_in_job_sub, \
+			additional_end_lines_in_job_sub, initial_sub_time, \
+			initial_sub_mem, output_path, output_file_label)
 	def _create_code_run_input_lists():
 		'''
 		Creates list of keys and their values to be submitted to
 		external code being run
 		'''
-		key_list = ['external_counter','combined_fixed_parameter_array', \
-			'combined_min_array','combined_max_array','combined_length_array', \
-			'combined_position_array','combined_start_values_array', \
-			'parameter_list','output_file', \
-			'parallel_processors','ms_positions','combined_profile_ub_array', \
-			'combined_profile_lb_array','ms_grid_parameter_array', \
-			'combined_logspace_parameters', \
-			'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
-			'tolfun_val']
-		value_list = [self.within_batch_counter_call, \
-			self.mle_parameters.current_tempfixed_parameter_bool, \
-			self.mle_parameters.current_min_parameter_val_list, \
-			self.mle_parameters.current_max_parameter_val_list, \
-			self.mle_parameters.current_profile_point_list, \
-			[self.within_batch_counter_call], \
-				# if combined_position_array has length=1, MLE programs
-					# interpret it as an array of the correct length
-					# with the same value repeated
-			self.mle_parameters.current_start_parameter_val_list, \
-			self.mle_parameters.current_parameter_list, \
-			self.output_filename, \
-			self.mle_parameters.current_parallel_processors, \
-			self.mle_parameters.current_ms_positions, \
-			self.mle_parameters.current_profile_upper_limit_list, \
-			self.mle_parameters.current_profile_lower_limit_list, \
-			self.mle_parameters.current_ms_grid_parameters, \
-			self.mle_parameters.current_logspace_profile_list,
-			self.mle_parameters.output_id_parameter, \
-			self.mle_parameters.current_scaling_val_list, \
-			self.mle_parameters.current_x_tolerance, \
-			self.mle_parameters.current_fun_tolerance]
-	def _create_code_run_input(self):
-		self._create_code_run_input_lists()
-		# take values from self.additional_code_run_keys and
-			# self.additional_code_run_values where
-			# self.additional_code_run_keys isn't already in key_list,
-			# and add remaining values to key_list and value_list
-		keys_to_add = self.additional_code_run_keys + self.input_datafile_keys
-		vals_to_add = self.additional_code_run_values + \
-			self.input_datafile_paths
-		for current_key, current_val in zip(keys_to_add, vals_to_add):
-			if not current_key in key_list:
-				key_list.append(current_key)
-				value_list.append(current_val)
-		# process key_list and value_list into a submission string
-		submission_string_processor = \
-			cluster_functions.SubmissionStringProcessor(self.module, key_list, value_list, \
-				self.code_name)
-		self.code_run_input = submission_string_processor.get_code_run_input()
-	def run_job_submission(self):
-		# handles submission of the job
-		job_name = self.job_name
-		job_numbers = [x + 1 for x in \
-			list(range(self.mle_parameters.current_profile_point_num))]
-		initial_time = self.initial_sub_time
-		initial_mem = self.initial_sub_mem
-			# initial_mem scaled for multiple parallel clusters at a later stage
-		cluster_parameters = self.cluster_parameters
-		output_folder = self.output_path
-		output_extension = self.output_extension
-		output_file_label = self.output_file_label
-		cluster_job_submission_folder = \
-			self.cluster_folders.get_path('cluster_job_submission_path')
-		experiment_folder = self.mle_folders.get_path('experiment_path')
-		module = self.module
-		code_run_input = self.code_run_input
-		additional_beginning_lines_in_job_sub = self.additional_beginning_lines_in_job_sub
-		additional_end_lines_in_job_sub = self.additional_end_lines_in_job_sub
-		parallel_processors = self.mle_parameters.current_parallel_processors
-		completefile_path = self.completefile
-		# set up and run batch jobs
-		cluster_functions.job_flow_handler(job_name, job_numbers, initial_time, \
-			initial_mem, cluster_parameters, output_folder, output_extension, \
-			output_file_label, cluster_job_submission_folder, experiment_folder, \
-			module, code_run_input, additional_beginning_lines_in_job_sub, \
-			additional_end_lines_in_job_sub, parallel_processors, completefile_path)
+		if (len(self.input_datafile_keys) == len(self.input_datafile_paths)) \
+			and (len(self.additional_code_run_keys) == \
+			len(self.additional_code_run_values)):
+			key_list = ['external_counter','combined_fixed_parameter_array', \
+				'combined_min_array','combined_max_array','combined_length_array', \
+				'combined_position_array','combined_start_values_array', \
+				'parameter_list','output_file', \
+				'parallel_processors','ms_positions','combined_profile_ub_array', \
+				'combined_profile_lb_array','ms_grid_parameter_array', \
+				'combined_logspace_parameters', \
+				'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
+				'tolfun_val'] + self.input_datafile_keys + \
+				self.additional_code_run_keys
+			value_list = [self.within_batch_counter_call, \
+				self.mle_parameters.current_tempfixed_parameter_bool, \
+				self.mle_parameters.current_min_parameter_val_list, \
+				self.mle_parameters.current_max_parameter_val_list, \
+				self.mle_parameters.current_profile_point_list, \
+				[self.within_batch_counter_call], \
+					# if combined_position_array has length=1, MLE programs
+						# interpret it as an array of the correct length
+						# with the same value repeated
+				self.mle_parameters.current_start_parameter_val_list, \
+				self.mle_parameters.current_parameter_list, \
+				self.output_filename, \
+				self.mle_parameters.current_parallel_processors, \
+				self.mle_parameters.current_ms_positions, \
+				self.mle_parameters.current_profile_upper_limit_list, \
+				self.mle_parameters.current_profile_lower_limit_list, \
+				self.mle_parameters.current_ms_grid_parameters, \
+				self.mle_parameters.current_logspace_profile_list,
+				self.mle_parameters.output_id_parameter, \
+				self.mle_parameters.current_scaling_val_list, \
+				self.mle_parameters.current_x_tolerance, \
+				self.mle_parameters.current_fun_tolerance] + \
+				self.input_datafile_paths + self.additional_code_run_values
+		else:
+			raise RuntimeError('input_datafile_paths or ' + \
+				'additional_code_run_values is not the same length as its ' + \
+				'corresponding list of keys in MLEstimation class!')
 
 class LLHolder(object):
 	'''
