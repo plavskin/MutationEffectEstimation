@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import warnings as war
 import mle_functions
+from mlestimator import mle_filenaming_functions
 from cluster_wrangler.cluster_functions import CompletenessTracker
 import copy
 war.filterwarnings("ignore", message="numpy.dtype size changed")
@@ -33,7 +34,6 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 #####################################################################
 class SimFolders(object):
 	pass()
-	# needs to have a get_experiment_path method, as MLEFolders does
 	# needs to have all the same folder types as MLEFolders does
 	# also needs:
 	#	current_sim_folder
@@ -57,14 +57,33 @@ class SimParameters(mle_functions.MLEParameters):
 	'''
 	def __init__(self, parameter_list):
 		super(mle_functions.MLEParameters, self).__init__(parameter_list)
+		self.original_input_datafile_values = self.input_datafile_values
+		# delete self.input_datafile_values so that they can't be passed
+			# to downstream code without setting the sim first
+		del self.input_datafile_values
+		#### ??? ####
+		# Need to ensure setup files have all these parameters below
+		#### ??? ####
 		self.sim_CI_parameters_by_mode = \
 			parameter_list["sim_CI_parameters_by_mode"]
 		self.simulation_repeats_by_mode = \
 			parameter_list["simulation_repeats_by_mode"]
+		self.sim_time = parameter_list["sim_time"]
+		self.sim_mem = parameter_list["sim_mem"]
 		# reset profile_points_by_mode to number of sim repeats by mode
 		self.profile_points_by_mode = self.simulation_repeats_by_mode
 		# set default parameter_to_select for looping over parameters
 		self.parameter_to_select = 'unfixed'
+	def set_sim(self, sim_key):
+		'''
+		Sets names of input datafiles to retrieve sim data from
+		'''
+		self.sim_key = sim_key
+		self.input_datafile_values = []
+		for current_input_datafile_name in self.original_input_datafile_values:
+			new_input_datafile_val = generate_sim_file_label(sim_key, \
+				current_input_datafile_name)
+			self.input_datafile_values.append(new_input_datafile_val)
 	def set_mode(self, mode_name, output_identifier):
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_sim_rep_num = self.simulation_repeats_by_mode[mode_idx]
@@ -378,6 +397,8 @@ class SimPreparer(object):
 				# number; fixed parameter will be added to filenames
 				# by SimParameters, and sim number will be added in MLE
 		self.sim_key = self.hypothesis_testing_info.get_sim_key()
+#		self.within_batch_counter_call = \
+#			cluster_parameters.get_batch_counter_call()
 		self.sim_parameters = copy.deepcopy(sim_parameters)
 		self.sim_folders = sim_folders
 		self.cluster_parameters = cluster_parameters
@@ -392,8 +413,10 @@ class SimPreparer(object):
 		self._set_up_sim_parameters()
 	def _set_up_sim_parameters(self):
 		'''
-		Uses info in self.hypothesis_testing_info to respecify
-		SimParameters object for hypothesis testing
+		Creates a dictionary with a SimParameters object corresponding
+		to each hypothesis in hypothesis_testing_info; respecifies
+		SimParameters object for hypothesis testing, and sets its sim,
+		mode, and fixed_param
 		'''
 		# It's important to keep sim_parameters object as attribute of
 			# LRCalculator so that the objects can be modified to keep
@@ -409,6 +432,13 @@ class SimPreparer(object):
 				self.hypothesis_testing_info.get_starting_param_vals(current_Hnum)
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
+			# set sim, mode, fixed_param for current_sim_params
+			current_h_key = self.hypothesis_testing_info.get_hypothesis_key(Hnum)
+			current_output_id = '_'.join([self.output_id_sim, Hnum, \
+				str(current_h_key)])
+			current_sim_parameters.set_sim(self.sim_key)
+			current_sim_parameters.set_mode(current_mode, current_output_id)
+			current_sim_parameters.set_parameter(current_fixed_param)
 			self.sim_param_dict[current_Hnum] = current_sim_params
 
 class LLRCalculator(SimPreparer):
@@ -451,10 +481,12 @@ class LLRCalculator(SimPreparer):
 		# run MLE; completeness of current_sim_parameters will
 			# automatically be updated
 		include_unfixed_parameter = False
+		input_data_folder = self.sim_folders.get_path('current_sim_folder')
 		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
 			self.cluster_folders, self.sim_folders, self.datafile_keys, \
 			self.datafile_values, self.additional_code_run_keys, \
-			self.additional_code_run_values, include_unfixed_parameter)
+			self.additional_code_run_values, include_unfixed_parameter, \
+			input_data_folder)
 	def _compile_LL_list(self, Hnum, current_sim_parameters):
 		'''
 		Compiles and writes LL_list for each hypothesis
@@ -474,11 +506,7 @@ class LLRCalculator(SimPreparer):
 		runs MLE and, once that is complete, compiles LL_list for
 		hypothesis
 		'''
-		current_mode = self.hypothesis_testing_info.get_mode(Hnum)
-		current_h_key = self.hypothesis_testing_info.get_hypothesis_key(Hnum)
-		current_output_id = '_'.join([self.output_id_sim, Hnum, str(current_h_key)])
 		current_sim_parameters = self.sim_param_dict[Hnum]
-		current_sim_parameters.set_mode(current_mode, current_output_id)
 		self._run_MLE(current_sim_parameters)
 		mle_complete = current_sim_parameters.check_completeness_within_mode()
 		if mle_complete:
@@ -522,9 +550,95 @@ class LLRCalculator(SimPreparer):
 	def get_LL(self, Hnum):
 		return(self.LL_list_dict[Hnum])
 
+class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
+	'''
+	Submits info to cluster_wrangler.cluster_functions.job_flow_handler
+	to run matlab code that performs simulations based on original input
+	data
+	'''
+	def __init__(self, sim_parameters, cluster_parameters, cluster_folders, \
+		sim_folders, additional_code_run_keys, additional_code_run_values):
+		self.sim_parameters = copy.deepcopy(sim_parameters)
+		experiment_folder = sim_folders.get_path('experiment_path')
+		completefile = \
+			os.path.join(cluster_folders.get_path('completefile_path'), \
+				'_'.join(['sim',str(sim_parameters.sim_key), \
+					'completefile.txt']))
+		job_name = '-'.join(sim_folders.get_experiment_folder_name, \
+			'sim', str(sim_parameters.sim_key))
+		job_numbers = [x + 1 for x in \
+			list(range(sim_parameters.current_profile_point_num))]
+		module = 'matlab'
+		parallel_processors = 1
+		output_extension = 'csv'
+		code_name = '_'.join(['sim',sim_parameters.current_mode])
+		additional_beginning_lines_in_job_sub = []
+		additional_end_lines_in_job_sub = []
+		initial_sub_time = sim_parameters.sim_time
+		initial_sub_mem = sim_parameters.sim_mem
+		# need to set an output_file_label for the
+			# purposes of tracking job completion
+		# use last file in sim_parameters.input_datafile_values
+		sim_output_path = sim_folders.get_path('current_sim_folder')
+		output_file_label = sim_parameters.input_datafile_values[-1]
+		self.within_batch_counter_call = \
+			cluster_parameters.get_batch_counter_call()
+		# set up input_datafile_keys and input_datafile_paths
+			# attributes, which will be used by
+			# _create_code_run_input_lists
+		self.input_datafile_keys = sim_parameters.input_datafile_keys
+		self.input_datafile_paths = \
+			[generate_sim_filename(sim_output_path, \
+				self.within_batch_counter_call, current_input_datafile) \
+				for current_input_datafile in \
+				sim_parameters.input_datafile_values]
+		# Need to add original data and also include that in code input
+		self.original_input_datafile_keys = ['original_' + current_key for \
+			current_key in sim_parameters.input_datafile_keys]
+		self.original_input_datafile_paths = \
+			[generate_sim_filename(sim_output_path, \
+				self.within_batch_counter_call, \
+				generate_sim_file_label('original', current_input_datafile)) \
+				for current_input_datafile in \
+				sim_parameters.original_input_datafile_values]
+		# run __init__ from parent class, which in turn runs
+			# _create_code_run_input_lists
+		super(cluster_wrangler.cluster_functions.CodeSubmitter, \
+			self).__init__(cluster_parameters, \
+			cluster_folders, completefile, job_name, \
+			job_numbers, module, parallel_processors, \
+			experiment_folder, output_extension, code_name, \
+			additional_beginning_lines_in_job_sub, \
+			additional_end_lines_in_job_sub, initial_sub_time, \
+			initial_sub_mem, sim_output_path, output_file_label)
+	def _create_code_run_input_lists(self):
+		'''
+		Creates list of keys and their values to be submitted to
+		external code being run
+		'''
+		if (len(self.original_input_datafile_keys) == \
+			len(self.original_input_datafile_paths)) and \
+			(len(self.input_datafile_keys) == len(self.input_datafile_paths)) \
+				and (len(self.additional_code_run_keys) == \
+				len(self.additional_code_run_values)):
+			self.key_list = ['external_counter','combined_start_values_array', \
+				'parameter_list'] + self.original_input_datafile_keys + \
+				self.input_datafile_keys + self.additional_code_run_keys
+			self.value_list = [self.within_batch_counter_call, \
+				self.sim_parameters.current_start_parameter_val_list, \
+				self.sim_parameters.current_parameter_list] + \
+				self.original_input_datafile_paths + self.input_datafile_paths \
+				+ self.additional_code_run_values
+		else:
+			raise RuntimeError('original_input_datafile_paths, ' + \
+				'input_datafile_paths, or additional_code_run_values is not' + \
+				' the same length as its corresponding list of keys in ' + \
+				'Simulator class!')
+
 class SimRunner(SimPreparer):
 	'''
-	Runs simulations
+	Runs simulations with parameters corresponding to H0 hypothesis in
+	hypothesis_testing_info
 	'''
 	def __init__(self, output_id_sim, sim_parameters, hypothesis_testing_info, \
 		cluster_parameters, cluster_folders, sim_folders, additional_code_run_keys, \
@@ -535,11 +649,31 @@ class SimRunner(SimPreparer):
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, datafile_keys, datafile_values, \
 			additional_code_run_keys, additional_code_run_values)
-		self.sim_completeness_tracker = CompletenessTracker(self.hypothesis_list)
-	def submit_sims(self):
-
-	# Base on run_MLE function
-	# Need Simulation class based on MLEstimation
+		self.sim_completeness = False
+	def submit_sim(self):
+		'''
+		Submits code to run sim with parameters corresponding to H0
+		'''
+		H0_sim_parameters = self.sim_param_dict['H0']
+		# create Simulator object
+		simulator = Simulator(H0_sim_parameters, \
+			self.cluster_parameters, self.cluster_folders, \
+			self.sim_folders, additional_code_run_keys, \
+			additional_code_run_values)
+		# submit and track current set of jobs
+		simulator.run_job_submission()
+		# track completeness within current mode
+		sim_completefile = simulator.get_completefile_path()
+		current_sim_parameters.update_parameter_completeness(sim_completefile)
+		# if all parameters for this mode are complete, update mode completeness
+		# this also updates completeness across modes
+		self.sim_completeness = \
+			current_sim_parameters.check_completeness_within_mode()
+	def get_sim_completeness(self):
+		'''
+		Returns bool of whether or not all sim jobs have run
+		'''
+		return(self.sim_completeness)
 
 
 
@@ -676,6 +810,18 @@ class FixedPointPvalCalculator(object):
 		Runs simulations based on parameters in
 		current_hypothesis_testing_info
 		'''
+		current_sim_key = current_hypothesis_testing_info.get_sim_key()
+		if current_sim_key is 'original':
+
+
+
+
+		SimRunner(output_id_sim, sim_parameters, hypothesis_testing_info, \
+		cluster_parameters, cluster_folders, sim_folders, additional_code_run_keys, \
+		additional_code_run_values)
+		# when 'running' original sim (i.e. duplicating initial files), need to set number of sim reps to 1 somehow, or replace within_batch_counter with str(1)
+		# remember that sim only needs to be run with H0 mode
+
 	def _run_LLR_calc(self, current_hypothesis_testing_info, \
 		current_completeness_tracker):
 		'''
@@ -724,3 +870,14 @@ class FixedPointIdentifier(object):
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointPvalCalculator on the two models
 #####################################################################
+
+def generate_sim_file_label(sim_key, input_datafile_name):
+	sim_file_label = \
+		mle_filenaming_functions.generate_file_label('sim', str(sim_key), \
+			input_datafile_name)
+	return(sim_file_label)
+
+def generate_sim_filename(sim_file_path, within_batch_counter_call, sim_file_label):
+	sim_file = '_'.join([sim_file_label, within_batch_counter_call]) + '.csv'
+	sim_filename = os.path.join(sim_file_path, sim_file)
+	return(sim_filename)
