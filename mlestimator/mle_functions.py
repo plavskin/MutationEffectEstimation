@@ -73,7 +73,6 @@ class MLEParameters(object):
 		self.input_datafile_keys = parameter_list["input_datafile_keys"]
 		self.input_datafile_values = parameter_list["input_datafile_values"]
 		self.runtime_percentile = parameter_list["runtime_percentile"]
-		self.input_datafile_keys = parameter_list["input_datafile_keys"]
 		self.CI_pval_by_mode = parameter_list['CI_pval_by_mode']
 #		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
 		self.profile_points_by_mode = parameter_list["profile_points_by_mode"]
