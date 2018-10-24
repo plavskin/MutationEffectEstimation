@@ -357,33 +357,6 @@ class HypothesisTestingInfo(object):
 	def get_hypotheses(self):
 		return(self.hypotheses)
 
-#####################################################################
-# Pipeline for sim-LRT-based p-val
-
-# Inputs:
-# optimal_param_vector is fixed_param_mle
-# fixed_parameter_indices include parameter for which LRT is being calculated (just as in asymptotic search)
-# original_LL - likelihood value at MLE
-# sim_number
-# cutoff_pval
-# parameter lower and upper bounds
-# idealized_cutoff - x-val of asymptotic CI bound
-
-# ID 3 points at which to find LRs--maybe, 2*(idealized_cutoff-optimal_param_vector(current_param))?
-#	- one option is to ID these points stepwise: i.e. first try asymptotic bound, then go from there
-#		- example flow:
-#			a. measure LR p-val at asymptotic value
-#			b. use this value and x-position of MLE to approximate a normal(? or t?) distribution,
-#				and find second x-val to try based on where desired p-val would be on that distribution
-#			c. Linear interpolate between the p-vals and x-vals measured so far to ID a third x-position to try
-#			d. Quad-fit the 3 values
-#		The problem with this approach is if the initial values randomly happen to go in wrong directions
-#		(i.e. p-val increases, not decreases, with x-distance from optimum), linear interpolation will take
-#		next value further from target
-#		However, this could either be explicitly dealt with, or it could be assumed that if this happens, all
-#		values are close enough together and to target for exact x-values to not matter much
-#		Also need to deal with what to do when p-val at both points is identical...
-
 class SimPreparer(object):
 	'''
 	Parent class for classes that run through hypotheses in a
@@ -713,11 +686,11 @@ class SimRunner(SimPreparer):
 		'''
 		return(self.sim_completeness)
 
-class FixedPointPvalCalculator(object):
+class FixedPointCDFvalCalculator(object):
 	'''
-	Performs simulations and MLEs to calculate p-val given parameters in
-	hypothesis_testing_info
-	To calculate p-val at a given point:
+	Performs simulations and MLEs to calculate cumulative density
+	function val given parameters in hypothesis_testing_info
+	To calculate cdf val at a given point:
 		1. 	a.	Calculate H1: the hypothesis with the higher number of
 				degrees of freedom; for comparisons of hypothesis in one
 				of which a parameter is set to a predetermined value,
@@ -726,8 +699,8 @@ class FixedPointPvalCalculator(object):
 			b.	Calculate H0: the hypothesis with the lower number of
 				degrees of freedom; LL at fixed point in parameter space
 			c. 	'original' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
-				(actually to make the p-vals easier to understand, it's
-				easier to work with the deviance, -2*LLR)
+				(actually to make the cdf vals easier to understand,
+				it's easier to work with the deviance, -2*LLR)
 			d. 	MLE parameter values for all parameters estimated in (b)
 				will be used as sim starting values!
 		2. 	Run sim_number simulations using starting parameter values
@@ -757,7 +730,7 @@ class FixedPointPvalCalculator(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
-		self.pval_calc_complete = False
+		self.cdf_val_calc_complete = False
 	def _get_starting_params(self, Hnum):
 		self.sim_parameters.set_mode(self.mode_dict[Hnum])
 		self.sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
@@ -894,7 +867,7 @@ class FixedPointPvalCalculator(object):
 			if current_completeness_tracker.get_key_completeness('sim'):
 				self._run_LLR_calc(current_hypothesis_testing_info, \
 					current_completeness_tracker)
-	def _calculate_p_val(self):
+	def _calculate_cdf_val(self):
 		'''
 		Calculates proportion of sim data deviances above deviance of
 		original data
@@ -909,18 +882,19 @@ class FixedPointPvalCalculator(object):
 			(len(self.original_deviance_array) is 0) or \
 			np.all(np.isnan(self.original_deviance_array)) or \
 			np.all(np.isnan(sim_deviance_array)):
-			self.pval = np.nan
+			self.cdf_val = np.nan
 		else:
 			original_deviance = self.original_deviance_array[0]
 			num_sim_deviances_above_original_deviance = \
 				sum(np.greater(original_deviance, sim_deviance_array))
 			num_sim_deviances = sum(~np.isnan(sim_deviance_array))
-			self.pval = \
+			self.cdf_val = \
 				num_sim_deviances_above_original_deviance/num_sim_deviances
-		self.pval_calc_complete = True
-	def run_fixed_pt_pval_estimation(self):
+		self.cdf_val_calc_complete = True
+	def run_fixed_pt_cdf_val_estimation(self):
 		'''
-		Determine the p-val of the hypothesis comparison being performed
+		Determine the cumulative density function val of the hypothesis
+		comparison being performed
 		If MLE on original data for one of the hypotheses fails, returns
 		NaN
 		'''
@@ -935,7 +909,7 @@ class FixedPointPvalCalculator(object):
 				self.llr_calculator_dict['original'].get_deviances()
 			if (len(self.original_deviance_array) is 0) or \
 				np.all(np.isnan(self.original_deviance_array)):
-				self.pval = np.nan
+				self.cdf_val = np.nan
 				self.completeness_tracker_dict['simulated'].switch_key_completeness('sim', True)
 				self.completeness_tracker_dict['simulated'].switch_key_completeness('LLR', True)
 			else:
@@ -944,29 +918,70 @@ class FixedPointPvalCalculator(object):
 				simulated_completeness = \
 					self.completeness_tracker_dict['simulated'].get_completeness()
 				if simulated_completeness:
-					self._calculate_p_val()
-	def get_pval_completeness(self):
-		return(self.pval_calc_complete)
-	def get_pval(self):
-		return(self.pval)
+					self._calculate_cdf_val()
+	def get_cdf_val_completeness(self):
+		return(self.cdf_val_calc_complete)
+	def get_cdf_val(self):
+		return(self.cdf_val)
+
+#####################################################################
+# Pipeline for sim-LRT-based p-val
+
+# Inputs:
+# optimal_param_vector is fixed_param_mle
+# fixed_parameter_indices include parameter for which LRT is being calculated (just as in asymptotic search)
+# original_LL - likelihood value at MLE
+# sim_number
+# cutoff_pval
+# parameter lower and upper bounds
+# idealized_cutoff - x-val of asymptotic CI bound
+
+# ID 3 points at which to find LRs--maybe, 2*(idealized_cutoff-optimal_param_vector(current_param))?
+#	- one option is to ID these points stepwise: i.e. first try asymptotic bound, then go from there
+#		- example flow:
+#			a. measure LR p-val at asymptotic value
+#			b. use this value and x-position of MLE to approximate a normal(? or t?) distribution,
+#				and find second x-val to try based on where desired p-val would be on that distribution
+#			c. Linear interpolate between the p-vals and x-vals measured so far to ID a third x-position to try
+#			d. Quad-fit the 3 values
+#		The problem with this approach is if the initial values randomly happen to go in wrong directions
+#		(i.e. p-val increases, not decreases, with x-distance from optimum), linear interpolation will take
+#		next value further from target
+#		However, this could either be explicitly dealt with, or it could be assumed that if this happens, all
+#		values are close enough together and to target for exact x-values to not matter much
+#		Also need to deal with what to do when p-val at both points is identical...
 
 class FixedPointIdentifier(object):
 	'''
-	To determine which point to calculate p-vals at:
-		1. 	Calculate p-val at asymptotic CI value
-		2. 	Taking p-val from (1) as a p-val on a normal curve,
+
+	To determine which point to calculate cumulative density vals at:
+		1. 	Calculate cdf val at asymptotic CI value
+		2. 	Taking cdf val from (1) as a cdf val on a normal curve,
 			determine at which point on fixed parameter axis
-			1/2*(target p-val) would be, and calculate the p-val at
+			1/2*(target cdf val) would be, and calculate the cdf val at
 			that point
-		3. 	a. 	If point (2) has a lower empirical p-val than the target
-				p-val, interpolate between points (2) and (1) to id the
-				best candidate for the target p-val
-			b. 	If point (2) has a higher empirical p-val than the
-				target p-val, determine at which point on the fixed
-				parameter axis 1/4*(target p-val) would be, taking the
-				p-val from (2) as a p-val on a normal curve, and
-				calculate the p-val at that point
+		3. 	a. 	If point (2) has a lower empirical cdf val than the
+				target cdf val, interpolate between points (2) and (1)
+				to id the best candidate for the target cdf val
+			b. 	If point (2) has a higher empirical cdf val than the
+				target cdf val, determine at which point on the fixed
+				parameter axis 1/4*(target cdf val) would be, taking the
+				cdf val from (2) as a cdf val on a normal curve, and
+				calculate the cdf val at that point
 	'''
+	def __init__(self, asymptotic_CI_val):
+		self.mode_dict = 
+
+
+
+
+	def _run_fixed_pt_calc(self, current_fixed_param_dict):
+		fixed_point_pval_calc = FixedPointPvalCalculator(self.mode_dict, \
+			fixed_param_dict, fixed_param_val_dict, sim_parameters, \
+			hypothesis_key_organizer, sim_folders, sim_key_organizer, \
+			mode_dict, fixed_param_dict, fixed_param_val_dict, \
+			additional_code_run_keys, additional_code_run_values, output_id_prefix)
+
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointPvalCalculator on the two models
 #####################################################################
