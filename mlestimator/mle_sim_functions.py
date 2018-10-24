@@ -9,6 +9,7 @@ import mle_functions
 from mlestimator import mle_filenaming_functions
 from cluster_wrangler.cluster_functions import CompletenessTracker
 import copy
+from shutil import copyfile
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
@@ -57,7 +58,7 @@ class SimParameters(mle_functions.MLEParameters):
 	'''
 	def __init__(self, parameter_list):
 		super(mle_functions.MLEParameters, self).__init__(parameter_list)
-		self.original_input_datafile_values = self.input_datafile_values
+		self.unmod_input_datafile_values = self.input_datafile_values
 		# delete self.input_datafile_values so that they can't be passed
 			# to downstream code without setting the sim first
 		del self.input_datafile_values
@@ -80,7 +81,7 @@ class SimParameters(mle_functions.MLEParameters):
 		'''
 		self.sim_key = sim_key
 		self.input_datafile_values = []
-		for current_input_datafile_name in self.original_input_datafile_values:
+		for current_input_datafile_name in self.unmod_input_datafile_values:
 			new_input_datafile_val = generate_sim_file_label(sim_key, \
 				current_input_datafile_name)
 			self.input_datafile_values.append(new_input_datafile_val)
@@ -389,22 +390,20 @@ class SimPreparer(object):
 	HypothesisTestingInfo class object and perform some actions (e.g.
 	LLRCalculator, SimRunner)
 	'''
-	def __init__(self, output_id_sim, sim_parameters, hypothesis_testing_info, \
-		cluster_parameters, cluster_folders, sim_folders, datafile_keys, datafile_values, 
+	def __init__(self, output_id_prefix, sim_parameters, hypothesis_testing_info, \
+		cluster_parameters, cluster_folders, sim_folders, 
 		additional_code_run_keys, additional_code_run_values):
-		self.output_id_sim = output_id_sim
+		self.sim_key = self.hypothesis_testing_info.get_sim_key()
+		self.output_id_sim = output_id_sim + str(self.sim_key)
 			# output_id_sim needs to include sim key but not sim
 				# number; fixed parameter will be added to filenames
 				# by SimParameters, and sim number will be added in MLE
-		self.sim_key = self.hypothesis_testing_info.get_sim_key()
 #		self.within_batch_counter_call = \
 #			cluster_parameters.get_batch_counter_call()
 		self.sim_parameters = copy.deepcopy(sim_parameters)
 		self.sim_folders = sim_folders
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
-		self.datafile_keys = datafile_keys
-		self.datafile_values = datafile_values
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.sim_datafile_path = sim_folders.get_path('current_sim_output_path')
@@ -448,21 +447,22 @@ class LLRCalculator(SimPreparer):
 			estimated)
 		2. Calculates H0: LL at fixed_param_val
 		3. Calculates LL(H0)-LL(H1)
+		4. Calculates Deviance as -2*LLR
 	'''
-	def __init__(self, output_id_sim, \
+	def __init__(self, output_id_prefix, \
 		sim_parameters, hypothesis_testing_info, cluster_parameters, \
-		cluster_folders, sim_folders, datafile_keys, datafile_values, \
-		additional_code_run_keys, additional_code_run_values):
-		super(SimPreparer, self).__init__(output_id_sim, sim_parameters, \
+		cluster_folders, sim_folders, additional_code_run_keys, \
+		additional_code_run_values):
+		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
-			sim_folders, datafile_keys, datafile_values, \
-			additional_code_run_keys, additional_code_run_values)
+			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self._generate_LLR_filename()
 		self.LL_list_dict = dict()
 		# create CompletenessTracker object to track whether each LL
 			# list is complete
 		self.LL_list_completeness_tracker = \
 			CompletenessTracker(self.hypothesis_list)
+		self.llr_completeness = False
 	def _generate_LLR_filename(self):
 		''' Generates name for combined LLR file '''
 		hypothesis_key_string = ''
@@ -483,8 +483,7 @@ class LLRCalculator(SimPreparer):
 		include_unfixed_parameter = False
 		input_data_folder = self.sim_folders.get_path('current_sim_folder')
 		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
-			self.cluster_folders, self.sim_folders, self.datafile_keys, \
-			self.datafile_values, self.additional_code_run_keys, \
+			self.cluster_folders, self.sim_folders, self.additional_code_run_keys, \
 			self.additional_code_run_values, include_unfixed_parameter, \
 			input_data_folder)
 	def _compile_LL_list(self, Hnum, current_sim_parameters):
@@ -531,7 +530,9 @@ class LLRCalculator(SimPreparer):
 			abbreviated_LL_df_dict['H1'], how='outer', left_on = 'point_num', \
 			right_on = 'point_num', suffixes = (['_H0','_H1']))
 		self.LLR_df['LLR'] = self.LLR_df['LL_H0'] - self.LLR_df['LL_H1']
+		self.LLR_df['deviance'] = -2 * self.LLR_df['LLR']
 		self.LLR_df.to_csv(path_or_buf = self.LLR_file)
+		self.llr_completeness = True
 	def run_LLR(self):
 		'''
 		Runs through steps to submit MLE jobs on simulations, compile
@@ -545,8 +546,22 @@ class LLRCalculator(SimPreparer):
 			self._calculate_LLR()
 	def get_LLR_filepath(self):
 		return(self.LLR_file)
-	def get_LLRs(self):
-		return(self.LLR_df['LLR'])
+	def get_LLR_completeness:
+		return(self.llr_completeness)
+	def get_deviances(self):
+		'''
+		If llr calculation has been completed, returns np array of
+		values in deviance column of self.LLR_df (unless self.LLR_df is
+		empty, in which an np array with a single NaN value is returned)
+		'''
+		if self.llr_completeness:
+			if self.LLR_df.empty:
+				return(np.array(np.nan))
+			else:
+				return(self.LLR_df['deviance'].values)
+		else:
+			raise RuntimeError('Requestion LLR values before LLR ' + \
+				'calculation has been completed')
 	def get_LL(self, Hnum):
 		return(self.LL_list_dict[Hnum])
 
@@ -596,8 +611,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		self.original_input_datafile_keys = ['original_' + current_key for \
 			current_key in sim_parameters.input_datafile_keys]
 		self.original_input_datafile_paths = \
-			[generate_sim_filename(sim_output_path, \
-				self.within_batch_counter_call, \
+			[generate_sim_filename(sim_output_path, '1', \
 				generate_sim_file_label('original', current_input_datafile)) \
 				for current_input_datafile in \
 				sim_parameters.original_input_datafile_values]
@@ -634,57 +648,70 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 				'input_datafile_paths, or additional_code_run_values is not' + \
 				' the same length as its corresponding list of keys in ' + \
 				'Simulator class!')
+	def get_original_input_datafile_paths(self):
+		return(self.original_input_datafile_paths)
 
 class SimRunner(SimPreparer):
 	'''
 	Runs simulations with parameters corresponding to H0 hypothesis in
 	hypothesis_testing_info
 	'''
-	def __init__(self, output_id_sim, sim_parameters, hypothesis_testing_info, \
+	def __init__(self, output_id_prefix, sim_parameters, hypothesis_testing_info, \
 		cluster_parameters, cluster_folders, sim_folders, additional_code_run_keys, \
 		additional_code_run_values):
 		# create CompletenessTracker object to track whether each LL
 			# list is complete
-		super(SimPreparer, self).__init__(output_id_sim, sim_parameters, \
+		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
-			sim_folders, datafile_keys, datafile_values, \
-			additional_code_run_keys, additional_code_run_values)
+			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self.sim_completeness = False
-	def submit_sim(self):
-		'''
-		Submits code to run sim with parameters corresponding to H0
-		'''
-		H0_sim_parameters = self.sim_param_dict['H0']
 		# create Simulator object
-		simulator = Simulator(H0_sim_parameters, \
+		self.simulator = Simulator(self.sim_param_dict['H0'], \
 			self.cluster_parameters, self.cluster_folders, \
 			self.sim_folders, additional_code_run_keys, \
 			additional_code_run_values)
-		# submit and track current set of jobs
-		simulator.run_job_submission()
+	def _copy_original_files(self):
+		''' Copies original datafiles to simulation folder '''
+		experiment_path = self.sim_folders.get_path('experiment_path')
+		input_files = [os.path.join(experiment_path, \
+			(current_datafile_val + '.csv')) for current_datafile_val in \
+			self.sim_parameters.original_input_datafile_values]
+		output_files = self.simulator.get_original_input_datafile_paths()
+		if len(input_files) == len(output_files):
+			for (current_input_file, current_output_file) in \
+				zip(input_files, output_files):
+				if not os.path.isfile(current_output_file):
+					copyfile(current_input_file, current_output_file)
+			self.sim_completeness = True
+		else:
+			raise RuntimeError('Cannot create copy of original data, ' + \
+				'more output files than input files listed')
+	def _submit_and_track_sim_job(self):
+		''' Submit and track current set of jobs '''
+		self.simulator.run_job_submission()
 		# track completeness within current mode
-		sim_completefile = simulator.get_completefile_path()
+		sim_completefile = self.simulator.get_completefile_path()
 		current_sim_parameters.update_parameter_completeness(sim_completefile)
 		# if all parameters for this mode are complete, update mode completeness
 		# this also updates completeness across modes
 		self.sim_completeness = \
 			current_sim_parameters.check_completeness_within_mode()
+	def submit_sim(self):
+		'''
+		If sim_key is 'original', copies original datafiles to
+		destination of 'original' datafiles in simulation folder;
+		otherwise, submits code to run sim with parameters corresponding
+		to H0
+		'''
+		if self.sim_key is 'original':
+			self._copy_original_files()
+		else:
+			self._submit_and_track_sim_job()
 	def get_sim_completeness(self):
 		'''
 		Returns bool of whether or not all sim jobs have run
 		'''
 		return(self.sim_completeness)
-
-
-
-
-######## ??? #######
-# Before running LLRCalculator on original data, a copy of it needs to
-# be created in the same place where simulation folders are stored;
-# The 'unfixed' output file for this data should be placed in this folder
-######## ??? #######
-
-### sim_key == 'original' for original data
 
 class FixedPointPvalCalculator(object):
 	'''
@@ -698,9 +725,9 @@ class FixedPointPvalCalculator(object):
 				parameters freely estimated)
 			b.	Calculate H0: the hypothesis with the lower number of
 				degrees of freedom; LL at fixed point in parameter space
-			c. 	'True' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
+			c. 	'original' log likelihood ratio 'LLR' is LL(H0)-LL(H1)
 				(actually to make the p-vals easier to understand, it's
-				easier to work with the negative of LLR values)
+				easier to work with the deviance, -2*LLR)
 			d. 	MLE parameter values for all parameters estimated in (b)
 				will be used as sim starting values!
 		2. 	Run sim_number simulations using starting parameter values
@@ -709,19 +736,28 @@ class FixedPointPvalCalculator(object):
 	'''
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, \
-		hypothesis_key_organizer, sim_folders, sim_key_organizer):
+		hypothesis_key_organizer, sim_folders, sim_key_organizer, \
+		mode_dict, fixed_param_dict, fixed_param_val_dict, \
+		additional_code_run_keys, additional_code_run_values, output_id_prefix):
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = hypothesis_key_organizer
 		self.sim_key_organizer = sim_key_organizer
 		self.hypotheses = ['H0','H1']
 		self.sim_parameters = copy.deepcopy(sim_parameters)
-		self.original_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
-		self.sim_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		original_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		simulated_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		self.completeness_tracker_dict = \
+			{'original': original_data_completeness_tracker, \
+			'simulated': simulated_data_completeness_tracker}
 		self.llr_calculator_dict = dict()
 		self.hypothesis_testing_info_dict = dict()
 		self.mode_dict = mode_dict
 		self.fixed_param_dict = fixed_param_dict
 		self.fixed_param_val_dict = fixed_param_val_dict
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
+		self.output_id_prefix = output_id_prefix
+		self.pval_calc_complete = False
 	def _get_starting_params(self, Hnum):
 		self.sim_parameters.set_mode(self.mode_dict[Hnum])
 		self.sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
@@ -764,7 +800,7 @@ class FixedPointPvalCalculator(object):
 			H1_starting_param_vals)
 		# create sim_key_holder and get sim_key from
 			# sim_key_organizer
-		sim_key_holder = SimKeyHolder(H0_mode, H0_starting_param_vals)
+		sim_key_holder = SimKeyHolder(self.mode_dict['H0'], H0_starting_param_vals)
 		self.sim_key_organizer.set_key(sim_key_holder, sim_key)
 		# set up hypothesis testing info for original data
 		self._set_up_hypothesis_testing_info('original', H0_key_holder, \
@@ -785,9 +821,12 @@ class FixedPointPvalCalculator(object):
 			current_original_LL_df.loc[0][parameter_names].tolist()
 		return(current_original_MLE_param_vals)
 	def _set_up_sim_data(self):
-		self.sim_hypothesis_testing_info = HypothesisTestingInfo()
+		''' Sets up hypothesis_testing_info for sim data '''
 		# get MLE parameter values from LL_df, and use them as new
 			# starting vals
+		# only H0 data will be used for running simulations, but
+			# starting_param_vals for both will be used as MLE starting
+			# vals
 		H0_starting_param_vals = self._get_original_MLE_param_vals('H0')
 		# create sim_key_holder and get sim_key from sim_key_organizer
 		sim_key_holder = SimKeyHolder(self.mode_dict['H0'], \
@@ -802,53 +841,114 @@ class FixedPointPvalCalculator(object):
 		H1_key_holder = self.HypothesisKeyHolder(H1_mode, H1_fixed_param, \
 			H1_starting_param_vals, sim_key)
 		# pass hypothesis_key_holder to self.hypothesis_testing_info_dict['sim']
-		self._set_up_hypothesis_testing_info('sim', H0_key_holder, \
+		self._set_up_hypothesis_testing_info('simulated', H0_key_holder, \
 			H1_key_holder)
 	def _run_sim(self, current_hypothesis_testing_info, \
 		current_completeness_tracker):
 		'''
-		Runs simulations based on parameters in
+		Runs simulations based on H0 parameters in
 		current_hypothesis_testing_info
 		'''
-		current_sim_key = current_hypothesis_testing_info.get_sim_key()
-		if current_sim_key is 'original':
-
-
-
-
-		SimRunner(output_id_sim, sim_parameters, hypothesis_testing_info, \
-		cluster_parameters, cluster_folders, sim_folders, additional_code_run_keys, \
-		additional_code_run_values)
-		# when 'running' original sim (i.e. duplicating initial files), need to set number of sim reps to 1 somehow, or replace within_batch_counter with str(1)
-		# remember that sim only needs to be run with H0 mode
-
+		sim_runner = SimRunner(self.output_id_prefix, self.sim_parameters, \
+			current_hypothesis_testing_info, self.cluster_parameters, \
+			self.cluster_folders, self.sim_folders, \
+			self.additional_code_run_keys, self.additional_code_run_values)
+		sim_runner.submit_sim()
+		sim_completeness = sim_runner.get_sim_completeness()
+		current_completeness_tracker.switch_key_completeness('sim', \
+			sim_completeness)
 	def _run_LLR_calc(self, current_hypothesis_testing_info, \
-		current_completeness_tracker):
+		current_completeness_tracker, data_type):
 		'''
 		Estimates log likelihood ratios for given
 		current_hypothesis_testing_info based on sim outputs
 		'''
+		self.llr_calculator_dict[data_type] = \
+			LLRCalculator(self.output_id_prefix, self.sim_parameters, \
+				current_hypothesis_testing_info, self.cluster_parameters, \
+				self.cluster_folders, self.sim_folders, \
+				self.additional_code_run_keys, self.additional_code_run_values)
+		self.llr_calculator_dict[data_type].run_LLR()
+		llr_completeness = \
+			self.llr_calculator_dict[data_type].get_LLR_completeness()
+		current_completeness_tracker.switch_key_completeness('LLR', \
+			llr_completeness)
 	def _run_sim_and_LLR(self, data_type):
 		'''
 		Based on current_hypothesis_testing_info, runs simulations (if
 		necessary) and LLR calculation
 		'''
-		self.original_llr_calculator = 
-
-		### Need to allow for option that original data MLE (or LLR) ran but did not successfully complete
-			# LLR value may be NaN or missing
-		### Need to change the way data inputs are handled in mle_functions--make separate dict of data input files (read in from setup_file) that gets added to submission keys and values during mle batch submission
-		return(LLR_list)
+		current_hypothesis_testing_info = \
+			self.hypothesis_testing_info_dict[data_type]
+		current_completeness_tracker = \
+			self.completeness_tracker_dict[data_type]
+		data_type_complete = current_completeness_tracker.get_completeness()
+		if not data_type_complete:
+			# run sim if it has not been completed
+			if not current_completeness_tracker.get_key_completeness('sim'):
+				self._run_sim(current_hypothesis_testing_info, \
+					current_completeness_tracker)
+			# run LLR if sim has been completed
+				# (need to re-check completion status in case sims got
+					# completed in above run)
+			if current_completeness_tracker.get_key_completeness('sim'):
+				self._run_LLR_calc(current_hypothesis_testing_info, \
+					current_completeness_tracker)
+	def _calculate_p_val(self):
+		'''
+		Calculates proportion of sim data deviances above deviance of
+		original data
+		'''
+		# sim_deviance_array and original_deviance_array are np arrays
+		if len(self.original_deviance_array) > 1:
+			raise RuntimeError('More than one deviance value returned for ' + \
+				'original data')
+		sim_deviance_array = \
+			self.llr_calculator_dict['simulated'].get_deviances()
+		if (len(sim_deviance_array) is 0) or \
+			(len(self.original_deviance_array) is 0) or \
+			np.all(np.isnan(self.original_deviance_array)) or \
+			np.all(np.isnan(sim_deviance_array)):
+			self.pval = np.nan
+		else:
+			original_deviance = self.original_deviance_array[0]
+			num_sim_deviances_above_original_deviance = \
+				sum(np.greater(original_deviance, sim_deviance_array))
+			num_sim_deviances = sum(~np.isnan(sim_deviance_array))
+			self.pval = \
+				num_sim_deviances_above_original_deviance/num_sim_deviances
+		self.pval_calc_complete = True
 	def run_fixed_pt_pval_estimation(self):
 		'''
 		Determine the p-val of the hypothesis comparison being performed
+		If MLE on original data for one of the hypotheses fails, returns
+		NaN
 		'''
 		self._set_up_original_data()
 		self._run_sim_and_LLR('original')
-
-
-
-
+		original_completeness = \
+			self.completeness_tracker_dict['original'].get_completeness()
+		if original_completeness:
+			# check that deviance is non-NaN for original data; if it is
+				# NaN, there's no point running sims
+			self.original_deviance_array = \
+				self.llr_calculator_dict['original'].get_deviances()
+			if (len(self.original_deviance_array) is 0) or \
+				np.all(np.isnan(self.original_deviance_array)):
+				self.pval = np.nan
+				self.completeness_tracker_dict['simulated'].switch_key_completeness('sim', True)
+				self.completeness_tracker_dict['simulated'].switch_key_completeness('LLR', True)
+			else:
+				self._set_up_sim_data()
+				self._run_sim_and_LLR('simulated')
+				simulated_completeness = \
+					self.completeness_tracker_dict['simulated'].get_completeness()
+				if simulated_completeness:
+					self._calculate_p_val()
+	def get_pval_completeness(self):
+		return(self.pval_calc_complete)
+	def get_pval(self):
+		return(self.pval)
 
 class FixedPointIdentifier(object):
 	'''
