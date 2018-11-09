@@ -346,11 +346,11 @@ class LLHolder(object):
 	'''
 	Populates, holds, and saves a dataframe containing outputs of MLE
 	'''
-	def __init__(self, mle_parameters, datafile_path, LL_list_folder):
-		self.profile_points = mle_parameters.current_profile_point_num
-		self.output_identifier = mle_parameters.output_identifier
+	def __init__(self, profile_points, output_identifier, fixed_param, datafile_path, LL_list_folder):
+		self.profile_points = profile_points
+		self.output_identifier = output_identifier
 		self.datafile_path = datafile_path
-		self.fixed_param = mle_parameters.current_fixed_parameter
+		self.fixed_param = fixed_param
 		self.LL_file = os.path.join(LL_list_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
@@ -421,7 +421,11 @@ class LLHolder(object):
 class LLProfile(LLHolder):
 	# Gets, holds, and updates log likelihood profile
 	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
-		super(LLHolder, self).__init__(mle_parameters, datafile_path, LL_profile_folder)
+		super(LLHolder, \
+			self).__init__(mle_parameters.current_profile_point_num, \
+			mle_parameters.output_identifier, \
+			mle_parameters.current_fixed_parameter, datafile_path, \
+			LL_profile_folder)
 		self.warning_line = ''
 		self.additional_param_df = copy.copy(additional_param_df)
 		self.max_LL = None
