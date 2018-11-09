@@ -98,7 +98,8 @@ class OneSidedCIBound(object):
 				# points has already occurred, since these functions throw
 				# important warnings
 			self._check_monotonicity()
-			self._asymptotic_pval_calc()
+			if self.CI_type is 'asymptotic':
+				self._asymptotic_pval_calc()
 			self._find_CI_proximal_LL_points()
 			self._set_output_filenames()
 			if self.one_sided_LL_df.shape[0] > 1:
