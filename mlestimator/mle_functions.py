@@ -481,7 +481,7 @@ class LLProfile(LLHolder):
 		CI_type = 'asymptotic'
 		self.asymptotic_CI = mle_CI_functions.TwoSidedCI(pval, \
 			self.LL_df_sorted, deg_freedom, self.fixed_param_MLE_val, \
-			self.fixed_param, self.max_LL, CI_type, mle_folders, \
+			self.fixed_param, CI_type, mle_folders, \
 			cluster_parameters, cluster_folders, self.output_identifier, \
 			mle_parameters)
 		self.asymptotic_CI.find_CI()

@@ -64,7 +64,7 @@ class CIWarning(object):
 class OneSidedCIBound(object):
 	# Stores data for CI bound on one side of MLE
 	def __init__(self, pval, LL_df, df, fixed_param_MLE_val,fixed_param, \
-		max_LL, CI_type, mle_folders, cluster_parameters, cluster_folders, \
+		CI_type, mle_folders, cluster_parameters, cluster_folders, \
 		output_identifier):
 		self.cdf_bound = 1-pval
 			# if pval is passed to OneSidedCIBound by TwoSidedCIBound,
@@ -77,7 +77,6 @@ class OneSidedCIBound(object):
 		self.default_CI_bound = None
 		self.fixed_param = fixed_param
 		self.fixed_param_MLE_val = fixed_param_MLE_val
-		self.max_LL = max_LL
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
 		self.mle_folders = mle_folders
@@ -92,14 +91,13 @@ class OneSidedCIBound(object):
 			self.warning.set_LL_empty()
 			self._set_CI_bound(np.NaN)
 		else:
-			self._select_profile_side(LL_df)
-			# need to run _asymptotic_pval_calc and
-				# _find_CI_proximal_LL_points even if curve fitting to LL
-				# points has already occurred, since these functions throw
-				# important warnings
-			self._check_monotonicity()
 			if self.CI_type is 'asymptotic':
 				self._asymptotic_pval_calc()
+			self._select_profile_side(LL_df)
+			self._check_monotonicity()
+			# need to run _find_CI_proximal_LL_points even if curve
+				# fitting to LL points has already occurred, since these
+				# functions throw important warnings
 			self._find_CI_proximal_LL_points()
 			self._set_output_filenames()
 			if self.one_sided_LL_df.shape[0] > 1:
@@ -125,9 +123,10 @@ class OneSidedCIBound(object):
 		print('error! Profile side not selected in parent class of OneSidedCIBound objects; setting one_sided_LL_df to empty df')
 	def _asymptotic_pval_calc(self):
 		# calculates p-values for every point in LL_profile, following asymptotic assumption
+		max_LL = max(self.LL_df['LL'])
 		x_vals = self.one_sided_LL_df[self.fixed_param]
 		y_vals = self.one_sided_LL_df['LL']
-		D_vals = 2*(self.max_LL-y_vals)
+		D_vals = 2*(max_LL-y_vals)
 		cdf_vals = chi2.cdf(D_vals,self.df)
 			# rather than calculating p-vals for the whole distribution, we
 				# calculate a 'reflected' cdf for the lower side of the
@@ -319,7 +318,7 @@ class OneSidedCIBoundLower(OneSidedCIBound):
 			# profile expected to increase monotonically up until
 			# max LL, then decrease monotonically after; if this
 			# isn't the case, throw a warning
-		y_diffs = np.diff(self.one_sided_LL_df['LL'])
+		y_diffs = np.diff(self.one_sided_LL_df['cdf_vals'])
 		monotonicity_state = np.all(y_diffs >= 0)
 		if not monotonicity_state:
 			self.warning.set_non_monotonic()
@@ -344,7 +343,7 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 			# profile expected to increase monotonically up until
 			# max LL, then decrease monotonically after; if this
 			# isn't the case, throw a warning
-		y_diffs = np.diff(self.one_sided_LL_df['LL'])
+		y_diffs = np.diff(self.one_sided_LL_df['cdf_vals'])
 		monotonicity_state = np.all(y_diffs <= 0)
 		if not monotonicity_state:
 			self.warning.set_non_monotonic()
@@ -407,7 +406,7 @@ class BoundAbuttingPointRemover(object):
 class TwoSidedCI(object):
 	# compiles two-sided CI
 	def __init__(self, pval, LL_df_prefilter, deg_freedom, fixed_param_MLE_val, \
-		fixed_param, max_LL, CI_type, mle_folders, cluster_parameters, \
+		fixed_param, CI_type, mle_folders, cluster_parameters, \
 		cluster_folders, output_identifier, mle_parameters):
 		self.CI_sides = ['lower','upper']
 		self.CI_object_dictionary = dict()
@@ -425,11 +424,11 @@ class TwoSidedCI(object):
 			mle_parameters.current_fixed_parameter)
 		self.CI_object_dictionary = {}
 		self.CI_object_dictionary['lower'] = OneSidedCIBoundLower(pval/2, \
-				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
+				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
 		self.CI_object_dictionary['upper'] = OneSidedCIBoundUpper(pval/2, \
-				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, max_LL, \
+				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
 	def _remove_bound_abutting_points(self, LL_df_prefilter, x_tolerance, \
