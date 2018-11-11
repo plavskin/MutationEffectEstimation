@@ -469,7 +469,7 @@ class LLRCalculator(SimPreparer):
 		'''
 		Compiles and writes LL_list for each hypothesis
 		'''
-		ll_list = LLHolder(current_sim_parameters.current_profile_point_num, \
+		ll_list = mle_functions.LLHolder(current_sim_parameters.current_profile_point_num, \
 			current_sim_parameters.output_identifier, \
 			current_sim_parameters.current_fixed_parameter, \
 			self.mle_datafile_path, self.LL_list_folder)

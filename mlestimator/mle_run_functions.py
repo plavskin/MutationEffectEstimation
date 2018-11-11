@@ -3,7 +3,8 @@
 ''' Contains function needed to run MLE '''
 
 import os
-from mlestimator.mle_functions import MLEParameters, run_MLE, CombinedResultSummary
+from mlestimator.mle_functions import MLEParameters, run_MLE
+from mlestimator.mle_result_combiner import CombinedResultSummary
 
 def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mle_folders, experiment_path, additional_code_run_keys, \
