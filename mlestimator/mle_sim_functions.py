@@ -39,7 +39,7 @@ class SimFolders(object):
 	# also needs:
 	#	current_sim_folder
 	# need to keep hypothesis_key_organizer_file and sim_key_organizer_file filenames in here
-	# need sim_profile_folder?
+	# need sim_profile_folder, current_output_subfolder
 	def get_hypothesis_key_organizer_file(self):
 		return(hypothesis_key_organizer_file)
 	def get_sim_key_organizer_file(self):
@@ -435,6 +435,8 @@ class LLRCalculator(SimPreparer):
 		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, additional_code_run_keys, additional_code_run_values)
+		self.LL_list_folder = self.sim_folders.get_path('sim_profile_folder')
+		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
 		self._generate_LLR_filename()
 		self.LL_list_dict = dict()
 		# create CompletenessTracker object to track whether each LL
@@ -717,7 +719,7 @@ class FixedPointCDFvalCalculator(object):
 	'''
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
-		additional_code_run_keys, additional_code_run_values, output_id_prefix):
+		additional_code_run_keys, additional_code_run_values, output_id_prefix, output_file):
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = \
 			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file())
@@ -738,6 +740,7 @@ class FixedPointCDFvalCalculator(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
+		self.output_file = output_file
 		self.cdf_val_calc_complete = False
 	def _get_starting_params(self, Hnum):
 		self.sim_parameters.set_mode(self.mode_dict[Hnum])
@@ -899,6 +902,16 @@ class FixedPointCDFvalCalculator(object):
 			self.cdf_val = \
 				num_sim_deviances_above_original_deviance/num_sim_deviances
 		self.cdf_val_calc_complete = True
+	def _write_fixed_pt_output(self):
+		'''
+		Writes output containing current value of fixed_param for H1 and
+		current cdf val
+		'''
+		fixed_param = self.fixed_param_dict['H1']
+		fixed_param_val = self.fixed_param_val_dict['H1']
+		self.output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
+			'cdf_vals': [self.cdf_val]})
+		self.output_df.to_csv(path_or_buf=self.output_file, index=False)
 	def run_fixed_pt_cdf_val_estimation(self):
 		'''
 		Determine the cumulative density function val of the hypothesis
@@ -980,16 +993,18 @@ class OneSidedSimProfiler(object):
 	'''
 	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
-		additional_code_run_values, output_id_prefix):
+		additional_code_run_values, output_id_prefix, profile_side):
 		self.mode_dict = {'H0': mode, 'H1': mode}
 		self.fixed_param_dict = {'H0': fixed_param, 'H1': fixed_param}
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
+		self.profile_path = sim_folders.get_path('sim_profile_folder')
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
 		self.asymptotic_CI_val = asymptotic_CI_val
 		self.fixed_param_mle = fixed_param_mle
+		self.profile_side = profile_side
 
 	def _select_first_point(self):
 		return(fixed_param_val)
@@ -997,15 +1012,21 @@ class OneSidedSimProfiler(object):
 		return(fixed_param_val)
 	def _select_third_point(self):
 		return(fixed_param_val)
-	def _run_fixed_pt_calc(self, current_fixed_param_val_dict):
+	def _run_fixed_pt_calc(self, current_fixed_param_val_dict, profile_pt):
+		output_id_fixed_pt = '_'.join([self.output_id_prefix, \
+			self.profile_side, 'fixed_pt'])
+		output_file = generate_filename(self.profile_path, \
+				str(profile_pt), output_id_fixed_pt, \
+				self.fixed_param_dict['H1'], 'data')
 		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.mode_dict, \
 			self.fixed_param_dict, current_fixed_param_val_dict, \
 			self.sim_parameters, self.sim_key_organizer, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
-			self.output_id_prefix)
+			self.output_id_prefix, output_file)
 			#Output file for FixedPointCDFvalCalculator probably needs to output a sim profile file, and then have these be collected at the end
 				# maybe the files should be included in
 			# Need fixed_parameter and 'cdf_vals' column
+				# DONE WITH COMMENTS ABOVE
 
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
