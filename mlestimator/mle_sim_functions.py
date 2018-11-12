@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import warnings as war
 import mle_functions
+from scipy.stats import norm
 from mlestimator import mle_filenaming_functions
 from cluster_wrangler.cluster_functions import CompletenessTracker
 import copy
@@ -719,7 +720,8 @@ class FixedPointCDFvalCalculator(object):
 	'''
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
-		additional_code_run_keys, additional_code_run_values, output_id_prefix, output_file):
+		additional_code_run_keys, additional_code_run_values, \
+		output_id_prefix, output_file_dict):
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = \
 			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file())
@@ -740,7 +742,8 @@ class FixedPointCDFvalCalculator(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
-		self.output_file = output_file
+		self.output_file_dict = output_file_dict
+		self.output_df_dict = {}
 		self.cdf_val_calc_complete = False
 	def _get_starting_params(self, Hnum):
 		self.sim_parameters.set_mode(self.mode_dict[Hnum])
@@ -902,16 +905,21 @@ class FixedPointCDFvalCalculator(object):
 			self.cdf_val = \
 				num_sim_deviances_above_original_deviance/num_sim_deviances
 		self.cdf_val_calc_complete = True
-	def _write_fixed_pt_output(self):
+		self._write_fixed_pt_output('H0', 0)
+		self._write_fixed_pt_output('H1', self.cdf_val)
+	def _write_fixed_pt_output(self, current_Hnum, current_cdf_val):
 		'''
 		Writes output containing current value of fixed_param for H1 and
 		current cdf val
 		'''
-		fixed_param = self.fixed_param_dict['H1']
-		fixed_param_val = self.fixed_param_val_dict['H1']
-		self.output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
-			'cdf_vals': [self.cdf_val]})
-		self.output_df.to_csv(path_or_buf=self.output_file, index=False)
+		fixed_param = self.fixed_param_dict[current_Hnum]
+		fixed_param_val = self.fixed_param_val_dict[current_Hnum]
+		self.output_df_dict[current_Hnum] = pd.DataFrame({fixed_param: [fixed_param_val], \
+			'cdf_vals': [current_cdf_val]})
+		current_output_file = self.output_file_dict[current_Hnum]
+		if not os.path.isfile(current_output_file):
+			self.output_df_dict[current_Hnum].to_csv(path_or_buf = current_output_file, \
+				index = False)
 	def run_fixed_pt_cdf_val_estimation(self):
 		'''
 		Determine the cumulative density function val of the hypothesis
@@ -940,10 +948,10 @@ class FixedPointCDFvalCalculator(object):
 					self.completeness_tracker_dict['simulated'].get_completeness()
 				if simulated_completeness:
 					self._calculate_cdf_val()
-	def get_cdf_val_completeness(self):
-		return(self.cdf_val_calc_complete)
 	def get_cdf_val(self):
 		return(self.cdf_val)
+	def get_cdf_val_completeness(self):
+		return(self.cdf_val_calc_complete)
 
 #####################################################################
 # Pipeline for sim-LRT-based p-val
@@ -957,20 +965,6 @@ class FixedPointCDFvalCalculator(object):
 # parameter lower and upper bounds
 # idealized_cutoff - x-val of asymptotic CI bound
 
-# ID 3 points at which to find LRs--maybe, 2*(idealized_cutoff-optimal_param_vector(current_param))?
-#	- one option is to ID these points stepwise: i.e. first try asymptotic bound, then go from there
-#		- example flow:
-#			a. measure LR p-val at asymptotic value
-#			b. use this value and x-position of MLE to approximate a normal(? or t?) distribution,
-#				and find second x-val to try based on where desired p-val would be on that distribution
-#			c. Linear interpolate between the p-vals and x-vals measured so far to ID a third x-position to try
-#			d. Quad-fit the 3 values
-#		The problem with this approach is if the initial values randomly happen to go in wrong directions
-#		(i.e. p-val increases, not decreases, with x-distance from optimum), linear interpolation will take
-#		next value further from target
-#		However, this could either be explicitly dealt with, or it could be assumed that if this happens, all
-#		values are close enough together and to target for exact x-values to not matter much
-#		Also need to deal with what to do when p-val at both points is identical...
 
 class OneSidedSimProfiler(object):
 	'''
@@ -980,22 +974,22 @@ class OneSidedSimProfiler(object):
 		1. 	Calculate cdf val at asymptotic CI value
 		2. 	Taking cdf val from (1) as a cdf val on a normal curve,
 			determine at which point on fixed parameter axis
-			1/2*(target cdf val) would be, and calculate the cdf val at
-			that point
-		3. 	a. 	If point (2) has a lower empirical cdf val than the
+			1/2*(target p-val) would be, and calculate the cdf
+			val at that point
+		3. 	a. 	If point (2) has a higher empirical cdf val than the
 				target cdf val, interpolate between points (2) and (1)
 				to id the best candidate for the target cdf val
-			b. 	If point (2) has a higher empirical cdf val than the
+			b. 	If point (2) has a lower empirical cdf val than the
 				target cdf val, determine at which point on the fixed
-				parameter axis 1/4*(target cdf val) would be, taking the
+				parameter axis 1/4*(target p-val) would be, taking the
 				cdf val from (2) as a cdf val on a normal curve, and
 				calculate the cdf val at that point
 	'''
 	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
-		additional_code_run_values, output_id_prefix, profile_side):
+		additional_code_run_values, output_id_prefix, cdf_bound):
 		self.mode_dict = {'H0': mode, 'H1': mode}
-		self.fixed_param_dict = {'H0': fixed_param, 'H1': fixed_param}
+		self.fixed_param_dict = {'H0': 'unfixed', 'H1': fixed_param}
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
 		self.profile_path = sim_folders.get_path('sim_profile_folder')
@@ -1004,29 +998,147 @@ class OneSidedSimProfiler(object):
 		self.output_id_prefix = output_id_prefix
 		self.asymptotic_CI_val = asymptotic_CI_val
 		self.fixed_param_mle = fixed_param_mle
-		self.profile_side = profile_side
-
+		self.cdf_bound = cdf_bound
+		self.profile_points_per_side = 3
+		self.fixed_point_df = \
+			pd.DataFrame(\
+				{'fixed_param_val_dict': [{'H0': self.fixed_param_mle, \
+					'H1': np.nan}] * 3, \
+				'completeness': [False] * 3, \
+				'cdf_val' = [np.nan] * 3}, \
+				index = [0,1,2])
+		self.side_completeness = False
+	def _convert_profile_pt_num(self, profile_pt):
+		'''
+		Converts profile_pt to an index that will be unique across both
+		sides of the sim-based profile
+		'''
+		if self.fixed_param_mle < self.asymptotic_CI_val:
+			# upper side of profi;le
+			profile_pt_converted = profile_pt + self.profile_points_per_side
+		elif self.fixed_param_mle > self.asymptotic_CI_val:
+			# lower side of profile, re-order point indices
+			profile_pt_converted = self.profile_points_per_side - profile_pt + 1
+		else:
+			raise ValueError('fixed_param_mle is neither greater than nor ' + \
+				'less than asymptotic_CI_val for sim-based CI estimation ' + \
+				'on ' + self.output_id_prefix + '; cannot detect profile side')
+		return(profile_pt_converted)
+	def _fixed_param_val_finder(self, current_fixed_param_val, current_cdf_val, \
+		target_cdf_val):
+		'''
+		Finds value of fixed_param that corresponds to target_cdf_val,
+		assuming density function of fixed parameter probabilities is
+		normal
+		'''
+		current_z_val = norm.ppf(current_cdf_val)
+		z_val_scaler = \
+			(current_fixed_param_val - self.fixed_param_mle) / current_z_val
+		target_z_val = norm.ppf(target_cdf_val)
+		target_fixed_param_val = \
+			target_z_val * z_val_scaler + self.fixed_param_mle
+		return(target_fixed_param_val)
 	def _select_first_point(self):
-		return(fixed_param_val)
+		'''
+		Assigns self.asymptotic_CI_val to fixed parameter val of 1st
+		profile point
+		'''
+		self.fixed_point_df.at[0, 'fixed_param_val_dict']['H1'] = \
+			self.asymptotic_CI_val
 	def _select_second_point(self):
-		return(fixed_param_val)
+		'''
+		Assumes cdf on first point is on normal distribution with center
+		at mle val of fixed parameter, and assign second point to fixed
+		parameter value where p-val is expected to be 1/2*(target p-val)
+		'''
+		first_fixed_param_val = \
+			self.fixed_point_df.loc[0]['fixed_param_val_dict']['H1']
+		first_cdf_val = self.fixed_point_df.loc[0]['cdf_val']
+		pval_scaler = 0.5
+		target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
+		second_pt_fixed_param_val = \
+			self._fixed_param_val_finder(first_fixed_param_val, first_cdf_val, \
+				target_cdf_val)
+		self.fixed_point_df.at[1, 'fixed_param_val_dict']['H1'] = \
+			second_pt_fixed_param_val
 	def _select_third_point(self):
-		return(fixed_param_val)
-	def _run_fixed_pt_calc(self, current_fixed_param_val_dict, profile_pt):
-		output_id_fixed_pt = '_'.join([self.output_id_prefix, \
-			self.profile_side, 'fixed_pt'])
-		output_file = generate_filename(self.profile_path, \
-				str(profile_pt), output_id_fixed_pt, \
-				self.fixed_param_dict['H1'], 'data')
+		'''
+		If second fixed param val has higher cdf than cdf_bound, uses
+		linear interpolation to get close to cdf_bound based on the two
+		known values (or, in the unlikely case that cdf at both first
+		and second point is above cdf_bound, extrapolates to cdf_bound;
+		this will most likely occur due to sampling error in sim
+		Otherwise, proceed as in second point selection, but re-scaling
+		target p-val by 1/4 instead of 1/2
+		'''
+		second_fixed_param_val = \
+			self.fixed_point_df.loc[1]['fixed_param_val_dict']['H1']
+		second_cdf_val = self.fixed_point_df.loc[1]['cdf_val']
+		if second_cdf_val > self.cdf_bound:
+			# interpolate (or if necessary extrapolate) between first
+				# and second fixed param val on x-axis to point
+				# corresponding to cdf_bound y-val
+			first_fixed_param_val = \
+				self.fixed_point_df.loc[0]['fixed_param_val_dict']['H1']
+			first_cdf_val = self.fixed_point_df.loc[0]['cdf_val']
+			line_fit = \
+				np.polyfit([first_fixed_param_val, second_fixed_param_val],
+					[first_cdf_val, second_cdf_val], 1)
+			interpolator = poly1d(line_fit)
+			third_pt_fixed_param_val = interpolator(self.cdf_bound)
+		else:
+			pval_scaler = 0.25
+			target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
+			third_pt_fixed_param_val = \
+				self._fixed_param_val_finder(second_fixed_param_val, \
+					second_cdf_val, target_cdf_val)
+		self.fixed_point_df.at[2, 'fixed_param_val_dict']['H1'] = \
+			third_pt_fixed_param_val
+	def _run_fixed_pt_calc(self, profile_pt):
+		output_id_fixed_pt = '_'.join([self.output_id_prefix, 'fixed_pt_cdf'])
+		profile_pt_global = self._convert_profile_pt_num(profile_pt)
+		current_profile_idx = profile_pt - 1
+		output_file_dict = \
+			{'H0': generate_filename(self.profile_path, str(0), \
+				output_id_fixed_pt, self.fixed_param_dict['H0'], 'data'), \
+			'H1': generate_filename(self.profile_path, str(profile_pt_global), \
+				output_id_fixed_pt, self.fixed_param_dict['H1'], 'data')}
+		current_fixed_param_val_dict = \
+			self.fixed_point_df.loc(current_profile_idx)['fixed_param_val_dict']
 		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.mode_dict, \
 			self.fixed_param_dict, current_fixed_param_val_dict, \
 			self.sim_parameters, self.sim_key_organizer, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
-			self.output_id_prefix, output_file)
-			#Output file for FixedPointCDFvalCalculator probably needs to output a sim profile file, and then have these be collected at the end
-				# maybe the files should be included in
-			# Need fixed_parameter and 'cdf_vals' column
-				# DONE WITH COMMENTS ABOVE
+			self.output_id_prefix, output_file_dict)
+		fixed_point_pval_calc.run_fixed_pt_cdf_val_estimation()
+		current_fixed_pt_complete = \
+			fixed_point_pval_calc.get_cdf_val_completeness()
+		self.fixed_point_df.at[current_profile_idx, 'completeness'] = \
+			current_fixed_pt_complete
+		if current_fixed_pt_complete:
+			current_cdf_val = fixed_point_pval_calc.get_cdf_val()
+			self.fixed_point_df.at[current_profile_idx, 'cdf_val'] = \
+				current_cdf_val
+		return(current_fixed_pt_complete)
+	def get_sim_profile_side_completeness(self):
+		return(self.side_completeness)
+	def run_sim_profiler(self):
+		'''
+		Determines three fixed pts at which to run sims, and runs sims
+		and mle on them
+		'''
+		self._select_first_point()
+		first_fixed_pt_complete = self._run_fixed_pt_calc(1)
+		if first_fixed_pt_complete:
+			self._select_second_point()
+			second_fixed_pt_complete = self._run_fixed_pt_calc(2)
+			if second_fixed_pt_complete:
+				self._select_third_point()
+				third_fixed_pt_complete = self._run_fixed_pt_calc(3)
+				if third_fixed_pt_complete:
+					self.side_completeness = True
+
+
 
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
