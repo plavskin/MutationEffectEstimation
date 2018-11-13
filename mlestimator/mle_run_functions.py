@@ -5,10 +5,12 @@
 import os
 from mlestimator.mle_functions import MLEParameters, run_MLE
 from mlestimator.mle_result_combiner import CombinedResultSummary
+from mlestimator.mle_sim_functions import generate_sim_based_profile_pts
 
 def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mle_folders, experiment_path, additional_code_run_keys, \
-	additional_code_run_values, output_id_string_start):
+	additional_code_run_values, output_id_string_start, sim_parameters, \
+	sim_folders):
 	# Handles all of MLE across modes, including confidence
 		# interval identification
 	for current_mode in mle_parameters.mode_list:
@@ -23,8 +25,18 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		run_MLE(mle_parameters, cluster_parameters, cluster_folders, \
 			mle_folders, additional_code_run_keys, additional_code_run_values, \
 			include_unfixed_param)
-		# generate LL_profiles and MLE_output file, and identify CIs
+		# generate LL_profiles and MLE_output file, and identify
+			# asymptotic CIs
 		current_combined_results = CombinedResultSummary(mle_folders, \
 			mle_parameters, cluster_parameters, cluster_folders)
 		current_combined_results.initialize_combined_results()
 		current_combined_results.generate_asymptotic_CIs()
+		# run simulations, run MLE on those simulations, and generate
+			# empirical sim-based cdf value profile points across each
+			# parameter for which sim-based CIs are required
+		sim_parameters.set_mode(current_mode, output_id_string)
+		generate_sim_based_profile_pts(current_mode, sim_parameters, \
+			sim_folders, additional_code_run_keys, additional_code_run_values, \
+			output_id_string, current_combined_results)
+
+

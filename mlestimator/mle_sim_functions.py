@@ -90,7 +90,7 @@ class SimParameters(mle_functions.MLEParameters):
 		self.sim_key = sim_key
 		self.input_datafile_values = []
 		for current_input_datafile_name in self.unmod_input_datafile_values:
-			new_input_datafile_val = generate_sim_file_label(sim_key, \
+			new_input_datafile_val = _generate_sim_file_label(sim_key, \
 				current_input_datafile_name)
 			self.input_datafile_values.append(new_input_datafile_val)
 	def set_mode(self, mode_name, output_identifier):
@@ -588,7 +588,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			# _create_code_run_input_lists
 		self.input_datafile_keys = sim_parameters.input_datafile_keys
 		self.input_datafile_paths = \
-			[generate_sim_filename(sim_output_path, \
+			[_generate_sim_filename(sim_output_path, \
 				self.within_batch_counter_call, current_input_datafile) \
 				for current_input_datafile in \
 				sim_parameters.input_datafile_values]
@@ -596,8 +596,8 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		self.original_input_datafile_keys = ['original_' + current_key for \
 			current_key in sim_parameters.input_datafile_keys]
 		self.original_input_datafile_paths = \
-			[generate_sim_filename(sim_output_path, '1', \
-				generate_sim_file_label('original', current_input_datafile)) \
+			[_generate_sim_filename(sim_output_path, '1', \
+				_generate_sim_file_label('original', current_input_datafile)) \
 				for current_input_datafile in \
 				sim_parameters.original_input_datafile_values]
 		# run __init__ from parent class, which in turn runs
@@ -1180,22 +1180,45 @@ class TwoSidedProfiler(object):
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
 #####################################################################
-def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, current_output_file):
+def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, \
+	current_output_file):
 		'''
 		Writes mlestimation.LLProfile-readable output containing
 		current value of fixed_param and current cdf val
 		'''
 		output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
 			'cdf_vals': [current_cdf_val]})
-		output_df[current_Hnum].to_csv(path_or_buf = current_output_file, index = False)
+		output_df[current_Hnum].to_csv(path_or_buf = current_output_file, \
+			index = False)
 
-def generate_sim_file_label(sim_key, input_datafile_name):
+def _generate_sim_file_label(sim_key, input_datafile_name):
 	sim_file_label = \
 		mle_filenaming_functions.generate_file_label('sim', str(sim_key), \
 			input_datafile_name)
 	return(sim_file_label)
 
-def generate_sim_filename(sim_file_path, within_batch_counter_call, sim_file_label):
+def _generate_sim_filename(sim_file_path, within_batch_counter_call, \
+	sim_file_label):
 	sim_file = '_'.join([sim_file_label, within_batch_counter_call]) + '.csv'
 	sim_filename = os.path.join(sim_file_path, sim_file)
 	return(sim_filename)
+
+def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
+	additional_code_run_keys, additional_code_run_values, output_id_prefix, \
+	combined_results):
+		cdf_bound = 1 - sim_parameters.current_CI_pval
+		for fixed_param in sim_parameters.current_sim_CI_parameters:
+			asymptotic_CI_complete = \
+				combined_results.get_key_completeness('asymptotic_CIs')
+			if asymptotic_CI_complete:
+				fixed_param_mle = \
+					combined_results.get_param_mle_val(fixed_param)
+				asymptotic_CI_dict = \
+					combined_results.get_CI_dict(fixed_param, 'asymptotic')
+				current_param_profiler = TwoSidedProfiler(fixed_param_mle, \
+					asymptotic_CI_dict, mode, fixed_param, sim_parameters, \
+					sim_folders, additional_code_run_keys, \
+					additional_code_run_values, output_id_prefix, cdf_bound)
+				current_param_profiler.run_profiler()
+
+
