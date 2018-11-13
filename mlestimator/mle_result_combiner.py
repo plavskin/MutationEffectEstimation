@@ -54,6 +54,11 @@ class SingleParamResultSummary(object):
 				not np.any([np.isnan(self.content_dict[key]) for \
 					key in searchstring_keys])
 		return(columns_filled)
+	def get_contents_by_searchstring(self, searchstring):
+		''' Get dictionary elements whose keys contain searchstring '''
+		searchstring_keys = self._get_keys_by_searchstring(searchstring)
+		searchstring_dict = {key: self.content_dict[key] for key in searchstring_keys}
+		return(searchsting_dict)
 	def get_contents(self):
 		return(self.content_dict)
 
@@ -363,6 +368,30 @@ class CombinedResultSummary(object):
 					asymptotic_CI_completeness_tracker.get_completeness()
 				if asymptotic_CIs_just_completed:
 					open(self.asymptotic_CI_completefile,'a').close()
+	def get_CI_dict(self, fixed_param, CI_type):
+		'''
+		Get a dictionary with 'lower' and 'upper' as keys for CI_type
+		bounds
+		'''
+		current_results_line = SingleParamResultSummary()
+		current_results_line.read_from_df_line(self.combined_results_df, \
+			fixed_param)
+		CI_bound_dict = \
+			current_results_line.get_contents_by_searchstring(CI_type)
+		CI_bound_names = ['lower','upper']
+		CI_bound_dict_renamed = {}
+		for current_bound_name in CI_bound_names:
+			bound_name_dict = \
+				current_results_line.get_contents_by_searchstring(current_bound_name)
+			current_bound_key = list(set(CI_bound_dict.keys()) & set(bound_name_dict.keys()))
+			current_bound_val_list = [val for key, val in CI_bound_dict if key in current_bound_key]
+			if len(current_bound_val_list) > 1:
+				raise ValueError('Too many values for ' + \
+					current_bound_name + 'side of ' + CI_type + 'bound')
+			else:
+				current_bound_val = current_bound_val_list[0]
+			CI_bound_dict_renamed[current_bound_name] = current_bound_val
+		return(CI_bound_dict_renamed)
 
 
 			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
@@ -370,5 +399,4 @@ class CombinedResultSummary(object):
 		#	create summary file
 		# keep track of summary files for each mode; once those are complete, stop running current folder
 		##
-
 
