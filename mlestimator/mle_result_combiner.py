@@ -392,6 +392,8 @@ class CombinedResultSummary(object):
 				current_bound_val = current_bound_val_list[0]
 			CI_bound_dict_renamed[current_bound_name] = current_bound_val
 		return(CI_bound_dict_renamed)
+	def get_param_mle_val(self, fixed_param):
+		return(self.content_dict.loc[fixed_param]['param_MLE'])
 
 
 			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
