@@ -8,6 +8,7 @@ import warnings as war
 import mle_functions
 from scipy.stats import norm
 from mlestimator import mle_filenaming_functions
+from mlestimator.mle_result_combiner import CombinedResultSummary
 from cluster_wrangler.cluster_functions import CompletenessTracker
 import copy
 from shutil import copyfile
@@ -721,7 +722,7 @@ class FixedPointCDFvalCalculator(object):
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
 		additional_code_run_keys, additional_code_run_values, \
-		output_id_prefix, output_file_dict):
+		output_id_prefix, output_file):
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = \
 			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file())
@@ -742,8 +743,7 @@ class FixedPointCDFvalCalculator(object):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
-		self.output_file_dict = output_file_dict
-		self.output_df_dict = {}
+		self.output_file = output_file
 		self.cdf_val_calc_complete = False
 	def _get_starting_params(self, Hnum):
 		self.sim_parameters.set_mode(self.mode_dict[Hnum])
@@ -905,21 +905,8 @@ class FixedPointCDFvalCalculator(object):
 			self.cdf_val = \
 				num_sim_deviances_above_original_deviance/num_sim_deviances
 		self.cdf_val_calc_complete = True
-		self._write_fixed_pt_output('H0', 0)
-		self._write_fixed_pt_output('H1', self.cdf_val)
-	def _write_fixed_pt_output(self, current_Hnum, current_cdf_val):
-		'''
-		Writes output containing current value of fixed_param for H1 and
-		current cdf val
-		'''
-		fixed_param = self.fixed_param_dict[current_Hnum]
-		fixed_param_val = self.fixed_param_val_dict[current_Hnum]
-		self.output_df_dict[current_Hnum] = pd.DataFrame({fixed_param: [fixed_param_val], \
-			'cdf_vals': [current_cdf_val]})
-		current_output_file = self.output_file_dict[current_Hnum]
-		if not os.path.isfile(current_output_file):
-			self.output_df_dict[current_Hnum].to_csv(path_or_buf = current_output_file, \
-				index = False)
+		_write_fixed_pt_output(self.fixed_param_dict['H1'], \
+			self.fixed_param_val_dict['H1'], self.cdf_val, self.output_file)
 	def run_fixed_pt_cdf_val_estimation(self):
 		'''
 		Determine the cumulative density function val of the hypothesis
@@ -987,7 +974,7 @@ class OneSidedSimProfiler(object):
 	'''
 	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
-		additional_code_run_values, output_id_prefix, cdf_bound):
+		additional_code_run_values, output_id_prefix, cdf_bound, profile_pt_list):
 		self.mode_dict = {'H0': mode, 'H1': mode}
 		self.fixed_param_dict = {'H0': 'unfixed', 'H1': fixed_param}
 		self.sim_parameters = sim_parameters
@@ -999,31 +986,32 @@ class OneSidedSimProfiler(object):
 		self.asymptotic_CI_val = asymptotic_CI_val
 		self.fixed_param_mle = fixed_param_mle
 		self.cdf_bound = cdf_bound
-		self.profile_points_per_side = 3
+		self.profile_pt_list = profile_pt_list
+		self.profile_pt_num = len(self.profile_pt_list)
 		self.fixed_point_df = \
 			pd.DataFrame(\
 				{'fixed_param_val_dict': [{'H0': self.fixed_param_mle, \
-					'H1': np.nan}] * 3, \
-				'completeness': [False] * 3, \
-				'cdf_val' = [np.nan] * 3}, \
-				index = [0,1,2])
+					'H1': np.nan}] * self.profile_pt_num, \
+				'completeness': [False] * self.profile_pt_num, \
+				'cdf_val' = [np.nan] * self.profile_pt_num}, \
+				index = self.profile_pt_list)
 		self.side_completeness = False
-	def _convert_profile_pt_num(self, profile_pt):
-		'''
-		Converts profile_pt to an index that will be unique across both
-		sides of the sim-based profile
-		'''
-		if self.fixed_param_mle < self.asymptotic_CI_val:
-			# upper side of profi;le
-			profile_pt_converted = profile_pt + self.profile_points_per_side
-		elif self.fixed_param_mle > self.asymptotic_CI_val:
-			# lower side of profile, re-order point indices
-			profile_pt_converted = self.profile_points_per_side - profile_pt + 1
-		else:
-			raise ValueError('fixed_param_mle is neither greater than nor ' + \
-				'less than asymptotic_CI_val for sim-based CI estimation ' + \
-				'on ' + self.output_id_prefix + '; cannot detect profile side')
-		return(profile_pt_converted)
+#	def _convert_profile_pt_num(self, profile_pt):
+#		'''
+#		Converts profile_pt to an index that will be unique across both
+#		sides of the sim-based profile
+#		'''
+#		if self.fixed_param_mle < self.asymptotic_CI_val:
+#			# upper side of profi;le
+#			profile_pt_converted = profile_pt + self.profile_points_per_side
+#		elif self.fixed_param_mle > self.asymptotic_CI_val:
+#			# lower side of profile, re-order point indices
+#			profile_pt_converted = self.profile_points_per_side - profile_pt + 1
+#		else:
+#			raise ValueError('fixed_param_mle is neither greater than nor ' + \
+#				'less than asymptotic_CI_val for sim-based CI estimation ' + \
+#				'on ' + self.output_id_prefix + '; cannot detect profile side')
+#		return(profile_pt_converted)
 	def _fixed_param_val_finder(self, current_fixed_param_val, current_cdf_val, \
 		target_cdf_val):
 		'''
@@ -1043,8 +1031,8 @@ class OneSidedSimProfiler(object):
 		Assigns self.asymptotic_CI_val to fixed parameter val of 1st
 		profile point
 		'''
-		self.fixed_point_df.at[0, 'fixed_param_val_dict']['H1'] = \
-			self.asymptotic_CI_val
+		self.fixed_point_df.at[self.profile_pt_list[0], \
+			'fixed_param_val_dict']['H1'] = self.asymptotic_CI_val
 	def _select_second_point(self):
 		'''
 		Assumes cdf on first point is on normal distribution with center
@@ -1052,14 +1040,14 @@ class OneSidedSimProfiler(object):
 		parameter value where p-val is expected to be 1/2*(target p-val)
 		'''
 		first_fixed_param_val = \
-			self.fixed_point_df.loc[0]['fixed_param_val_dict']['H1']
-		first_cdf_val = self.fixed_point_df.loc[0]['cdf_val']
+			self.fixed_point_df.loc[self.profile_pt_list[0]]['fixed_param_val_dict']['H1']
+		first_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[0]]['cdf_val']
 		pval_scaler = 0.5
 		target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 		second_pt_fixed_param_val = \
 			self._fixed_param_val_finder(first_fixed_param_val, first_cdf_val, \
 				target_cdf_val)
-		self.fixed_point_df.at[1, 'fixed_param_val_dict']['H1'] = \
+		self.fixed_point_df.at[self.profile_pt_list[1], 'fixed_param_val_dict']['H1'] = \
 			second_pt_fixed_param_val
 	def _select_third_point(self):
 		'''
@@ -1072,15 +1060,15 @@ class OneSidedSimProfiler(object):
 		target p-val by 1/4 instead of 1/2
 		'''
 		second_fixed_param_val = \
-			self.fixed_point_df.loc[1]['fixed_param_val_dict']['H1']
-		second_cdf_val = self.fixed_point_df.loc[1]['cdf_val']
+			self.fixed_point_df.loc[self.profile_pt_list[1]]['fixed_param_val_dict']['H1']
+		second_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[1]]['cdf_val']
 		if second_cdf_val > self.cdf_bound:
 			# interpolate (or if necessary extrapolate) between first
 				# and second fixed param val on x-axis to point
 				# corresponding to cdf_bound y-val
 			first_fixed_param_val = \
-				self.fixed_point_df.loc[0]['fixed_param_val_dict']['H1']
-			first_cdf_val = self.fixed_point_df.loc[0]['cdf_val']
+				self.fixed_point_df.loc[self.profile_pt_list[0]]['fixed_param_val_dict']['H1']
+			first_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[0]]['cdf_val']
 			line_fit = \
 				np.polyfit([first_fixed_param_val, second_fixed_param_val],
 					[first_cdf_val, second_cdf_val], 1)
@@ -1092,19 +1080,14 @@ class OneSidedSimProfiler(object):
 			third_pt_fixed_param_val = \
 				self._fixed_param_val_finder(second_fixed_param_val, \
 					second_cdf_val, target_cdf_val)
-		self.fixed_point_df.at[2, 'fixed_param_val_dict']['H1'] = \
+		self.fixed_point_df.at[self.profile_pt_list[2], 'fixed_param_val_dict']['H1'] = \
 			third_pt_fixed_param_val
 	def _run_fixed_pt_calc(self, profile_pt):
-		output_id_fixed_pt = '_'.join([self.output_id_prefix, 'fixed_pt_cdf'])
-		profile_pt_global = self._convert_profile_pt_num(profile_pt)
-		current_profile_idx = profile_pt - 1
-		output_file_dict = \
-			{'H0': generate_filename(self.profile_path, str(0), \
-				output_id_fixed_pt, self.fixed_param_dict['H0'], 'data'), \
-			'H1': generate_filename(self.profile_path, str(profile_pt_global), \
-				output_id_fixed_pt, self.fixed_param_dict['H1'], 'data')}
+#		output_id_fixed_pt = '_'.join([self.output_id_prefix, 'fixed_pt_cdf'])
+		output_file = generate_filename(self.profile_path, str(profile_pt), \
+			output_id_prefix, self.fixed_param_dict['H1'], 'data')}
 		current_fixed_param_val_dict = \
-			self.fixed_point_df.loc(current_profile_idx)['fixed_param_val_dict']
+			self.fixed_point_df.loc(profile_pt)['fixed_param_val_dict']
 		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.mode_dict, \
 			self.fixed_param_dict, current_fixed_param_val_dict, \
 			self.sim_parameters, self.sim_key_organizer, \
@@ -1113,11 +1096,11 @@ class OneSidedSimProfiler(object):
 		fixed_point_pval_calc.run_fixed_pt_cdf_val_estimation()
 		current_fixed_pt_complete = \
 			fixed_point_pval_calc.get_cdf_val_completeness()
-		self.fixed_point_df.at[current_profile_idx, 'completeness'] = \
+		self.fixed_point_df.at[profile_pt, 'completeness'] = \
 			current_fixed_pt_complete
 		if current_fixed_pt_complete:
 			current_cdf_val = fixed_point_pval_calc.get_cdf_val()
-			self.fixed_point_df.at[current_profile_idx, 'cdf_val'] = \
+			self.fixed_point_df.at[profile_pt, 'cdf_val'] = \
 				current_cdf_val
 		return(current_fixed_pt_complete)
 	def get_sim_profile_side_completeness(self):
@@ -1128,21 +1111,83 @@ class OneSidedSimProfiler(object):
 		and mle on them
 		'''
 		self._select_first_point()
-		first_fixed_pt_complete = self._run_fixed_pt_calc(1)
+		first_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[0])
 		if first_fixed_pt_complete:
 			self._select_second_point()
-			second_fixed_pt_complete = self._run_fixed_pt_calc(2)
+			second_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[1])
 			if second_fixed_pt_complete:
 				self._select_third_point()
-				third_fixed_pt_complete = self._run_fixed_pt_calc(3)
+				third_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[2])
 				if third_fixed_pt_complete:
 					self.side_completeness = True
 
+class TwoSidedProfiler(object):
+	'''
+	Runs OneSidedSimProfiler on both upper and lower sides of mle value
+	of fixed parameter
+	'''
+	def __init__(self, fixed_param_mle, asymptotic_CI_dict, mode, fixed_param, \
+		sim_parameters, sim_folders, additional_code_run_keys, \
+		additional_code_run_values, output_id_prefix, cdf_bound):
+		self.mode = mode
+		self.fixed_param = fixed_param
+		self.sim_parameters = sim_parameters
+		self.sim_folders = sim_folders
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
+		self.output_id_prefix = output_id_prefix
+		self.asymptotic_CI_dict = asymptotic_CI_dict
+		self.fixed_param_mle = fixed_param_mle
+		self.cdf_bound = cdf_bound
+		self.profile_points_per_side = 3
+		self.profile_pt_list = \
+			np.array(range(0, (self.profile_points_per_side * 2 + 1)))
+		self.CI_sides = ['lower', 'upper']
+		self.completeness_tracker = CompletenessTracker(self.CI_sides)
+		self._create_profile_pt_list_dict()
+	def _create_profile_pt_list_dict(self):
+		lower_profile_pts = \
+			self.profile_pt_list[range(1, (self.profile_points_per_side + 1))]
+		upper_profile_pts = \
+			self.profile_pt_list[range((self.profile_points_per_side + 1), \
+				(2 * self.profile_points_per_side + 1))]
+		self.profile_pt_list_dict = {'lower': lower_profile_pts, \
+			'upper': upper_profile_pts}
+	def run_profiler(self):
+		# write output file for 0th pt
+		output_file = generate_filename(self.profile_path, str(profile_pt), \
+			output_id_prefix, self.fixed_param, 'data')}
+		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, 0, \
+			output_file)
+		# run through sides
+		for current_profile_side in self.CI_sides:
+			current_profile_pt_list = \
+				self.profile_pt_list_dict[current_profile_side]
+			asymptotic_CI_val = self.asymptotic_CI_dict[current_profile_side]
+			current_side_sim_profiler = \
+				OneSidedSimProfiler(self.fixed_param_mle, asymptotic_CI_val, \
+					self.mode, self.fixed_param, self.sim_parameters, \
+					self.sim_folders, self.additional_code_run_keys, \
+					self.additional_code_run_values, self.output_id_prefix, \
+					self.cdf_bound, current_profile_pt_list)
+			current_side_sim_profiler.run_sim_profiler()
+			current_side_completeness = \
+				current_side_sim_profiler.get_sim_profile_side_completeness()
+			self.completeness_tracker.switch_key_completeness(current_profile_side, \
+				current_side_completeness)
 
 
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
 #####################################################################
+def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, current_output_file):
+		'''
+		Writes mlestimation.LLProfile-readable output containing
+		current value of fixed_param and current cdf val
+		'''
+		output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
+			'cdf_vals': [current_cdf_val]})
+		output_df[current_Hnum].to_csv(path_or_buf = current_output_file, index = False)
 
 def generate_sim_file_label(sim_key, input_datafile_name):
 	sim_file_label = \
