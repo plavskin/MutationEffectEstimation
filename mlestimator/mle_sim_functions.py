@@ -41,7 +41,7 @@ class SimFolders(object):
 	# also needs:
 	#	current_sim_folder
 	# need to keep hypothesis_key_organizer_file and sim_key_organizer_file filenames in here
-	# need sim_profile_folder, current_output_subfolder
+	# need sim_profile_folder, sim_profile_fixed_pt_folder (subfolder of prev), sim_summary_folder, current_output_subfolder
 	def get_hypothesis_key_organizer_file(self):
 		return(hypothesis_key_organizer_file)
 	def get_sim_key_organizer_file(self):
@@ -437,7 +437,7 @@ class LLRCalculator(SimPreparer):
 		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, additional_code_run_keys, additional_code_run_values)
-		self.LL_list_folder = self.sim_folders.get_path('sim_profile_folder')
+		self.LL_list_folder = self.sim_folders.get_path('sim_summary_folder')
 		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
 		self._generate_LLR_filename()
 		self.LL_list_dict = dict()
@@ -731,7 +731,9 @@ class FixedPointCDFvalCalculator(object):
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
 		additional_code_run_keys, additional_code_run_values, \
-		output_id_prefix, output_file):
+		output_id_prefix, output_file, cluster_folders, cluster_parameters):
+		self.cluster_folders = cluster_folders
+		self.cluster_parameters = cluster_parameters
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = \
 			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file())
@@ -983,12 +985,15 @@ class OneSidedSimProfiler(object):
 	'''
 	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
-		additional_code_run_values, output_id_prefix, cdf_bound, profile_pt_list):
+		additional_code_run_values, output_id_prefix, cdf_bound, profile_pt_list, \
+		cluster_folders, cluster_parameters):
 		self.mode_dict = {'H0': mode, 'H1': mode}
 		self.fixed_param_dict = {'H0': 'unfixed', 'H1': fixed_param}
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
-		self.profile_path = sim_folders.get_path('sim_profile_folder')
+		self.cluster_folders = cluster_folders
+		self.cluster_parameters = cluster_parameters
+		self.profile_path = sim_folders.get_path('sim_profile_fixed_pt_folder')
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
@@ -1137,11 +1142,14 @@ class TwoSidedProfiler(object):
 	'''
 	def __init__(self, fixed_param_mle, asymptotic_CI_dict, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
-		additional_code_run_values, output_id_prefix, cdf_bound):
+		additional_code_run_values, output_id_prefix, cdf_bound, cluster_folders, \
+		cluster_parameters):
 		self.mode = mode
 		self.fixed_param = fixed_param
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
+		self.cluster_folders = cluster_folders
+		self.cluster_parameters = cluster_parameters
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
@@ -1154,6 +1162,10 @@ class TwoSidedProfiler(object):
 		self.CI_sides = ['lower', 'upper']
 		self.completeness_tracker = CompletenessTracker(self.CI_sides)
 		self._create_profile_pt_list_dict()
+		self.completefile = \
+			os.path.join(cluster_folders.get_path('completefile_path'), \
+				'_'.join(['param_profile_', sim_parameters.output_id_parameter, \
+					'completefile.txt']))
 	def _create_profile_pt_list_dict(self):
 		lower_profile_pts = \
 			self.profile_pt_list[range(1, (self.profile_points_per_side + 1))]
@@ -1162,6 +1174,8 @@ class TwoSidedProfiler(object):
 				(2 * self.profile_points_per_side + 1))]
 		self.profile_pt_list_dict = {'lower': lower_profile_pts, \
 			'upper': upper_profile_pts}
+	def get_completefile(self):
+		return(self.completefile)
 	def run_profiler(self):
 		# write output file for 0th pt
 		output_file = generate_filename(self.profile_path, str(profile_pt), \
@@ -1178,12 +1192,15 @@ class TwoSidedProfiler(object):
 					self.mode, self.fixed_param, self.sim_parameters, \
 					self.sim_folders, self.additional_code_run_keys, \
 					self.additional_code_run_values, self.output_id_prefix, \
-					self.cdf_bound, current_profile_pt_list)
+					self.cdf_bound, current_profile_pt_list, cluster_folders)
 			current_side_sim_profiler.run_sim_profiler()
 			current_side_completeness = \
 				current_side_sim_profiler.get_sim_profile_side_completeness()
 			self.completeness_tracker.switch_key_completeness(current_profile_side, \
 				current_side_completeness)
+		if self.completeness_tracker.get_completeness():
+			open(self.completefile,'a').close()
+
 
 
 			
@@ -1214,7 +1231,7 @@ def _generate_sim_filename(sim_file_path, within_batch_counter_call, \
 
 def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 	additional_code_run_keys, additional_code_run_values, output_id_prefix, \
-	combined_results):
+	combined_results, cluster_folders, cluster_parameters):
 		cdf_bound = 1 - sim_parameters.current_CI_pval
 		for fixed_param in sim_parameters.current_sim_CI_parameters:
 			asymptotic_CI_complete = \
@@ -1227,7 +1244,11 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 				current_param_profiler = TwoSidedProfiler(fixed_param_mle, \
 					asymptotic_CI_dict, mode, fixed_param, sim_parameters, \
 					sim_folders, additional_code_run_keys, \
-					additional_code_run_values, output_id_prefix, cdf_bound)
+					additional_code_run_values, output_id_prefix, cdf_bound, \
+					cluster_folders, cluster_parameters)
 				current_param_profiler.run_profiler()
+				profile_completefile = \
+					current_param_profiler.get_completefile()
+				sim_parameters.update_parameter_completeness(profile_completefile)
 
 

@@ -103,36 +103,52 @@ class CombinedResultSummary(object):
 	#	create summary file
 	# keep track of summary files for each mode; once those are complete, stop running current folder
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
-		cluster_folders):
-		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
+		cluster_folders, sim_parameters, sim_folders):
+		self.datafile_path_dict = \
+			{'asymptotic': mle_folders.get_path('current_output_subfolder'),
+			'sim_based': sim_folders.get_path('sim_profile_fixed_pt_folder')}
+		self.LL_profile_folder = mle_folders.get_path('LL_list_path')
+
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.mle_folders = copy.deepcopy(mle_folders)
+
+
+		self.parameter_holder_dict = \
+			{'asymptotic': copy.deepcopy(mle_parameters),
+			'sim_based': copy.deepcopy(sim_parameters)}
+		self.folder_holder_dict = \
+			{'asymptotic': copy.deepcopy(mle_folders),
+			'sim_based': copy.deepcopy(sim_folders)}
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
-		self.LL_profile_folder = mle_folders.get_path('LL_list_path')
 		self.runtime_percentile = mle_parameters.runtime_percentile
 		self.pval = mle_parameters.current_CI_pval
 		self._create_combined_output_file()
 		self.max_LL = None
 		self.warnings = CombinedResultWarning()
-		self.completeness_tracker = cluster_functions.CompletenessTracker(['initialization', \
-			'asymptotic_CIs', 'simulation-based_CIs'])
+		self.CI_type_list = ['asymptotic', 'sim_based']
+		self.completeness_tracker = cluster_functions.CompletenessTracker(['asymptotic_initialization', \
+			'asymptotic_CIs', 'sim_based_initialization', 'sim_based_CIs'])
 		self.runtime_quant_list = np.array([])
 		self.true_max_param_df = pd.DataFrame()
 		self.combined_results_df = pd.DataFrame()
 		# set completefiles for asymptotic and sim-based CIs
-		self.asymptotic_CI_completefile = \
-			os.path.join(cluster_folders.get_path('completefile_path'), \
-				'_'.join(['asymoptotic_CI', mle_parameters.output_identifier, \
-					'completefile.txt']))
-		self.sim_CI_completefile = \
-			os.path.join(cluster_folders.get_path('completefile_path'), \
-				'_'.join(['simulation-based_CI', \
-					mle_parameters.output_identifier, 'completefile.txt']))
+		self._create_completefile_dict()
 		# set MLE results from 'unfixed' parameter (i.e. fitting all
 			# unfixed params together)
-		self.unfixed_mle_file = generate_filename(self.mle_datafile_path, \
+		self.unfixed_mle_file = \
+			generate_filename(self.datafile_path_dict['asymptotic'], \
 			'1', mle_parameters.output_identifier, 'unfixed', 'data')
+	def _create_completefile_dict(self):
+		self.CI_completefile_dict = {}
+		for CI_type in CI_type_list:
+			current_parameter_holder = self.parameter_holder_dict[CI_type]
+			current_completefile = \
+				os.path.join(cluster_folders.get_path('completefile_path'), \
+					'_'.join([(CI_type + '_CI'), \
+						current_parameter_holder.output_identifier, \
+						'completefile.txt']))
+			self.CI_completefile_dict[CI_type] = current_completefile
 	def _create_combined_output_file(self):
 		# creates the name of the combined output file for the results
 		experiment_path = self.mle_folders.get_path('experiment_path')
@@ -171,7 +187,8 @@ class CombinedResultSummary(object):
 		self.mle_parameters.set_parameter(fixed_parameter)
 		# create an LLProfile for current parameter
 		ll_profile = mle_functions.LLProfile(self.mle_parameters, \
-			self.mle_datafile_path, self.LL_profile_folder, \
+			self.datafile_path_dict['asymptotic'], \
+			LL_profile_folder, \
 			non_profile_max_params)
 		ll_profile.run_LL_list_compilation()
 		warning_line = ll_profile.get_warnings()
@@ -274,16 +291,16 @@ class CombinedResultSummary(object):
 			mle_df.drop(index=['LL','runtime_in_secs'],inplace = True)
 			self.combined_results_df = \
 				self.combined_results_df.append(mle_df, sort = False)
-	def initialize_combined_results(self):
+	def _initialize_asymptotic_results(self):
 		# check whether initial mle has been completed
 		mle_complete = self.mle_parameters.check_completeness_within_mode()
 		if mle_complete:
 			self._set_unfixed_param_data()
 			# check whether initialization has been run
-			self.completeness_tracker.update_key_status('initialization', \
+			self.completeness_tracker.update_key_status('asymptotic_initialization', \
 				self.combined_results_output_file)
 			init_complete = \
-				self.completeness_tracker.get_key_completeness('initialization')
+				self.completeness_tracker.get_key_completeness('asymptotic_initialization')
 			if init_complete:
 				self._read_combined_df()
 			else:
@@ -304,53 +321,71 @@ class CombinedResultSummary(object):
 				if non_unfixed_ML_identified:
 					self._correct_LL_profiles()
 				self._write_combined_df()
-	def generate_asymptotic_CIs(self):
-		# generate and record asymptotic CIs for fitted parameters
-		init_complete = \
-			self.completeness_tracker.get_key_completeness('initialization')
-		if init_complete:
+	def _initialize_sim_based_results(self):
+		# check whether initial sim profile building has been completed
+		sim_profile_complete = \
+			self.parameter_holder_dict['sim_based'].check_completeness_within_mode()
+		if sim_profile_complete:
+			self.completeness_tracker.switch_key_status('sim_based_initialization', \
+				True)
+	def generate_CIs(self, CI_type):
+		''' Generates and record CIs for fitted parameters '''
+		if CI_type not in self.CI_type_list:
+			raise ValueError('Unknown CI type ' + CI_type)
+		parameter_holder = self.parameter_holder_dict[CI_type]
+		folder_holder = self.folder_holder_dict[CI_type]
+		# initialize combined results df
+		self._initialize_asymptotic_results()
+		# check whether sim_based profiles ready
+		self._initialize_sim_based_results()
+		# Only run CI estimation if initialization is complete but CIs are not
+		if self.completeness_tracker.get_key_completeness(CI_type + \
+			'_initialization'):
 			self._read_combined_df()
-			# check whether asymptotic CI has been completed
-			self.completeness_tracker.update_key_status('asymptotic_CI', \
-				self.asymptotic_CI_completefile)
-			asymptotic_CIs_complete = \
-				self.completeness_tracker.get_key_completeness('asymptotic_CIs')
-			if not asymptotic_CIs_complete:
-				parameters_to_loop_over = \
-					self.mle_parameters.get_fitted_parameter_list(False)
-				asymptotic_CI_completeness_tracker = \
+			if not \
+				self.completeness_tracker.get_key_completeness(CI_type + \
+					'_CIs'):
+				if CI_type is 'asymptotic':
+					parameters_to_loop_over = \
+						parameter_holder.get_fitted_parameter_list(False)
+				elif CI_type is 'sim_based':
+					parameters_to_loop_over = \
+						parameter_holder.current_sim_CI_parameters
+				CI_completeness_tracker = \
 					cluster_functions.CompletenessTracker(parameters_to_loop_over)
 				for current_fixed_parameter in parameters_to_loop_over:
-					# check whether this asymptotic CI has been identified
+					# check whether this CI has been identified
 					# read line for current_fixed_parameter from
 						# combined_results_df
 					current_results_line = SingleParamResultSummary()
 					current_results_line.read_from_df_line(self.combined_results_df, \
 						current_fixed_parameter)
-					# identify columns containing the word 'asymptotic_CI'
-						# and check that such columns exist and that none
-						# of them contain NaN)
-					current_asymptotic_CI_complete = \
-						current_results_line.check_column_filledness_by_keyword('asymptotic_CI')
-					if current_asymptotic_CI_complete:
-						asymptotic_CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
+					# identify columns containing the string
+						# (CI_type + '_CI') and check that such columns
+						# exist and that none of them contain NaN)
+					current_CI_complete = \
+						current_results_line.check_column_filledness_by_keyword(CI_type + '_CI')
+					if current_CI_complete:
+						CI_completeness_tracker.switch_key_completeness(current_fixed_parameter, \
+							True)
 					else:
 						# first set current parameter
-						self.mle_parameters.set_parameter(current_fixed_parameter)
+						parameter_holder.set_parameter(current_fixed_parameter)
 						# create an LLProfile for current parameter
-						ll_profile = LLProfile(self.mle_parameters, \
-							self.mle_datafile_path, self.LL_profile_folder, \
+						ll_profile = LLProfile(parameter_holder, \
+							self.datafile_path_dict[CI_type], \
+							LL_profile_folder, \
 							pd.DataFrame())
 						ll_profile.run_LL_list_compilation()
-						ll_profile.run_CI(self.pval, self.mle_folders, \
+						ll_profile.run_CI(self.pval, folder_holder, \
 							self.cluster_parameters, self.cluster_folders, \
-							self.mle_parameters, 'asymptotic')
-						asymptotic_CI_dict = ll_profile.get_CI()
+							parameter_holder, CI_type)
+						CI_dict = ll_profile.get_CI()
 							# if jobs to calculate both CI bounds have not yet been
 								# completed, returns None
-						if asymptotic_CI_dict:
+						if CI_dict:
 							# set the new confidence interval
-							current_results_line.set_CI('asymptotic', asymptotic_CI_dict)
+							current_results_line.set_CI(CI_type, CI_dict)
 							# replace previous warning entry--all warnings are
 								# recalculated individually when a CI bound is
 								# initialized, so having a CI_bound completely
@@ -359,15 +394,15 @@ class CombinedResultSummary(object):
 							current_warning = ll_profile.get_warnings()
 							current_results_line.set_warnings(current_warning)
 							# replace line in combined_results_df with updated line
-								# that has asymptotic CI and warnings
+								# that has CI and warnings
 							current_results_dict = current_results_line.get_contents()
 							self._add_line_to_combined_df(current_fixed_parameter, current_results_dict)
-							asymptotic_CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
+							CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
 				self._write_combined_df()
-				asymptotic_CIs_just_completed = \
-					asymptotic_CI_completeness_tracker.get_completeness()
-				if asymptotic_CIs_just_completed:
-					open(self.asymptotic_CI_completefile,'a').close()
+				CIs_just_completed = \
+					CI_completeness_tracker.get_completeness()
+				if CIs_just_completed:
+					open(self.CI_completefile_dict[CI_type],'a').close()
 	def get_CI_dict(self, fixed_param, CI_type):
 		'''
 		Get a dictionary with 'lower' and 'upper' as keys for CI_type
