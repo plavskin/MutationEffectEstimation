@@ -108,6 +108,7 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 		cluster_parameters = cluster_functions.ClusterParameters(parameter_list)
 		# get general info necessary to run the rest of code
 		mle_parameters = mle_functions.MLEParameters(parameter_list)
+		sim_parameters = mle_sim_functions.SimParameters(parameter_list)
 
 		# create MLE_running.txt so no new instances of MLE_runner.py run
 #		open(currently_running_checkfile,'w+').close()
@@ -196,7 +197,8 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 				mle_run_functions.loop_over_modes(mle_parameters, \
 					cluster_parameters, cluster_folders, mle_folders, \
 					experiment_path, additional_code_run_keys, \
-					additional_code_run_values, output_id_string_start)
+					additional_code_run_values, output_id_string_start, \
+					sim_parameters)
 
 
 

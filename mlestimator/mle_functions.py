@@ -21,9 +21,9 @@ class FolderManager(object):
 		self.path_dict['experiment_path'] = \
 			os.path.join(cluster_parameters.composite_data_path, \
 				experiment_folder_name)
-		self.path_dict['sim_output_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
-				experiment_folder_name, 'simulated_phenotypes')
+	#	self.path_dict['sim_output_path'] = \
+	#		os.path.join(cluster_parameters.temp_storage_path, \
+	#			experiment_folder_name, 'simulated_phenotypes')
 		self.path_dict['MLE_output_path'] = \
 			os.path.join(cluster_parameters.temp_storage_path, \
 				experiment_folder_name,'MLE_output')
@@ -33,22 +33,48 @@ class FolderManager(object):
 			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
 		self.path_dict['CI_bound_path'] = \
 			os.path.join(self.path_dict['experiment_path'],'CI_bounds')
-	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
-		self.path_dict['MLE_combined_sim_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
-				'MLE_sim_outputs')
-		self._set_up_folders()
-	def _set_up_folders(self):
-		setup_complete_file = \
+		self.setup_complete_file = \
 			os.path.join(self.path_dict['completefile_folder'], \
 			'mle_folder_setup_complete.txt')
-		if not os.path.isfile(setup_complete_file):
+	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
+	#	self.path_dict['MLE_combined_sim_path'] = \
+	#		os.path.join(cluster_parameters.temp_storage_path, \
+	#			'MLE_sim_outputs')
+		self.path_dict['sim_output_path'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name, 'simulated_phenotypes')
+		self.path_dict['sim_profile_fixed_pt_folder'] = \
+			os.path.join(self.path_dict['LL_list_path'], \
+				'sim_profile_fixed_points')
+		self.path_dict['sim_profile_fixed_pt_folder'] = \
+			os.path.join(self.path_dict['LL_list_path'], \
+				'sim_profile_fixed_points')
+		self.path_dict['sim_output_list_folder'] = \
+			os.path.join(self.path_dict['LL_list_path'], \
+				'sim_output_list_folder')
+		self.path_dict['key_organizer_folder'] = \
+			os.path.join(self.path_dict['experiment_path'],'key_organizers')
+		# create folders in path_dict
+		self._set_up_folders()
+		# set up organizer files for sim
+		self.hypothesis_key_organizer_file = \
+			os.path.join(self.path_dict['key_organizer_folder'], \
+				'hypothesis_key_organizer.csv')
+		self.sim_key_organizer_file = \
+			os.path.join(self.path_dict['key_organizer_folder'], \
+				'sim_key_organizer.csv')
+	def _set_up_folders(self):
+		if not os.path.isfile(self.setup_complete_file):
 			for current_folder_key, current_path in self.path_dict.iteritems():
 				if not os.path.isdir(current_path):
 					os.makedirs(current_path)
-			open(setup_complete_file,'a').close()
+			open(self.setup_complete_file,'a').close()
 	def get_experiment_folder_name(self):
 		return(self.experiment_folder_name)
+	def get_hypothesis_key_organizer_file(self):
+		return(self.hypothesis_key_organizer_file)
+	def get_sim_key_organizer_file(self):
+		return(self.sim_key_organizer_file)
 	def get_path(self, folder_name):
 		return(self.path_dict[folder_name])
 	def set_current_output_subfolder(self,current_subfolder):

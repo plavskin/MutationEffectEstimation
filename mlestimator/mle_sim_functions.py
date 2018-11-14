@@ -30,23 +30,8 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 # FOR NOW, MAYBE DON'T WRITE IN FRAMEWORK FOR MODEL COMPARISON!?
 #####################################################################
 
-# have a list of simulation key files, by mode and fixed sim parameters; each will have a unique key number
-# before starting new set of sims, see if key for such a sim already exists (e.g. look through ones with correct sim mode);
-	# if it does, use the key number corresponding to that sim for trackfiles, completefiles, etc (i.e. in sim output_id)
 
 #####################################################################
-class SimFolders(object):
-	pass()
-	# needs to have all the same folder types as MLEFolders does
-	# also needs:
-	#	current_sim_folder
-	# need to keep hypothesis_key_organizer_file and sim_key_organizer_file filenames in here
-	# need sim_profile_folder, sim_profile_fixed_pt_folder (subfolder of prev), sim_summary_folder, current_output_subfolder
-	def get_hypothesis_key_organizer_file(self):
-		return(hypothesis_key_organizer_file)
-	def get_sim_key_organizer_file(self):
-		return(sim_key_organizer_file)
-
 class SimParameters(mle_functions.MLEParameters):
 	'''
 	This class inherits from mle_functions.MLEParameters, but allows
@@ -239,7 +224,7 @@ class KeyOrganizer(object):
 	def _read_key_file(self):
 		# if self.key_file exists, reads it in;
 		# otherwise, creates one
-		if os.path.isfile(self.LL_file):
+		if os.path.isfile(self.key_file):
 			try:
 				self.key_df = pd.read_csv(filepath_or_buffer=self.key_file)
 			except pd.io.common.EmptyDataError:
@@ -437,8 +422,8 @@ class LLRCalculator(SimPreparer):
 		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, additional_code_run_keys, additional_code_run_values)
-		self.LL_list_folder = self.sim_folders.get_path('sim_summary_folder')
-		self.mle_datafile_path = mle_folders.get_path('current_output_subfolder')
+		self.LL_list_folder = sim_folders.get_path('sim_output_list_folder')
+		self.mle_datafile_path = sim_folders.get_path('current_output_subfolder')
 		self._generate_LLR_filename()
 		self.LL_list_dict = dict()
 		# create CompletenessTracker object to track whether each LL
@@ -464,7 +449,7 @@ class LLRCalculator(SimPreparer):
 		# run MLE; completeness of current_sim_parameters will
 			# automatically be updated
 		include_unfixed_parameter = False
-		input_data_folder = self.sim_folders.get_path('current_sim_folder')
+		input_data_folder = self.sim_folders.get_path('sim_output_path')
 		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
 			self.cluster_folders, self.sim_folders, self.additional_code_run_keys, \
 			self.additional_code_run_values, include_unfixed_parameter, \
@@ -588,7 +573,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		# need to set an output_file_label for the
 			# purposes of tracking job completion
 		# use last file in sim_parameters.input_datafile_values
-		sim_output_path = sim_folders.get_path('current_sim_folder')
+		sim_output_path = sim_folders.get_path('sim_output_path')
 		output_file_label = sim_parameters.input_datafile_values[-1]
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()

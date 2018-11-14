@@ -103,22 +103,16 @@ class CombinedResultSummary(object):
 	#	create summary file
 	# keep track of summary files for each mode; once those are complete, stop running current folder
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
-		cluster_folders, sim_parameters, sim_folders):
+		cluster_folders, sim_parameters):
 		self.datafile_path_dict = \
 			{'asymptotic': mle_folders.get_path('current_output_subfolder'),
-			'sim_based': sim_folders.get_path('sim_profile_fixed_pt_folder')}
+			'sim_based': mle_folders.get_path('sim_profile_fixed_pt_folder')}
 		self.LL_profile_folder = mle_folders.get_path('LL_list_path')
-
 		self.mle_parameters = copy.deepcopy(mle_parameters)
 		self.mle_folders = copy.deepcopy(mle_folders)
-
-
 		self.parameter_holder_dict = \
 			{'asymptotic': copy.deepcopy(mle_parameters),
 			'sim_based': copy.deepcopy(sim_parameters)}
-		self.folder_holder_dict = \
-			{'asymptotic': copy.deepcopy(mle_folders),
-			'sim_based': copy.deepcopy(sim_folders)}
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
 		self.runtime_percentile = mle_parameters.runtime_percentile
@@ -333,7 +327,6 @@ class CombinedResultSummary(object):
 		if CI_type not in self.CI_type_list:
 			raise ValueError('Unknown CI type ' + CI_type)
 		parameter_holder = self.parameter_holder_dict[CI_type]
-		folder_holder = self.folder_holder_dict[CI_type]
 		# initialize combined results df
 		self._initialize_asymptotic_results()
 		# check whether sim_based profiles ready
@@ -377,7 +370,7 @@ class CombinedResultSummary(object):
 							LL_profile_folder, \
 							pd.DataFrame())
 						ll_profile.run_LL_list_compilation()
-						ll_profile.run_CI(self.pval, folder_holder, \
+						ll_profile.run_CI(self.pval, self.mle_folders, \
 							self.cluster_parameters, self.cluster_folders, \
 							parameter_holder, CI_type)
 						CI_dict = ll_profile.get_CI()
