@@ -342,6 +342,62 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				'additional_code_run_values is not the same length as its ' + \
 				'corresponding list of keys in MLEstimation class!')
 
+class BoundAbuttingPointRemover(object):
+	"""
+	Identifies and removes points from LL_df in which at least one
+	parameter value abutts a parameter from a list of boundary values
+	"""
+	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
+		scaling_array, logspace_parameters, parameter_names, fixed_param):
+		self.LL_df_prefilter = LL_df_prefilter
+		self.x_tolerance = x_tolerance
+		self.bound_array = bound_array
+		self.scaling_array = scaling_array
+		self.logspace_parameters = logspace_parameters
+		# allow fixed_param to abut a boundary
+		self.parameter_names = [x for x in parameter_names if x != fixed_param]
+		self.fixed_param = fixed_param
+		self.parameter_val_df = LL_df_prefilter[parameter_names]
+		self.num_rows = LL_df_prefilter.shape[0]
+		self.scaling_matrix = np.tile(scaling_array, (self.num_rows, 1))
+		# get abs val of difference between rescaled
+			# self.parameter_val_df and rescaled bound_array
+		self._get_scaled_array_diff()
+		self._remove_abutting_points()
+	def _rescale_df(self, df):
+		# rescales df by converting necessary columns to logspace and
+		# then multipying by scaling_array
+		logspace_df = copy.copy(df)
+		if any(self.logspace_parameters):
+			logspace_df[self.logspace_parameters] = \
+				np.log(logspace_df[self.logspace_parameters])
+		scaled_df = logspace_df * self.scaling_matrix
+		return(scaled_df)
+	def _get_scaled_array_diff(self):
+		# rescales columns in parameter_val_df and finds abs val of the
+		# difference between each row and a rescaled comparison_array
+		bound_matrix = np.tile(self.bound_array, (self.num_rows, 1))
+		bound_df = pd.DataFrame(bound_matrix, \
+			index = self.parameter_val_df.index.values, \
+			columns = self.parameter_names)
+		bound_df_rescaled = self._rescale_df(bound_df)
+		parameter_val_df_rescaled = self._rescale_df(self.parameter_val_df)
+		self.LL_df_diff = abs(parameter_val_df_rescaled - bound_df_rescaled)
+	def _remove_abutting_points(self):
+		# identify indices to remove from df, remove them, and save
+		# removed vals of fixed_param as self.removed_param_vals
+		comparison_df = self.LL_df_diff < self.x_tolerance
+		indices_to_remove_bool = comparison_df.any(axis = 'columns')
+		indices_to_remove = list(compress(comparison_df.index.values, \
+			indices_to_remove_bool))
+		self.removed_param_vals = \
+			np.array(self.LL_df_prefilter[self.fixed_param].loc[indices_to_remove])
+		self.LL_df = self.LL_df_prefilter.drop(indices_to_remove)
+	def get_LL_df(self):
+		return(self.LL_df)
+	def get_removed_param_vals(self):
+		return(self.removed_param_vals)
+
 class LLHolder(object):
 	'''
 	Populates, holds, and saves a dataframe containing outputs of MLE
@@ -351,6 +407,7 @@ class LLHolder(object):
 		self.output_identifier = output_identifier
 		self.datafile_path = datafile_path
 		self.fixed_param = fixed_param
+		self.warning_line = ''
 		self.LL_file = os.path.join(LL_list_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
@@ -406,6 +463,39 @@ class LLHolder(object):
 		else:
 			self._populate_LL_df()
 		self._sort_by_profiled_param()
+	def remove_bound_abutting_points(self, x_tolerance, \
+		parameter_max_vals, parameter_min_vals, scaling_array, \
+		logspace_parameters, parameter_names):
+		# identifies points that abutt parameter_max_vals or
+		# parameter_min_vals at a parameter point, and removes them
+		# from LL_df
+		bound_abutting_point_remover_min = \
+			BoundAbuttingPointRemover(self.LL_df_sorted, x_tolerance, \
+				parameter_min_vals, scaling_array, logspace_parameters, \
+				parameter_names, self.fixed_param)
+		LL_df_minfilter = bound_abutting_point_remover_min.get_LL_df()
+		min_removed_param_vals = \
+			bound_abutting_point_remover_min.get_removed_param_vals()
+		bound_abutting_point_remover_max = \
+			BoundAbuttingPointRemover(LL_df_minfilter, x_tolerance, \
+				parameter_max_vals, scaling_array, logspace_parameters, \
+				parameter_names, fixed_param)
+		LL_df_postfilter = bound_abutting_point_remover_max.get_LL_df()
+		max_removed_param_vals = \
+			bound_abutting_point_remover_max.get_removed_param_vals()
+		self.removed_param_vals = {'lower' : min_removed_param_vals, \
+			'upper' : max_removed_param_vals}
+		self._check_bound_abutting_point_warning(fixed_param)
+		return(LL_df_postfilter)
+	def _check_bound_abutting_point_warning(self, fixed_param):
+		for key, val in self.removed_param_vals.iteritems():
+			if not val.size == 0:
+				current_list_as_str = ';'.join([str(i) for i in val])
+				current_warning_string = \
+					'datapoints for the following values of ' + \
+					fixed_param + 'were removed for abutting the ' + \
+					key + ' parameter bounds: ' + current_list_as_str
+				self.warning_line = self.warning_line + current_warning_string
 	def run_LL_list_compilation(self):
 		''' Compiles and writes LL_df '''
 		self._set_LL_df()
@@ -426,7 +516,6 @@ class LLProfile(LLHolder):
 			mle_parameters.output_identifier, \
 			mle_parameters.current_fixed_parameter, datafile_path, \
 			LL_profile_folder)
-		self.warning_line = ''
 		self.additional_param_df = copy.copy(additional_param_df)
 		self.max_LL = None
 		self.ML_params = None
@@ -469,7 +558,7 @@ class LLProfile(LLHolder):
 		self._set_LL_df()
 		self._write_LL_df()
 		self._id_max_LL()
-	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders, mle_parameters):
+	def run_CI(self, pval, mle_folders, cluster_parameters, cluster_folders, mle_parameters, CI_type):
 		# when LL_profile complete, get lower and upper asymptotic CI
 		# if asymptotic CI identification is complete:
 		#	- identify position at which sims need to happen
@@ -478,16 +567,23 @@ class LLProfile(LLHolder):
 		# get asymptotic CI
 		deg_freedom = 1
 			# 1 df for chi-square test for LL profile comparisons
-		CI_type = 'asymptotic'
-		self.asymptotic_CI = mle_CI_functions.TwoSidedCI(pval, \
-			self.LL_df_sorted, deg_freedom, self.fixed_param_MLE_val, \
+		LL_df_sorted_cleaned = \
+			self.remove_bound_abutting_points(self.mle_parameters.current_x_tolerance, \
+				self.mle_parameters.current_max_parameter_val_list, \
+				self.mle_parameters.current_min_parameter_val_list, \
+				self.mle_parameters.current_scaling_val_list, \
+				self.mle_parameters.current_logspace_profile_list, \
+				self.mle_parameters.current_parameter_list,
+				self.mle_parameters.current_fixed_parameter)
+		self.CI = mle_CI_functions.TwoSidedCI(pval, \
+			LL_df_sorted_cleaned, deg_freedom, self.fixed_param_MLE_val, \
 			self.fixed_param, CI_type, mle_folders, \
 			cluster_parameters, cluster_folders, self.output_identifier, \
 			mle_parameters)
-		self.asymptotic_CI.find_CI()
-		self.asymptotic_CI_dict = self.asymptotic_CI.get_CI()
-		if self.asymptotic_CI_dict:
-			self.warning_line = self.asymptotic_CI.get_CI_warning()
+		self.CI.find_CI()
+		self.CI_dict = self.CI.get_CI()
+		if self.CI_dict:
+			self.warning_line = self.CI.get_CI_warning()
 	def get_fixed_param_MLE_val(self):
 		# returns MLE value of current fixed parameter
 		return(self.fixed_param_MLE_val)

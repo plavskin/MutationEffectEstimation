@@ -479,7 +479,16 @@ class LLRCalculator(SimPreparer):
 			self.mle_datafile_path, self.LL_list_folder)
 		ll_list.run_LL_list_compilation()
 			# compiles ll_list and writes it to a file
-		current_ll_df = ll_list.get_LL_df()
+		# get sorted list of LL values with any values in which a
+			# parameter (except the fixed parameter) abutted a min or
+			# max bound removed from the list
+		current_ll_df = ll_list.remove_bound_abutting_points(current_sim_parameters.current_x_tolerance, \
+				current_sim_parameters.current_max_parameter_val_list, \
+				current_sim_parameters.current_min_parameter_val_list, \
+				current_sim_parameters.current_scaling_val_list, \
+				current_sim_parameters.current_logspace_profile_list, \
+				current_sim_parameters.current_parameter_list,
+				current_sim_parameters.current_fixed_parameter)
 		current_ll_file = ll_list.get_LL_file()
 		self.LL_list_dict[Hnum] = current_ll_df
 		self.LL_list_completeness_tracker.update_key_status(Hnum, \

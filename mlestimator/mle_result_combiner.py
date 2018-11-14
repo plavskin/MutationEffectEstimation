@@ -344,8 +344,8 @@ class CombinedResultSummary(object):
 						ll_profile.run_LL_list_compilation()
 						ll_profile.run_CI(self.pval, self.mle_folders, \
 							self.cluster_parameters, self.cluster_folders, \
-							self.mle_parameters)
-						asymptotic_CI_dict = ll_profile.get_asymptotic_CI()
+							self.mle_parameters, 'asymptotic')
+						asymptotic_CI_dict = ll_profile.get_CI()
 							# if jobs to calculate both CI bounds have not yet been
 								# completed, returns None
 						if asymptotic_CI_dict:
