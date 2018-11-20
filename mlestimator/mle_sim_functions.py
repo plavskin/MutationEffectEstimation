@@ -4,14 +4,15 @@
 
 import pandas as pd
 import numpy as np
+import os
 import warnings as war
 import mle_functions
 from scipy.stats import norm
 from mlestimator import mle_filenaming_functions
-from mlestimator.mle_result_combiner import CombinedResultSummary
-from cluster_wrangler.cluster_functions import CompletenessTracker
+import cluster_wrangler.cluster_functions
 import copy
 from shutil import copyfile
+from mlestimator.mle_filenaming_functions import generate_filename
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
@@ -50,22 +51,19 @@ class SimParameters(mle_functions.MLEParameters):
 	It also reads in and processes parameters specific to simulations
 	'''
 	def __init__(self, parameter_list):
-		super(mle_functions.MLEParameters, self).__init__(parameter_list)
+		super(SimParameters, self).__init__(parameter_list)
 		self.unmod_input_datafile_values = self.input_datafile_values
 		# delete self.input_datafile_values so that they can't be passed
 			# to downstream code without setting the sim first
 		del self.input_datafile_values
-		#### ??? ####
-		# Need to ensure setup files have all these parameters below
-		#### ??? ####
 		self.sim_CI_parameters_by_mode = \
 			parameter_list["sim_CI_parameters_by_mode"]
-		self.simulation_repeats_by_mode = \
+		self.sim_repeats_by_mode = \
 			parameter_list["simulation_repeats_by_mode"]
 		self.sim_time = parameter_list["sim_time"]
 		self.sim_mem = parameter_list["sim_mem"]
 		# reset profile_points_by_mode to number of sim repeats by mode
-		self.profile_points_by_mode = self.simulation_repeats_by_mode
+		self.profile_points_by_mode = [self.sim_repeats_by_mode]
 		# set default parameter_to_select for looping over parameters
 		self.parameter_to_select = 'unfixed'
 	def set_sim(self, sim_key):
@@ -80,10 +78,10 @@ class SimParameters(mle_functions.MLEParameters):
 			self.input_datafile_values.append(new_input_datafile_val)
 	def set_mode(self, mode_name, output_identifier):
 		mode_idx = self.mode_list.index(mode_name)
-		self.current_sim_rep_num = self.simulation_repeats_by_mode[mode_idx]
+		self.current_sim_rep_num = self.sim_repeats_by_mode[mode_idx]
 		self.current_sim_CI_parameters = \
 			self.sim_CI_parameters_by_mode[mode_idx]
-		super(mle_functions.MLEParameters, self).set_mode(mode_name, \
+		super(SimParameters, self).set_mode(mode_name, \
 				output_identifier)
 	def _id_parameters_to_loop_over(self):
 		'''
@@ -98,7 +96,7 @@ class SimParameters(mle_functions.MLEParameters):
 		sim reps
 		'''
 		self.current_parameters_to_loop_over = [self.parameter_to_select]
-		self.point_numbers_to_loop_over = numpy.array(self.current_sim_rep_num)
+		self.point_numbers_to_loop_over = np.array(self.current_sim_rep_num)
 	def _select_mode_to_keep(self, mode_name):
 		'''
 		Keeps only one of the original modes specified in the object,
@@ -128,12 +126,12 @@ class SimParameters(mle_functions.MLEParameters):
 		self.profile_upper_limits_by_mode = \
 			[self.profile_upper_limits_by_mode[mode_idx]]
 		self.scaling_arrays_by_mode = [self.scaling_arrays_by_mode[mode_idx]]
-		self.simulation_repeats_by_mode = \
-			[self.simulation_repeats_by_mode[mode_idx]]
+		self.sim_repeats_by_mode = \
+			[self.sim_repeats_by_mode[mode_idx]]
 		self.sim_CI_parameters_by_mode = \
 			[self.sim_CI_parameters_by_mode[mode_idx]]
 		# reset mode_completeness_tracker
-		self.mode_completeness_tracker = CompletenessTracker(self.mode_list)
+		self.mode_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
 	def _change_starting_param_vals(self, mode_name, new_starting_param_vals):
 		mode_idx = self.mode_list.index(mode_name)
@@ -185,7 +183,7 @@ class SimParameters(mle_functions.MLEParameters):
 	def respecify_for_hypothesis_testing(self, mode_name, fixed_param, starting_vals):
 		self._select_mode_to_keep(mode_name)
 		self._change_starting_param_vals(mode_name, starting_vals)
-		if fixed_param:
+		if fixed_param != 'unfixed':
 			self._set_permafixed_parameter(mode_name, fixed_param)
 		
 class SimKeyHolder(object):
@@ -218,15 +216,20 @@ class KeyOrganizer(object):
 	Organizes keys and checks if key with current properties already
 	exists; index in self.key_df serves as key
 	'''
-	def __init__(self, key_file):
+	def __init__(self, key_file, sim_parameters):
 		self.key_file = key_file
+		self.param_val_colname = 'starting_param_vals'
+		self.sim_parameters = copy.deepcopy(sim_parameters)
 		self._read_key_file()
 	def _read_key_file(self):
 		# if self.key_file exists, reads it in;
 		# otherwise, creates one
 		if os.path.isfile(self.key_file):
 			try:
-				self.key_df = pd.read_csv(filepath_or_buffer=self.key_file)
+				self.key_df = \
+					pd.read_csv(filepath_or_buffer = self.key_file, \
+						index_col = 'idx', \
+						converters={self.param_val_colname: _csv_list_converter})
 			except pd.io.common.EmptyDataError:
 				# if file is empty, just create an empty df for self.LL_df
 				self._create_key_df()
@@ -234,15 +237,53 @@ class KeyOrganizer(object):
 			self._create_key_df()
 	def _create_key_df(self):
 		''' Creates new key_df '''
-		self.key_df = pandas.DataFrame()
+		self.key_df = pd.DataFrame()
 	def _find_matching_key(self, key_holder):
 		'''
 		Takes in a KeyHolder object and identifies the row in
 		self.key_df that matches it, if any do
 		'''
-		current_keys = self.key_df.index.values.tolist()
-		row_match_boolean_list = [key_holder.get_params().equals(self.key_df.loc[i]) for i in current_keys]
-		matching_keys = self.key_df.index[row_match_boolean_list].tolist()
+		matching_keys = []
+		# identify indices that are within x_tolerance of key_holder
+			# for any columns that contain parameter values (first
+			# filter by columns containing the correct mode to avoid
+			# nonsensical parameter value comparisons)
+		if len(self.key_df.index) > 0:
+			current_mode = key_holder.get_params()['mode']
+			key_df_current_mode = \
+				self.key_df.loc[self.key_df['mode'] == current_mode]
+		else:
+			key_df_current_mode = self.key_df
+		if len(key_df_current_mode.index) > 0:
+			bound_array = list(key_holder.get_params()[self.param_val_colname])
+			param_df = \
+				pd.DataFrame(data = \
+					np.vstack(key_df_current_mode[self.param_val_colname].values), \
+					columns = self.sim_parameters.get_complete_parameter_list(), \
+					index = key_df_current_mode.index.values.tolist())
+			self.sim_parameters.set_mode(current_mode, '')
+			bound_abutting_point_identifier = \
+				mle_functions.BoundAbuttingPointRemover(param_df, \
+					self.sim_parameters.current_x_tolerance, bound_array, \
+					self.sim_parameters.current_scaling_val_list, \
+					self.sim_parameters.current_logspace_profile_list,
+					self.sim_parameters.get_complete_parameter_list(), 'all')
+			bound_abutting_point_indices = bound_abutting_point_identifier.get_removed_indices()
+		else:
+			bound_abutting_point_indices = []
+		if len(bound_abutting_point_indices) > 0:
+			columns_to_keep = \
+				[current_col for current_col in key_df_current_mode.columns if \
+					current_col != self.param_val_colname]
+			subset_of_key_df = \
+				key_df_current_mode.loc[bound_abutting_point_indices][columns_to_keep]
+			for i in subset_of_key_df.index.values.tolist():
+				new_dict = key_holder.get_params().to_dict()
+				old_dict = subset_of_key_df.loc[i].to_dict()
+				match_bool_list = []
+				match_bool = all([list(new_dict[j]) == list(old_dict[j]) for j in old_dict.keys()])
+				if match_bool:
+					matching_keys.append(i)		
 		if matching_keys:
 			key_val = matching_keys[0]
 		else:
@@ -266,10 +307,20 @@ class KeyOrganizer(object):
 		return(current_key)
 	def set_key(self, key_holder, key_idx):
 		''' Sets index key_idx in self.key_df to key_holder '''
-		self.key_df.loc[key_idx] = key_holder
+		# check that all keys in current_results_dict are columns
+			# in self.combined_results_df; if not, create these
+		dict_keys = key_holder.get_params().to_dict()
+		df_columns = list(self.key_df.columns.values)
+		new_columns = set(dict_keys).symmetric_difference(df_columns)
+		self.key_df = \
+			self.key_df.append(pd.DataFrame(columns=new_columns), \
+				sort=False)
+		# insert key_holder into correct row in df
+		self.key_df.loc[key_idx] = pd.Series(key_holder.get_params())
 	def write_key_df(self):
 		''' Writes self.key_df to self.key_file '''
-		self.key_df.to_csv(path_or_buf = self.key_file, index = True)
+		self.key_df.to_csv(path_or_buf = self.key_file, \
+			index = True, index_label = 'idx')
 
 class HypothesisTestingInfo(object):
 	'''
@@ -294,8 +345,8 @@ class HypothesisTestingInfo(object):
 		be used for hypothesis Hnum ('H0' or 'H1')
 		'''
 		if Hnum in self.hypotheses:
-			self.hypothesis_info.loc[Hnum] = 
-				hypothesis_key_holder.get_params()
+			self.hypothesis_info.loc[Hnum] = \
+				pd.Series(hypothesis_key_holder.get_params())
 			current_h_key = \
 				hypothesis_key_organizer.get_key(hypothesis_key_holder)
 			self.hypothesis_info.at[Hnum, 'hypothesis_key'] = current_h_key
@@ -311,7 +362,7 @@ class HypothesisTestingInfo(object):
 		'''
 		unique_sim_key_vals = \
 			self.hypothesis_info['sim_key'].unique()
-		if len(unique_sim_key_vals) not 1:
+		if len(unique_sim_key_vals) != 1:
 			raise ValueError("All hypotheses being compared must be using " + \
 				"the same simulation data. The following " + \
 				"HypothesisTestingInfo object lists multiple unique " + \
@@ -359,8 +410,8 @@ class SimPreparer(object):
 	def __init__(self, output_id_prefix, sim_parameters, hypothesis_testing_info, \
 		cluster_parameters, cluster_folders, sim_folders, 
 		additional_code_run_keys, additional_code_run_values):
-		self.sim_key = self.hypothesis_testing_info.get_sim_key()
-		self.output_id_sim = output_id_sim + str(self.sim_key)
+		self.sim_key = hypothesis_testing_info.get_sim_key()
+		self.output_id_sim = '_'.join([output_id_prefix, str(self.sim_key)])
 			# output_id_sim needs to include sim key but not sim
 				# number; fixed parameter will be added to filenames
 				# by SimParameters, and sim number will be added in MLE
@@ -372,7 +423,7 @@ class SimPreparer(object):
 		self.cluster_folders = cluster_folders
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
-		self.sim_datafile_path = sim_folders.get_path('current_sim_output_path')
+		self.sim_datafile_path = sim_folders.get_path('sim_output_path')
 		self.hypothesis_testing_info = hypothesis_testing_info
 		self.hypothesis_list = ['H0','H1']
 		self._set_up_sim_parameters()
@@ -389,7 +440,7 @@ class SimPreparer(object):
 		self.sim_param_dict = dict()
 		for current_Hnum in self.hypothesis_list:
 			# respecify SimParameter object for each hypothesis
-			current_sim_param = copy.deepcopy(self.sim_parameters)
+			current_sim_params = copy.deepcopy(self.sim_parameters)
 			current_mode = self.hypothesis_testing_info.get_mode(current_Hnum)
 			current_fixed_param = \
 				self.hypothesis_testing_info.get_fixed_param(current_Hnum)
@@ -398,12 +449,13 @@ class SimPreparer(object):
 			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
 				current_fixed_param, current_starting_param_vals)
 			# set sim, mode, fixed_param for current_sim_params
-			current_h_key = self.hypothesis_testing_info.get_hypothesis_key(Hnum)
-			current_output_id = '_'.join([self.output_id_sim, Hnum, \
+			current_h_key = \
+				self.hypothesis_testing_info.get_hypothesis_key(current_Hnum)
+			current_output_id = '_'.join([self.output_id_sim, current_Hnum, \
 				str(current_h_key)])
-			current_sim_parameters.set_sim(self.sim_key)
-			current_sim_parameters.set_mode(current_mode, current_output_id)
-			current_sim_parameters.set_parameter(current_fixed_param)
+			current_sim_params.set_sim(self.sim_key)
+			current_sim_params.set_mode(current_mode, current_output_id)
+			current_sim_params.set_parameter(current_fixed_param)
 			self.sim_param_dict[current_Hnum] = current_sim_params
 
 class LLRCalculator(SimPreparer):
@@ -419,7 +471,7 @@ class LLRCalculator(SimPreparer):
 		sim_parameters, hypothesis_testing_info, cluster_parameters, \
 		cluster_folders, sim_folders, additional_code_run_keys, \
 		additional_code_run_values):
-		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
+		super(LLRCalculator, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self.LL_list_folder = sim_folders.get_path('sim_output_list_folder')
@@ -429,7 +481,7 @@ class LLRCalculator(SimPreparer):
 		# create CompletenessTracker object to track whether each LL
 			# list is complete
 		self.LL_list_completeness_tracker = \
-			CompletenessTracker(self.hypothesis_list)
+			cluster_wrangler.cluster_functions.CompletenessTracker(self.hypothesis_list)
 		self.llr_completeness = False
 	def _generate_LLR_filename(self):
 		''' Generates name for combined LLR file '''
@@ -448,7 +500,10 @@ class LLRCalculator(SimPreparer):
 		'''
 		# run MLE; completeness of current_sim_parameters will
 			# automatically be updated
-		include_unfixed_parameter = False
+		print('------------------------------------')
+		print(current_sim_parameters.sim_key)
+		print(current_sim_parameters.input_datafile_values)
+		include_unfixed_parameter = True
 		input_data_folder = self.sim_folders.get_path('sim_output_path')
 		mle_functions.run_MLE(current_sim_parameters, self.cluster_parameters, \
 			self.cluster_folders, self.sim_folders, self.additional_code_run_keys, \
@@ -458,22 +513,14 @@ class LLRCalculator(SimPreparer):
 		'''
 		Compiles and writes LL_list for each hypothesis
 		'''
-		ll_list = mle_functions.LLHolder(current_sim_parameters.current_profile_point_num, \
-			current_sim_parameters.output_identifier, \
-			current_sim_parameters.current_fixed_parameter, \
+		ll_list = mle_functions.LLHolder(current_sim_parameters, \
 			self.mle_datafile_path, self.LL_list_folder)
 		ll_list.run_LL_list_compilation()
 			# compiles ll_list and writes it to a file
 		# get sorted list of LL values with any values in which a
 			# parameter (except the fixed parameter) abutted a min or
 			# max bound removed from the list
-		current_ll_df = ll_list.remove_bound_abutting_points(current_sim_parameters.current_x_tolerance, \
-				current_sim_parameters.current_max_parameter_val_list, \
-				current_sim_parameters.current_min_parameter_val_list, \
-				current_sim_parameters.current_scaling_val_list, \
-				current_sim_parameters.current_logspace_profile_list, \
-				current_sim_parameters.current_parameter_list,
-				current_sim_parameters.current_fixed_parameter)
+		current_ll_df = ll_list.get_LL_df()
 		current_ll_file = ll_list.get_LL_file()
 		self.LL_list_dict[Hnum] = current_ll_df
 		self.LL_list_completeness_tracker.update_key_status(Hnum, \
@@ -499,7 +546,10 @@ class LLRCalculator(SimPreparer):
 			current_full_df = self.LL_list_dict[current_Hnum]
 			current_fixed_param = \
 				self.hypothesis_testing_info.get_fixed_param(current_Hnum)
-			if current_fixed_param = 'unfixed':
+			if len(current_full_df.index) == 0:
+				current_full_df = \
+					pd.DataFrame(columns = ['LL', 'point_num', current_fixed_param])
+			if current_fixed_param is 'unfixed':
 				abbreviated_LL_df_dict[current_Hnum] = \
 					current_full_df[['LL', 'point_num']]
 			else:
@@ -525,7 +575,7 @@ class LLRCalculator(SimPreparer):
 			self._calculate_LLR()
 	def get_LLR_filepath(self):
 		return(self.LLR_file)
-	def get_LLR_completeness:
+	def get_LLR_completeness(self):
 		return(self.llr_completeness)
 	def get_deviances(self):
 		'''
@@ -535,7 +585,7 @@ class LLRCalculator(SimPreparer):
 		'''
 		if self.llr_completeness:
 			if self.LLR_df.empty:
-				return(np.array(np.nan))
+				return(np.array([np.nan]))
 			else:
 				return(self.LLR_df['deviance'].values)
 		else:
@@ -552,14 +602,16 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 	'''
 	def __init__(self, sim_parameters, cluster_parameters, cluster_folders, \
 		sim_folders, additional_code_run_keys, additional_code_run_values):
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
 		self.sim_parameters = copy.deepcopy(sim_parameters)
 		experiment_folder = sim_folders.get_path('experiment_path')
 		completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['sim',str(sim_parameters.sim_key), \
 					'completefile.txt']))
-		job_name = '-'.join(sim_folders.get_experiment_folder_name, \
-			'sim', str(sim_parameters.sim_key))
+		job_name = '-'.join([sim_folders.get_experiment_folder_name(), \
+			'sim', str(sim_parameters.sim_key)])
 		job_numbers = [x + 1 for x in \
 			list(range(sim_parameters.current_profile_point_num))]
 		module = 'matlab'
@@ -593,11 +645,10 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			[_generate_sim_filename(sim_output_path, '1', \
 				_generate_sim_file_label('original', current_input_datafile)) \
 				for current_input_datafile in \
-				sim_parameters.original_input_datafile_values]
+				sim_parameters.unmod_input_datafile_values]
 		# run __init__ from parent class, which in turn runs
 			# _create_code_run_input_lists
-		super(cluster_wrangler.cluster_functions.CodeSubmitter, \
-			self).__init__(cluster_parameters, \
+		super(Simulator, self).__init__(cluster_parameters, \
 			cluster_folders, completefile, job_name, \
 			job_numbers, module, parallel_processors, \
 			experiment_folder, output_extension, code_name, \
@@ -640,7 +691,7 @@ class SimRunner(SimPreparer):
 		additional_code_run_values):
 		# create CompletenessTracker object to track whether each LL
 			# list is complete
-		super(SimPreparer, self).__init__(output_id_prefix, sim_parameters, \
+		super(SimRunner, self).__init__(output_id_prefix, sim_parameters, \
 			hypothesis_testing_info, cluster_parameters, cluster_folders, \
 			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self.sim_completeness = False
@@ -652,9 +703,9 @@ class SimRunner(SimPreparer):
 	def _copy_original_files(self):
 		''' Copies original datafiles to simulation folder '''
 		experiment_path = self.sim_folders.get_path('experiment_path')
-		input_files = [os.path.join(experiment_path, \
-			(current_datafile_val + '.csv')) for current_datafile_val in \
-			self.sim_parameters.original_input_datafile_values]
+		input_files = [os.path.join(experiment_path, current_datafile_val) \
+			for current_datafile_val in \
+				self.sim_parameters.unmod_input_datafile_values]
 		output_files = self.simulator.get_original_input_datafile_paths()
 		if len(input_files) == len(output_files):
 			for (current_input_file, current_output_file) in \
@@ -682,7 +733,7 @@ class SimRunner(SimPreparer):
 		otherwise, submits code to run sim with parameters corresponding
 		to H0
 		'''
-		if self.sim_key is 'original':
+		if self.sim_key == 'original':
 			self._copy_original_files()
 		else:
 			self._submit_and_track_sim_job()
@@ -721,13 +772,15 @@ class FixedPointCDFvalCalculator(object):
 		self.cluster_parameters = cluster_parameters
 		self.sim_folders = copy.deepcopy(sim_folders)
 		self.hypothesis_key_organizer = \
-			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file())
+			KeyOrganizer(sim_folders.get_hypothesis_key_organizer_file(), \
+				sim_parameters)
 		self.sim_key_organizer = \
-			KeyOrganizer(sim_folders.get_sim_key_organizer_file())
+			KeyOrganizer(sim_folders.get_sim_key_organizer_file(), \
+				sim_parameters)
 		self.hypotheses = ['H0','H1']
 		self.sim_parameters = copy.deepcopy(sim_parameters)
-		original_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
-		simulated_data_completeness_tracker = CompletenessTracker(['sim','LLR'])
+		original_data_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker(['sim','LLR'])
+		simulated_data_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker(['sim','LLR'])
 		self.completeness_tracker_dict = \
 			{'original': original_data_completeness_tracker, \
 			'simulated': simulated_data_completeness_tracker}
@@ -742,12 +795,13 @@ class FixedPointCDFvalCalculator(object):
 		self.output_file = output_file
 		self.cdf_val_calc_complete = False
 	def _get_starting_params(self, Hnum):
-		self.sim_parameters.set_mode(self.mode_dict[Hnum])
+		self.sim_parameters.set_mode(self.mode_dict[Hnum], self.output_id_prefix)
 		self.sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
 		parameter_names = self.sim_parameters.get_complete_parameter_list()
 		starting_vals = \
-			copy.copy(self.sim_parameters.current_start_parameter_val_list())
-		if current_fixed_param not 'unfixed':
+			copy.copy(self.sim_parameters.current_start_parameter_val_list)
+		current_fixed_param = self.sim_parameters.current_fixed_parameter
+		if current_fixed_param != 'unfixed':
 			fixed_param_idx = parameter_names.index(self.fixed_param_dict[Hnum])
 			starting_vals[fixed_param_idx] = self.fixed_param_val_dict[Hnum]
 		return(starting_vals)
@@ -768,7 +822,7 @@ class FixedPointCDFvalCalculator(object):
 	def _generate_hypothesis_key_holder(self, Hnum, sim_key, \
 		starting_param_vals):
 		''' Generates HypothesisKeyHolder for Hnum with sim_key '''
-		current_key_holder = self.HypothesisKeyHolder(self.mode_dict[Hnum], \
+		current_key_holder = HypothesisKeyHolder(self.mode_dict[Hnum], \
 			self.fixed_param_dict[Hnum], starting_param_vals, sim_key)
 		return(current_key_holder)
 	def _set_up_original_data(self):
@@ -876,7 +930,7 @@ class FixedPointCDFvalCalculator(object):
 					# completed in above run)
 			if current_completeness_tracker.get_key_completeness('sim'):
 				self._run_LLR_calc(current_hypothesis_testing_info, \
-					current_completeness_tracker)
+					current_completeness_tracker, data_type)
 	def _calculate_cdf_val(self):
 		'''
 		Calculates proportion of sim data deviances above deviance of
@@ -888,8 +942,8 @@ class FixedPointCDFvalCalculator(object):
 				'original data')
 		sim_deviance_array = \
 			self.llr_calculator_dict['simulated'].get_deviances()
-		if (len(sim_deviance_array) is 0) or \
-			(len(self.original_deviance_array) is 0) or \
+		if (len(sim_deviance_array) == 0) or \
+			(len(self.original_deviance_array) == 0) or \
 			np.all(np.isnan(self.original_deviance_array)) or \
 			np.all(np.isnan(sim_deviance_array)):
 			self.cdf_val = np.nan
@@ -919,7 +973,7 @@ class FixedPointCDFvalCalculator(object):
 				# NaN, there's no point running sims
 			self.original_deviance_array = \
 				self.llr_calculator_dict['original'].get_deviances()
-			if (len(self.original_deviance_array) is 0) or \
+			if (len(self.original_deviance_array) == 0) or \
 				np.all(np.isnan(self.original_deviance_array)):
 				self.cdf_val = np.nan
 				self.completeness_tracker_dict['simulated'].switch_key_completeness('sim', True)
@@ -931,6 +985,7 @@ class FixedPointCDFvalCalculator(object):
 					self.completeness_tracker_dict['simulated'].get_completeness()
 				if simulated_completeness:
 					self._calculate_cdf_val()
+		self.sim_key_organizer.write_key_df()
 	def get_cdf_val(self):
 		return(self.cdf_val)
 	def get_cdf_val_completeness(self):
@@ -971,14 +1026,14 @@ class OneSidedSimProfiler(object):
 	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
 		additional_code_run_values, output_id_prefix, cdf_bound, profile_pt_list, \
-		cluster_folders, cluster_parameters):
+		cluster_folders, cluster_parameters, profile_path):
 		self.mode_dict = {'H0': mode, 'H1': mode}
 		self.fixed_param_dict = {'H0': 'unfixed', 'H1': fixed_param}
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
 		self.cluster_folders = cluster_folders
 		self.cluster_parameters = cluster_parameters
-		self.profile_path = sim_folders.get_path('sim_profile_fixed_pt_folder')
+		self.profile_path = profile_path
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.output_id_prefix = output_id_prefix
@@ -992,7 +1047,7 @@ class OneSidedSimProfiler(object):
 				{'fixed_param_val_dict': [{'H0': self.fixed_param_mle, \
 					'H1': np.nan}] * self.profile_pt_num, \
 				'completeness': [False] * self.profile_pt_num, \
-				'cdf_val' = [np.nan] * self.profile_pt_num}, \
+				'cdf_val': [np.nan] * self.profile_pt_num}, \
 				index = self.profile_pt_list)
 		self.side_completeness = False
 #	def _convert_profile_pt_num(self, profile_pt):
@@ -1030,8 +1085,11 @@ class OneSidedSimProfiler(object):
 		Assigns self.asymptotic_CI_val to fixed parameter val of 1st
 		profile point
 		'''
+		current_fixed_param_val_dict = \
+			copy.copy(self.fixed_point_df.loc[self.profile_pt_list[0]]['fixed_param_val_dict'])
+		current_fixed_param_val_dict['H1'] = self.asymptotic_CI_val
 		self.fixed_point_df.at[self.profile_pt_list[0], \
-			'fixed_param_val_dict']['H1'] = self.asymptotic_CI_val
+			'fixed_param_val_dict'] = current_fixed_param_val_dict
 	def _select_second_point(self):
 		'''
 		Assumes cdf on first point is on normal distribution with center
@@ -1046,8 +1104,11 @@ class OneSidedSimProfiler(object):
 		second_pt_fixed_param_val = \
 			self._fixed_param_val_finder(first_fixed_param_val, first_cdf_val, \
 				target_cdf_val)
-		self.fixed_point_df.at[self.profile_pt_list[1], 'fixed_param_val_dict']['H1'] = \
-			second_pt_fixed_param_val
+		current_fixed_param_val_dict = \
+			copy.copy(self.fixed_point_df.loc[self.profile_pt_list[1]]['fixed_param_val_dict'])
+		current_fixed_param_val_dict['H1'] = second_pt_fixed_param_val
+		self.fixed_point_df.at[self.profile_pt_list[1], 'fixed_param_val_dict'] = \
+			current_fixed_param_val_dict
 	def _select_third_point(self):
 		'''
 		If second fixed param val has higher cdf than cdf_bound, uses
@@ -1079,19 +1140,23 @@ class OneSidedSimProfiler(object):
 			third_pt_fixed_param_val = \
 				self._fixed_param_val_finder(second_fixed_param_val, \
 					second_cdf_val, target_cdf_val)
-		self.fixed_point_df.at[self.profile_pt_list[2], 'fixed_param_val_dict']['H1'] = \
-			third_pt_fixed_param_val
+		current_fixed_param_val_dict = \
+			copy.copy(self.fixed_point_df.loc[self.profile_pt_list[2]]['fixed_param_val_dict'])
+		current_fixed_param_val_dict['H1'] = third_pt_fixed_param_val
+		self.fixed_point_df.at[self.profile_pt_list[2], 'fixed_param_val_dict'] = \
+			current_fixed_param_val_dict
 	def _run_fixed_pt_calc(self, profile_pt):
 #		output_id_fixed_pt = '_'.join([self.output_id_prefix, 'fixed_pt_cdf'])
 		output_file = generate_filename(self.profile_path, str(profile_pt), \
-			output_id_prefix, self.fixed_param_dict['H1'], 'data')}
+			self.output_id_prefix, self.fixed_param_dict['H1'], 'data')
 		current_fixed_param_val_dict = \
-			self.fixed_point_df.loc(profile_pt)['fixed_param_val_dict']
+			self.fixed_point_df.loc[profile_pt]['fixed_param_val_dict']
 		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.mode_dict, \
 			self.fixed_param_dict, current_fixed_param_val_dict, \
-			self.sim_parameters, self.sim_key_organizer, \
+			self.sim_parameters, self.sim_folders, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
-			self.output_id_prefix, output_file_dict)
+			self.output_id_prefix, output_file, self.cluster_folders, \
+			self.cluster_parameters)
 		fixed_point_pval_calc.run_fixed_pt_cdf_val_estimation()
 		current_fixed_pt_complete = \
 			fixed_point_pval_calc.get_cdf_val_completeness()
@@ -1144,13 +1209,15 @@ class TwoSidedProfiler(object):
 		self.profile_points_per_side = 3
 		self.profile_pt_list = \
 			np.array(range(0, (self.profile_points_per_side * 2 + 1)))
+		self.profile_path = sim_folders.get_path('sim_profile_fixed_pt_folder')
 		self.CI_sides = ['lower', 'upper']
-		self.completeness_tracker = CompletenessTracker(self.CI_sides)
+		self.completeness_tracker = \
+			cluster_wrangler.cluster_functions.CompletenessTracker(self.CI_sides)
 		self._create_profile_pt_list_dict()
 		self.completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
-				'_'.join(['param_profile_', sim_parameters.output_id_parameter, \
-					'completefile.txt']))
+				'_'.join(['param_profile_', sim_parameters.output_identifier, \
+					fixed_param, 'completefile.txt']))
 	def _create_profile_pt_list_dict(self):
 		lower_profile_pts = \
 			self.profile_pt_list[range(1, (self.profile_points_per_side + 1))]
@@ -1163,9 +1230,10 @@ class TwoSidedProfiler(object):
 		return(self.completefile)
 	def run_profiler(self):
 		# write output file for 0th pt
+		profile_pt = 0
 		output_file = generate_filename(self.profile_path, str(profile_pt), \
-			output_id_prefix, self.fixed_param, 'data')}
-		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, 0, \
+			self.output_id_prefix, self.fixed_param, 'data')
+		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, profile_pt, \
 			output_file)
 		# run through sides
 		for current_profile_side in self.CI_sides:
@@ -1177,7 +1245,9 @@ class TwoSidedProfiler(object):
 					self.mode, self.fixed_param, self.sim_parameters, \
 					self.sim_folders, self.additional_code_run_keys, \
 					self.additional_code_run_values, self.output_id_prefix, \
-					self.cdf_bound, current_profile_pt_list, cluster_folders)
+					self.cdf_bound, current_profile_pt_list, \
+					self.cluster_folders, self.cluster_parameters, \
+					self.profile_path)
 			current_side_sim_profiler.run_sim_profiler()
 			current_side_completeness = \
 				current_side_sim_profiler.get_sim_profile_side_completeness()
@@ -1191,16 +1261,11 @@ class TwoSidedProfiler(object):
 			
 # For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
 #####################################################################
-def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, \
-	current_output_file):
-		'''
-		Writes mlestimation.LLProfile-readable output containing
-		current value of fixed_param and current cdf val
-		'''
-		output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
-			'cdf_vals': [current_cdf_val]})
-		output_df[current_Hnum].to_csv(path_or_buf = current_output_file, \
-			index = False)
+
+def _csv_list_converter(instr):
+	''' Converts values read in from csv cell to np array '''
+	# solution from https://stackoverflow.com/questions/50934301/numpy-array-changes-to-string-when-writing-to-file
+	return np.fromstring(instr[1:-1],sep=' ')
 
 def _generate_sim_file_label(sim_key, input_datafile_name):
 	sim_file_label = \
@@ -1210,9 +1275,25 @@ def _generate_sim_file_label(sim_key, input_datafile_name):
 
 def _generate_sim_filename(sim_file_path, within_batch_counter_call, \
 	sim_file_label):
-	sim_file = '_'.join([sim_file_label, within_batch_counter_call]) + '.csv'
+	sim_file_label_split_by_dot = sim_file_label.split('.')
+	sim_file_extension = sim_file_label_split_by_dot[-1]
+	sim_file_label_no_extension = '.'.join(sim_file_label_split_by_dot[0:-1])
+	new_sim_file_label = '_'.join([sim_file_label_no_extension, \
+		within_batch_counter_call])
+	sim_file = '.'.join([new_sim_file_label, sim_file_extension])
 	sim_filename = os.path.join(sim_file_path, sim_file)
 	return(sim_filename)
+
+def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, \
+	current_output_file):
+		'''
+		Writes mlestimation.LLProfile-readable output containing
+		current value of fixed_param and current cdf val
+		'''
+		output_df = pd.DataFrame({fixed_param: [fixed_param_val], \
+			'cdf_vals': [current_cdf_val]})
+		output_df.to_csv(path_or_buf = current_output_file, \
+			index = False)
 
 def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 	additional_code_run_keys, additional_code_run_values, output_id_prefix, \
@@ -1220,7 +1301,7 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 		cdf_bound = 1 - sim_parameters.current_CI_pval
 		for fixed_param in sim_parameters.current_sim_CI_parameters:
 			asymptotic_CI_complete = \
-				combined_results.get_key_completeness('asymptotic_CIs')
+				combined_results.check_step_completeness('asymptotic_CIs')
 			if asymptotic_CI_complete:
 				fixed_param_mle = \
 					combined_results.get_param_mle_val(fixed_param)
@@ -1234,6 +1315,7 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 				current_param_profiler.run_profiler()
 				profile_completefile = \
 					current_param_profiler.get_completefile()
+				sim_parameters.set_parameter(fixed_param)
 				sim_parameters.update_parameter_completeness(profile_completefile)
 
 

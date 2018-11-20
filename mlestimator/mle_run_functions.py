@@ -17,6 +17,8 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		##### RUN MLE #####
 		output_id_string = '_'.join([output_id_string_start, current_mode])
 		mle_parameters.set_mode(current_mode, output_id_string)
+		output_id_string_sim = 'sim_' + output_id_string
+		sim_parameters.set_mode(current_mode, output_id_string_sim)
 #		MLE_summary_file_path = os.path.join(experiment_path, \
 #			'_'.join([output_id_string,'MLE_file.csv']))
 		# run MLE for current set of parameters
@@ -24,7 +26,7 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		input_data_folder = mle_folders.get_path('experiment_path')
 		run_MLE(mle_parameters, cluster_parameters, cluster_folders, \
 			mle_folders, additional_code_run_keys, additional_code_run_values, \
-			include_unfixed_param)
+			include_unfixed_param, input_data_folder)
 		# generate LL_profiles and MLE_output file, and identify
 			# asymptotic CIs
 		current_combined_results = CombinedResultSummary(mle_folders, \
@@ -34,8 +36,6 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 		# run simulations, run MLE on those simulations, and generate
 			# empirical sim-based cdf value profile points across each
 			# parameter for which sim-based CIs are required
-		output_id_string_sim = 'sim' + output_id_string
-		sim_parameters.set_mode(current_mode, output_id_string_sim)
 		sim_folders = copy.deepcopy(mle_folders)
 		sim_folders.set_current_output_subfolder('sim')
 		generate_sim_based_profile_pts(current_mode, sim_parameters, \

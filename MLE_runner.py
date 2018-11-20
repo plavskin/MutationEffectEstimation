@@ -15,6 +15,7 @@ from shutil import copyfile
 from cluster_wrangler import cluster_functions
 from mlestimator import mle_functions
 from mlestimator import mle_run_functions
+from mlestimator import mle_sim_functions
 import warnings as war
 war.filterwarnings("ignore", message="numpy.dtype size changed")
 

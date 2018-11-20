@@ -1009,7 +1009,7 @@ class CodeSubmitter(object):
 		self._create_code_run_input()
 	def get_completefile_path(self):
 		return(self.completefile)
-	def _create_code_run_input_lists():
+	def _create_code_run_input_lists(self):
 		'''
 		Creates list of keys and their values to be submitted to
 		external code being run
@@ -1020,7 +1020,7 @@ class CodeSubmitter(object):
 		self._create_code_run_input_lists()
 		# process key_list and value_list into a submission string
 		submission_string_processor = \
-			cluster_functions.SubmissionStringProcessor(self.module, \
+			SubmissionStringProcessor(self.module, \
 				self.key_list, self.value_list, self.code_name)
 		self.code_run_input = submission_string_processor.get_code_run_input()
 	def run_job_submission(self):

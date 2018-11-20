@@ -33,7 +33,6 @@ function MLE_gaussian_test(key_list, value_list)
     tolfun_val = parameter_dict('tolfun_val');
     % optional parameters
     phenotype_file = parameter_dict('phenotype_file');
-    petite_file = parameter_dict('petite_file');
     % process parameter name arrays into bool arrays
     combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
@@ -46,6 +45,7 @@ function MLE_gaussian_test(key_list, value_list)
     combined_profile_lb_array = value_rescaler(combined_profile_lb_array_unscaled,combined_logspace_array,combined_scaling_array);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get data
+    disp(phenotype_file)
     data_table = readtable(phenotype_file);
 
     test_data = data_table.data;

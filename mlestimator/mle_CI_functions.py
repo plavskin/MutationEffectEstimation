@@ -70,6 +70,7 @@ class OneSidedCIBound(object):
 			# if pval is passed to OneSidedCIBound by TwoSidedCIBound,
 				# then originally supplied pval is divided by 2
 		self.points_to_fit_curve = 3
+		# df is degrees freedom
 		self.df = df
 		self.CI_type = CI_type
 		self.output_identifier = output_identifier
@@ -80,6 +81,7 @@ class OneSidedCIBound(object):
 		self.cluster_parameters = cluster_parameters
 		self.cluster_folders = cluster_folders
 		self.mle_folders = mle_folders
+		self.LL_df = LL_df
 		self.module = 'matlab'
 		self.CI_bound_set = False
 		self.additional_beginning_lines_in_job_sub = []
@@ -91,9 +93,9 @@ class OneSidedCIBound(object):
 			self.warning.set_LL_empty()
 			self._set_CI_bound(np.NaN)
 		else:
+			self._select_profile_side(LL_df)
 			if self.CI_type is 'asymptotic':
 				self._asymptotic_pval_calc()
-			self._select_profile_side(LL_df)
 			self._check_monotonicity()
 			# need to run _find_CI_proximal_LL_points even if curve
 				# fitting to LL points has already occurred, since these
@@ -241,7 +243,7 @@ class OneSidedCIBound(object):
 	def _run_CI_finder_submission(self):
 		# handles submission of the job
 		job_name = \
-			'-'.join([self.mle_folders.get_path('experiment_folder_name'), \
+			'-'.join([self.mle_folders.get_experiment_folder_name(), \
 				self.CI_bound_name])
 		job_numbers = [1]
 		initial_time = 5
@@ -350,7 +352,7 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 
 class TwoSidedCI(object):
 	# compiles two-sided CI
-	def __init__(self, pval, LL_df_prefilter, deg_freedom, fixed_param_MLE_val, \
+	def __init__(self, pval, LL_df, deg_freedom, fixed_param_MLE_val, \
 		fixed_param, CI_type, mle_folders, cluster_parameters, \
 		cluster_folders, output_identifier, mle_parameters):
 		self.CI_sides = ['lower','upper']
@@ -361,11 +363,11 @@ class TwoSidedCI(object):
 		self.CI_warning_list = []
 		self.CI_object_dictionary = {}
 		self.CI_object_dictionary['lower'] = OneSidedCIBoundLower(pval/2, \
-				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
+				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
 		self.CI_object_dictionary['upper'] = OneSidedCIBoundUpper(pval/2, \
-				self.LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
+				LL_df, deg_freedom, fixed_param_MLE_val, fixed_param, \
 				CI_type, mle_folders, cluster_parameters, cluster_folders, \
 				output_identifier)
 	def find_CI(self):

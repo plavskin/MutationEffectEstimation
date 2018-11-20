@@ -3,10 +3,10 @@
 # Contains objects needed for running Maximum Likelihood Estimation
 
 import os
-import numpy
+import numpy as np
 from cluster_wrangler import cluster_functions
 import copy
-import pandas
+import pandas as pd
 import csv
 from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
 import mle_CI_functions
@@ -139,13 +139,13 @@ class MLEParameters(object):
 				current_mode)
 			print(output_list)
 			print('Replacing all values with NAs')
-			output_list_trimmed = [numpy.NaN]*param_num
+			output_list_trimmed = [np.NaN]*param_num
 		elif output_list_length < param_num:
 			print('Warning! Fewer elements in list than parameters in mode ' + \
 				current_mode)
 			print(output_list)
 			print('Replacing all values with NAs')
-			output_list_trimmed = [numpy.NaN]*param_num
+			output_list_trimmed = [np.NaN]*param_num
 		else:
 			output_list_trimmed = output_list
 		return(output_list_trimmed)
@@ -154,8 +154,8 @@ class MLEParameters(object):
 			# i.e. fitted parameters that MLE needs to be performed on
 		# include 'unfixed' parameter, in which case no parameter is fixed
 		parameters_to_loop_over_bool = \
-			numpy.invert(self.current_permafixed_parameter_bool)* \
-			numpy.invert((self.current_profile_point_list < 1))
+			np.invert(self.current_permafixed_parameter_bool)* \
+			np.invert((self.current_profile_point_list < 1))
 		non_permafixed_parameters = [item for (item,bool_val) in \
 			zip(self.current_parameter_list,parameters_to_loop_over_bool) \
 			if bool_val]
@@ -163,7 +163,7 @@ class MLEParameters(object):
 		# include 1 profile point for 'unfixed' setting
 			# (i.e. only perform 'unfixed' MLE once, since no need to
 			# get likelihood profile)
-		self.point_numbers_to_loop_over = numpy.append([1], \
+		self.point_numbers_to_loop_over = np.append([1], \
 			self.current_profile_point_list[ \
 			parameters_to_loop_over_bool])
 	def set_mode(self,mode_name,output_identifier):
@@ -172,7 +172,6 @@ class MLEParameters(object):
 		self.current_mode = mode_name
 		mode_idx = self.mode_list.index(mode_name)
 		self.current_CI_pval = self.CI_pval_by_mode[mode_idx]
-		self.current_sim_repeats = self.sim_repeats_by_mode[mode_idx]
 		self.current_ms_positions = self.ms_positions[mode_idx]
 		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx]
 		self.current_logspace_profile_list = self.logspace_profile_list_by_mode[mode_idx]
@@ -186,25 +185,25 @@ class MLEParameters(object):
 		# if input in file was incorrect length relative to number of
 			# parameters, corresponding list is just NaN
 		self.current_min_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(self.min_parameter_vals_by_mode,\
+			np.array(self._retrieve_current_values(self.min_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_max_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(self.max_parameter_vals_by_mode,\
+			np.array(self._retrieve_current_values(self.max_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_start_parameter_val_list = \
-			numpy.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
+			np.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_point_list = \
-			numpy.array(self._retrieve_current_values(self.profile_points_by_mode,\
+			np.array(self._retrieve_current_values(self.profile_points_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_lower_limit_list = \
-			numpy.array(self._retrieve_current_values(self.profile_lower_limits_by_mode,\
+			np.array(self._retrieve_current_values(self.profile_lower_limits_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_profile_upper_limit_list = \
-			numpy.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
+			np.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		self.current_scaling_val_list = \
-			numpy.array(self._retrieve_current_values(self.scaling_arrays_by_mode,\
+			np.array(self._retrieve_current_values(self.scaling_arrays_by_mode,\
 				mode_idx,self.current_mode,self.total_param_num))
 		# identify list of parameters that are permanently fixed
 		self.current_permafixed_parameter_bool = \
@@ -265,6 +264,8 @@ class MLEParameters(object):
 		self.mode_completeness_tracker.switch_key_completeness( \
 			self.current_mode, self.current_mode_complete)
 		return(self.current_mode_complete)
+#	def get_parameter_completeness(self):
+#		return(self.parameter_completeness_tracker.get_key_completeness(self.current_fixed_parameter))
 	def check_completeness_across_modes(self):
 		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
 		return(self.all_modes_complete)
@@ -283,7 +284,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['MLE',mle_parameters.output_id_parameter, \
 					'completefile.txt']))
-		job_name = '-'.join([mle_folders.get_experiment_folder_name,'MLE', \
+		job_name = '-'.join([mle_folders.get_experiment_folder_name(), 'MLE', \
 			mle_parameters.output_id_parameter])
 		job_numbers = [x + 1 for x in \
 			list(range(mle_parameters.current_profile_point_num))]
@@ -295,6 +296,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		additional_end_lines_in_job_sub = []
 		initial_sub_time = cluster_parameters.current_time
 		initial_sub_mem = cluster_parameters.current_mem
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()
 		output_path = mle_folders.get_path('current_output_subfolder')
@@ -312,17 +315,18 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			[os.path.join(input_data_folder, \
 				current_input_datafile) for current_input_datafile in \
 				mle_parameters.input_datafile_values]
+		print('/#/#/#/#/#/#/#/#/#')
+		print(self.input_datafile_paths)
 		# run __init__ from parent class, which in turn runs
 			# _create_code_run_input_lists
-		super(cluster_wrangler.cluster_functions.CodeSubmitter, \
-			self).__init__(cluster_parameters, \
+		super(MLEstimation, self).__init__(cluster_parameters, \
 			cluster_folders, completefile, job_name, \
 			job_numbers, module, parallel_processors, \
 			experiment_folder, output_extension, code_name, \
 			additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, initial_sub_time, \
 			initial_sub_mem, output_path, output_file_label)
-	def _create_code_run_input_lists():
+	def _create_code_run_input_lists(self):
 		'''
 		Creates list of keys and their values to be submitted to
 		external code being run
@@ -330,7 +334,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		if (len(self.input_datafile_keys) == len(self.input_datafile_paths)) \
 			and (len(self.additional_code_run_keys) == \
 			len(self.additional_code_run_values)):
-			key_list = ['external_counter','combined_fixed_parameter_array', \
+			self.key_list = ['external_counter','combined_fixed_parameter_array', \
 				'combined_min_array','combined_max_array','combined_length_array', \
 				'combined_position_array','combined_start_values_array', \
 				'parameter_list','output_file', \
@@ -340,7 +344,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
 				'tolfun_val'] + self.input_datafile_keys + \
 				self.additional_code_run_keys
-			value_list = [self.within_batch_counter_call, \
+			self.value_list = [self.within_batch_counter_call, \
 				self.mle_parameters.current_tempfixed_parameter_bool, \
 				self.mle_parameters.current_min_parameter_val_list, \
 				self.mle_parameters.current_max_parameter_val_list, \
@@ -374,22 +378,26 @@ class BoundAbuttingPointRemover(object):
 	parameter value abutts a parameter from a list of boundary values
 	"""
 	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
-		scaling_array, logspace_parameters, parameter_names, fixed_param):
+		scaling_array, logspace_parameters, parameter_names, \
+		row_removal_criteria = 'any'):
 		self.LL_df_prefilter = LL_df_prefilter
 		self.x_tolerance = x_tolerance
+		# allow fixed_param to abut a boundary, so remove it from self.parameter_names and other related lists
+		self.parameter_names = parameter_names
+		self.logspace_parameters = logspace_parameters
 		self.bound_array = bound_array
 		self.scaling_array = scaling_array
-		self.logspace_parameters = logspace_parameters
-		# allow fixed_param to abut a boundary
-		self.parameter_names = [x for x in parameter_names if x != fixed_param]
-		self.fixed_param = fixed_param
-		self.parameter_val_df = LL_df_prefilter[parameter_names]
 		self.num_rows = LL_df_prefilter.shape[0]
-		self.scaling_matrix = np.tile(scaling_array, (self.num_rows, 1))
+		self.scaling_matrix = np.tile(self.scaling_array, (self.num_rows, 1))
+		self.row_removal_criteria = row_removal_criteria
 		# get abs val of difference between rescaled
 			# self.parameter_val_df and rescaled bound_array
-		self._get_scaled_array_diff()
-		self._remove_abutting_points()
+		if len(LL_df_prefilter.index) > 0:
+			self.parameter_val_df = LL_df_prefilter[self.parameter_names]
+			self._get_scaled_array_diff()
+			self._remove_abutting_points()
+		else:
+			self.LL_df = LL_df_prefilter
 	def _rescale_df(self, df):
 		# rescales df by converting necessary columns to logspace and
 		# then multipying by scaling_array
@@ -413,31 +421,89 @@ class BoundAbuttingPointRemover(object):
 		# identify indices to remove from df, remove them, and save
 		# removed vals of fixed_param as self.removed_param_vals
 		comparison_df = self.LL_df_diff < self.x_tolerance
-		indices_to_remove_bool = comparison_df.any(axis = 'columns')
-		indices_to_remove = list(compress(comparison_df.index.values, \
-			indices_to_remove_bool))
-		self.removed_param_vals = \
-			np.array(self.LL_df_prefilter[self.fixed_param].loc[indices_to_remove])
-		self.LL_df = self.LL_df_prefilter.drop(indices_to_remove)
+		if self.row_removal_criteria == 'any':
+			indices_to_remove_bool = comparison_df.any(axis = 'columns')
+		elif self.row_removal_criteria == 'all':
+			indices_to_remove_bool = comparison_df.all(axis = 'columns')
+		else:
+			raise ValueError('Row removal criteria is \'' + \
+				self.row_removal_criteria + \
+				'\' but must be \'any\' or \'all\'')
+		self.indices_to_remove = list(np.compress(indices_to_remove_bool, \
+			comparison_df.index.values))
+		self.LL_df = self.LL_df_prefilter.drop(self.indices_to_remove)
 	def get_LL_df(self):
 		return(self.LL_df)
+	def get_removed_indices(self):
+		return(self.indices_to_remove)
+
+class BoundAbuttingPointRemoverParamAware(BoundAbuttingPointRemover):
+	"""
+	Identifies and removes points from LL_df in which at least one
+	parameter value abutts a parameter from a list of boundary values,
+	excluding the fixed parameter
+	"""
+	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
+		scaling_array, logspace_parameters, parameter_names_original, \
+		fixed_param, row_removal_criteria = 'any'):
+		self.fixed_param = fixed_param
+		# allow fixed_param to abut a boundary, so remove it from self.parameter_names and other related lists
+		parameter_names_filtered = \
+			self._remove_fixed_param(parameter_names_original, \
+				parameter_names_original)
+		logspace_parameters_filtered = \
+			self._remove_fixed_param(logspace_parameters, logspace_parameters)
+		bound_array_filtered = \
+			self._remove_fixed_param(parameter_names_original, bound_array)
+		scaling_array_filtered = \
+			self._remove_fixed_param(parameter_names_original, scaling_array)
+		super(BoundAbuttingPointRemoverParamAware, \
+			self).__init__(LL_df_prefilter, x_tolerance, bound_array_filtered, \
+			scaling_array_filtered, logspace_parameters_filtered, \
+			parameter_names_filtered, row_removal_criteria)
+	def _remove_fixed_param(self, array_to_find_fixed_param_in, array_to_filter):
+		'''
+		Removes indices corresponding to self.fixed_param in
+		array_to_find_fixed_param_in from array_to_filter
+		'''
+		filtered_array = []
+		for counter, value in enumerate(array_to_filter):
+			current_param = array_to_find_fixed_param_in[counter]
+			if current_param != self.fixed_param:
+				filtered_array.append(value)
+		return(filtered_array)
 	def get_removed_param_vals(self):
-		return(self.removed_param_vals)
+		if len(self.LL_df_prefilter.index) > 0:
+			removed_param_vals = \
+				np.array(self.LL_df_prefilter[self.fixed_param].loc[self.indices_to_remove])
+		else:
+			removed_param_vals = np.array([])
+		return(removed_param_vals)
 
 class LLHolder(object):
 	'''
 	Populates, holds, and saves a dataframe containing outputs of MLE
 	'''
-	def __init__(self, profile_points, output_identifier, fixed_param, datafile_path, LL_list_folder):
-		self.profile_points = profile_points
-		self.output_identifier = output_identifier
+	def __init__(self, mle_parameters, datafile_path, LL_list_folder):
+		self.mle_parameters = mle_parameters
+		self.profile_points = mle_parameters.current_profile_point_num
+		self.output_identifier = mle_parameters.output_identifier
+		self.fixed_param = mle_parameters.current_fixed_parameter	
 		self.datafile_path = datafile_path
-		self.fixed_param = fixed_param
 		self.warning_line = ''
 		self.LL_file = os.path.join(LL_list_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
-		self.LL_df = pandas.DataFrame()
+		self.LL_file_unfiltered = os.path.join(LL_list_folder, \
+			('_'.join(['pre_cleanup_LL_file', self.output_identifier, \
+				self.fixed_param]) + '.csv'))
+		self.LL_df = pd.DataFrame()
+		self.x_tolerance = mle_parameters.current_x_tolerance
+		self.parameter_max_vals = mle_parameters.current_max_parameter_val_list
+		self.parameter_min_vals = mle_parameters.current_min_parameter_val_list
+		self.scaling_array = mle_parameters.current_scaling_val_list
+		self.logspace_parameters = mle_parameters.current_logspace_profile_list
+		self.parameter_names = mle_parameters.current_parameter_list
 	def _add_vals(self, ll_param_df):
 		# adds values to self.LL_df from current_param_datafile
 		# if current LL is max, updates max_LL, ML_params, and
@@ -455,7 +521,7 @@ class LLHolder(object):
 				str(current_pp), self.output_identifier, \
 				self.fixed_param, 'data')
 			if os.path.isfile(current_datafile):
-				current_data_df = _get_MLE_params(current_datafile)
+				current_data_df = pd.read_csv(current_datafile)
 				# add current_data_np to LL array and update max likelihood value
 				self._add_vals(current_data_df)
 	def _sort_by_profiled_param(self):
@@ -471,14 +537,16 @@ class LLHolder(object):
 		'''
 		Writes LL_df to file regardless of whether file already exists
 		'''
-		self.LL_df_sorted.to_csv(path_or_buf=self.LL_file,index=False)
+		self.LL_df_cleaned.to_csv(path_or_buf = self.LL_file , index = False)
+		self.LL_df_sorted.to_csv(path_or_buf = self.LL_file_unfiltered, \
+			index = False)
 	def _read_LL_df(self):
 		''' Reads self.LL_df from a pre-recorded file '''
 		try:
-			self.LL_df = pandas.read_csv(filepath_or_buffer=self.LL_file)
-		except pandas.io.common.EmptyDataError:
+			self.LL_df = pd.read_csv(filepath_or_buffer=self.LL_file)
+		except pd.io.common.EmptyDataError:
 			# if file is empty, just create an empty df for self.LL_df
-			self.LL_df = pandas.DataFrame()
+			self.LL_df = pd.DataFrame()
 		self._sort_by_profiled_param()
 	def _set_LL_df(self):
 		'''
@@ -489,30 +557,35 @@ class LLHolder(object):
 		else:
 			self._populate_LL_df()
 		self._sort_by_profiled_param()
-	def remove_bound_abutting_points(self, x_tolerance, \
-		parameter_max_vals, parameter_min_vals, scaling_array, \
-		logspace_parameters, parameter_names):
-		# identifies points that abutt parameter_max_vals or
-		# parameter_min_vals at a parameter point, and removes them
-		# from LL_df
+		self._remove_bound_abutting_points()
+	def _remove_bound_abutting_points(self):
+		'''
+		Identifies points that abutt parameter_max_vals or
+		parameter_min_vals at a parameter point, and removes them from
+		LL_df_sorted
+		'''
 		bound_abutting_point_remover_min = \
-			BoundAbuttingPointRemover(self.LL_df_sorted, x_tolerance, \
-				parameter_min_vals, scaling_array, logspace_parameters, \
-				parameter_names, self.fixed_param)
+			BoundAbuttingPointRemoverParamAware(self.LL_df_sorted, \
+				self.x_tolerance, \
+				self.parameter_min_vals, self.scaling_array, \
+				self.logspace_parameters, self.parameter_names, \
+				self.fixed_param)
 		LL_df_minfilter = bound_abutting_point_remover_min.get_LL_df()
 		min_removed_param_vals = \
 			bound_abutting_point_remover_min.get_removed_param_vals()
 		bound_abutting_point_remover_max = \
-			BoundAbuttingPointRemover(LL_df_minfilter, x_tolerance, \
-				parameter_max_vals, scaling_array, logspace_parameters, \
-				parameter_names, fixed_param)
-		LL_df_postfilter = bound_abutting_point_remover_max.get_LL_df()
+			BoundAbuttingPointRemoverParamAware(LL_df_minfilter, \
+				self.x_tolerance, \
+				self.parameter_max_vals, self.scaling_array, \
+				self.logspace_parameters, self.parameter_names, \
+				self.fixed_param)
+		LL_df_cleaned = bound_abutting_point_remover_max.get_LL_df()
 		max_removed_param_vals = \
 			bound_abutting_point_remover_max.get_removed_param_vals()
 		self.removed_param_vals = {'lower' : min_removed_param_vals, \
 			'upper' : max_removed_param_vals}
-		self._check_bound_abutting_point_warning(fixed_param)
-		return(LL_df_postfilter)
+		self._check_bound_abutting_point_warning(self.fixed_param)
+		self.LL_df_cleaned = LL_df_cleaned
 	def _check_bound_abutting_point_warning(self, fixed_param):
 		for key, val in self.removed_param_vals.iteritems():
 			if not val.size == 0:
@@ -528,7 +601,7 @@ class LLHolder(object):
 		self._write_LL_df()
 	def get_LL_df(self):
 		''' Returns sorted LL_df '''
-		return(self.LL_df_sorted)
+		return(self.LL_df_cleaned)
 	def get_LL_file(self):
 		''' Returns the filepath containing the LL list '''
 		return(self.LL_file)
@@ -537,11 +610,8 @@ class LLHolder(object):
 class LLProfile(LLHolder):
 	# Gets, holds, and updates log likelihood profile
 	def __init__(self, mle_parameters, datafile_path, LL_profile_folder, additional_param_df):
-		super(LLHolder, \
-			self).__init__(mle_parameters.current_profile_point_num, \
-			mle_parameters.output_identifier, \
-			mle_parameters.current_fixed_parameter, datafile_path, \
-			LL_profile_folder)
+		super(LLProfile, \
+			self).__init__(mle_parameters, datafile_path, LL_profile_folder)
 		self.additional_param_df = copy.copy(additional_param_df)
 		self.max_LL = None
 		self.ML_params = None
@@ -549,7 +619,7 @@ class LLProfile(LLHolder):
 		self.LL_file = os.path.join(LL_profile_folder, \
 			('_'.join(['LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
-		self.LL_df = pandas.DataFrame()
+		self.LL_df = pd.DataFrame()
 	def _set_ML_params(self, ml_param_df):
 		self.ML_params = copy.copy(ml_param_df)
 		self.max_LL = ml_param_df.iloc[0]['LL']
@@ -576,6 +646,7 @@ class LLProfile(LLHolder):
 		if not self.additional_param_df.empty:
 			self._add_vals(self.additional_param_df)
 		self._sort_by_profiled_param()
+		self._remove_bound_abutting_points()
 	def run_LL_list_compilation(self):
 		'''
 		Compiles and writes LL_df;
@@ -593,16 +664,8 @@ class LLProfile(LLHolder):
 		# get asymptotic CI
 		deg_freedom = 1
 			# 1 df for chi-square test for LL profile comparisons
-		LL_df_sorted_cleaned = \
-			self.remove_bound_abutting_points(self.mle_parameters.current_x_tolerance, \
-				self.mle_parameters.current_max_parameter_val_list, \
-				self.mle_parameters.current_min_parameter_val_list, \
-				self.mle_parameters.current_scaling_val_list, \
-				self.mle_parameters.current_logspace_profile_list, \
-				self.mle_parameters.current_parameter_list,
-				self.mle_parameters.current_fixed_parameter)
 		self.CI = mle_CI_functions.TwoSidedCI(pval, \
-			LL_df_sorted_cleaned, deg_freedom, self.fixed_param_MLE_val, \
+			self.LL_df_cleaned, deg_freedom, self.fixed_param_MLE_val, \
 			self.fixed_param, CI_type, mle_folders, \
 			cluster_parameters, cluster_folders, self.output_identifier, \
 			mle_parameters)
@@ -613,8 +676,8 @@ class LLProfile(LLHolder):
 	def get_fixed_param_MLE_val(self):
 		# returns MLE value of current fixed parameter
 		return(self.fixed_param_MLE_val)
-	def get_asymptotic_CI(self):
-		return(self.asymptotic_CI_dict)
+	def get_CI(self):
+		return(self.CI_dict)
 	def get_max_LL(self):
 		return(self.max_LL)
 	def get_ML_params(self):
@@ -627,19 +690,14 @@ class LLProfile(LLHolder):
 		percentile_as_decimal = runtime_display_percentile/100
 		try:
 			time_quantile_in_seconds = \
-				self.LL_df_sorted.runtime_in_secs.quantile(percentile_as_decimal)
+				self.LL_df_cleaned.runtime_in_secs.quantile(percentile_as_decimal)
 			time_quantile_in_hours = time_quantile_in_seconds/3600
 		except AttributeError:
-			time_quantile_in_hours = numpy.NaN
+			time_quantile_in_hours = np.NaN
 		return(time_quantile_in_hours)
 
 
 ########################################################################
-
-def _get_MLE_params(current_param_datafile):
-	# get MLE param values and run info from output (csv) file
-	current_param_df = pandas.read_csv(current_param_datafile)
-	return(current_param_df)
 
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	additional_code_run_keys, additional_code_run_values, \

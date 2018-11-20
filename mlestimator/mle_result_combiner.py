@@ -7,11 +7,14 @@ results into summary table
 
 import pandas as pd
 import numpy as np
+import copy
+import os
 import warnings as war
 import mle_functions
 import mle_CI_functions
 import mle_sim_functions
 from cluster_wrangler import cluster_functions
+from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
 
 class SingleParamResultSummary(object):
 	# stores MLE estimates and CIs for a single parameter
@@ -58,7 +61,7 @@ class SingleParamResultSummary(object):
 		''' Get dictionary elements whose keys contain searchstring '''
 		searchstring_keys = self._get_keys_by_searchstring(searchstring)
 		searchstring_dict = {key: self.content_dict[key] for key in searchstring_keys}
-		return(searchsting_dict)
+		return(searchstring_dict)
 	def get_contents(self):
 		return(self.content_dict)
 
@@ -128,6 +131,8 @@ class CombinedResultSummary(object):
 		self.combined_results_df = pd.DataFrame()
 		# set completefiles for asymptotic and sim-based CIs
 		self._create_completefile_dict()
+		# check current completeness of CIs
+		self._check_CI_completeness()
 		# set MLE results from 'unfixed' parameter (i.e. fitting all
 			# unfixed params together)
 		self.unfixed_mle_file = \
@@ -135,14 +140,20 @@ class CombinedResultSummary(object):
 			'1', mle_parameters.output_identifier, 'unfixed', 'data')
 	def _create_completefile_dict(self):
 		self.CI_completefile_dict = {}
-		for CI_type in CI_type_list:
+		for CI_type in self.CI_type_list:
 			current_parameter_holder = self.parameter_holder_dict[CI_type]
 			current_completefile = \
-				os.path.join(cluster_folders.get_path('completefile_path'), \
+				os.path.join(self.cluster_folders.get_path('completefile_path'), \
 					'_'.join([(CI_type + '_CI'), \
 						current_parameter_holder.output_identifier, \
 						'completefile.txt']))
 			self.CI_completefile_dict[CI_type] = current_completefile
+	def _check_CI_completeness(self):
+		for CI_type in self.CI_type_list:
+			current_CI_completefile = self.CI_completefile_dict[CI_type]
+			CI_key = CI_type + '_CIs'
+			self.completeness_tracker.update_key_status(CI_key, \
+				current_CI_completefile)
 	def _create_combined_output_file(self):
 		# creates the name of the combined output file for the results
 		experiment_path = self.mle_folders.get_path('experiment_path')
@@ -153,7 +164,7 @@ class CombinedResultSummary(object):
 		# gets data from self.unfixed_mle_file and uses it to update
 			# self.max_LL or, if file is not there, to create a warning
 		if os.path.isfile(self.unfixed_mle_file):
-			self.unfixed_ll_param_df = _get_MLE_params(self.unfixed_mle_file)
+			self.unfixed_ll_param_df = pd.read_csv(self.unfixed_mle_file)
 			self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 		else:
 			self.unfixed_ll_param_df = pd.DataFrame()
@@ -182,7 +193,7 @@ class CombinedResultSummary(object):
 		# create an LLProfile for current parameter
 		ll_profile = mle_functions.LLProfile(self.mle_parameters, \
 			self.datafile_path_dict['asymptotic'], \
-			LL_profile_folder, \
+			self.LL_profile_folder, \
 			non_profile_max_params)
 		ll_profile.run_LL_list_compilation()
 		warning_line = ll_profile.get_warnings()
@@ -338,10 +349,10 @@ class CombinedResultSummary(object):
 			if not \
 				self.completeness_tracker.get_key_completeness(CI_type + \
 					'_CIs'):
-				if CI_type is 'asymptotic':
+				if CI_type == 'asymptotic':
 					parameters_to_loop_over = \
 						parameter_holder.get_fitted_parameter_list(False)
-				elif CI_type is 'sim_based':
+				elif CI_type == 'sim_based':
 					parameters_to_loop_over = \
 						parameter_holder.current_sim_CI_parameters
 				CI_completeness_tracker = \
@@ -365,9 +376,9 @@ class CombinedResultSummary(object):
 						# first set current parameter
 						parameter_holder.set_parameter(current_fixed_parameter)
 						# create an LLProfile for current parameter
-						ll_profile = LLProfile(parameter_holder, \
+						ll_profile = mle_functions.LLProfile(parameter_holder, \
 							self.datafile_path_dict[CI_type], \
-							LL_profile_folder, \
+							self.LL_profile_folder, \
 							pd.DataFrame())
 						ll_profile.run_LL_list_compilation()
 						ll_profile.run_CI(self.pval, self.mle_folders, \
@@ -396,6 +407,8 @@ class CombinedResultSummary(object):
 					CI_completeness_tracker.get_completeness()
 				if CIs_just_completed:
 					open(self.CI_completefile_dict[CI_type],'a').close()
+	def check_step_completeness(self, step):
+		return(self.completeness_tracker.get_key_completeness(step))
 	def get_CI_dict(self, fixed_param, CI_type):
 		'''
 		Get a dictionary with 'lower' and 'upper' as keys for CI_type
@@ -412,7 +425,8 @@ class CombinedResultSummary(object):
 			bound_name_dict = \
 				current_results_line.get_contents_by_searchstring(current_bound_name)
 			current_bound_key = list(set(CI_bound_dict.keys()) & set(bound_name_dict.keys()))
-			current_bound_val_list = [val for key, val in CI_bound_dict if key in current_bound_key]
+			current_bound_val_list = [val for key, val in \
+				CI_bound_dict.iteritems() if key in current_bound_key]
 			if len(current_bound_val_list) > 1:
 				raise ValueError('Too many values for ' + \
 					current_bound_name + 'side of ' + CI_type + 'bound')
@@ -421,7 +435,7 @@ class CombinedResultSummary(object):
 			CI_bound_dict_renamed[current_bound_name] = current_bound_val
 		return(CI_bound_dict_renamed)
 	def get_param_mle_val(self, fixed_param):
-		return(self.content_dict.loc[fixed_param]['param_MLE'])
+		return(self.combined_results_df.loc[fixed_param]['param_MLE'])
 
 
 			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
