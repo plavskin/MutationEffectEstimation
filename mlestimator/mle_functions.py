@@ -715,7 +715,6 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	parameters_to_loop_over = \
 		mle_parameters.get_fitted_parameter_list(include_unfixed_parameter)
 	for current_fixed_parameter in parameters_to_loop_over:
-		print(current_fixed_parameter)
 		# set current parameter
 		mle_parameters.set_parameter(current_fixed_parameter)
 		# create MLEstimation object
