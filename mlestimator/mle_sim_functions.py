@@ -621,7 +621,7 @@ class LLRCalculator(SimPreparer):
 			right_on = 'point_num', suffixes = (['_H1','_H0']))
 		self.LLR_df['LLR'] = self.LLR_df['LL_H0'] - self.LLR_df['LL_H1']
 		self.LLR_df['deviance'] = -2 * self.LLR_df['LLR']
-		self.LLR_df.to_csv(path_or_buf = self.LLR_file)
+		self.LLR_df.to_csv(path_or_buf = self.LLR_file, index = False)
 		self.llr_completeness = True
 	def run_LLR(self):
 		'''
@@ -630,10 +630,15 @@ class LLRCalculator(SimPreparer):
 		'''
 		for current_Hnum in self.hypothesis_list:
 			self._find_LLs(current_Hnum)
-		ll_list_completeness = \
-			self.LL_list_completeness_tracker.get_completeness()
+			ll_list_completeness = \
+				self.LL_list_completeness_tracker.get_completeness()
 		if ll_list_completeness:
-			self._calculate_LLR()
+			if os.path.isfile(self.LLR_file):
+				self.LLR_df = \
+					pd.read_csv(filepath_or_buffer = self.LLR_file)
+				self.llr_completeness = True 
+			else:
+				self._calculate_LLR()
 	def get_LLR_filepath(self):
 		return(self.LLR_file)
 	def get_LLR_completeness(self):
@@ -662,7 +667,8 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 	data
 	'''
 	def __init__(self, sim_parameters, cluster_parameters, cluster_folders, \
-		sim_folders, additional_code_run_keys, additional_code_run_values):
+		sim_folders, additional_code_run_keys, additional_code_run_values, \
+		output_file_label):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.sim_parameters = copy.deepcopy(sim_parameters)
@@ -683,11 +689,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		additional_end_lines_in_job_sub = []
 		initial_sub_time = sim_parameters.sim_time
 		initial_sub_mem = sim_parameters.sim_mem
-		# need to set an output_file_label for the
-			# purposes of tracking job completion
-		# use last file in sim_parameters.input_datafile_values
 		sim_output_path = sim_folders.get_path('sim_output_path')
-		output_file_label = sim_parameters.input_datafile_values[-1]
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()
 		# set up input_datafile_keys and input_datafile_paths
@@ -759,10 +761,25 @@ class SimRunner(SimPreparer):
 			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self.sim_completeness = False
 		# create Simulator object
+		sim_key = hypothesis_testing_info.get_sim_key()
+		output_file_label = \
+			self._generate_sim_output_file_label(sim_parameters, sim_key)
+		print(output_file_label)
 		self.simulator = Simulator(self.sim_param_dict['H1'], \
 			self.cluster_parameters, self.cluster_folders, \
 			self.sim_folders, additional_code_run_keys, \
-			additional_code_run_values)
+			additional_code_run_values, output_file_label)
+	def _generate_sim_output_file_label(self, sim_parameters, sim_key):
+		'''
+		Use last input_datafile_name on list to generate
+		output_file_label
+		'''
+		output_file_to_look_for = sim_parameters.unmod_input_datafile_names[-1]
+		output_file_split_by_dot = output_file_to_look_for.split('.')
+		output_file_label_no_extension = '.'.join(output_file_split_by_dot[0:-1])
+		output_file_label = _generate_sim_file_label(sim_key, \
+			output_file_label_no_extension)
+		return(output_file_label)
 	def _copy_original_files(self):
 		''' Copies original datafiles to simulation folder '''
 		experiment_path = self.sim_folders.get_path('experiment_path')
