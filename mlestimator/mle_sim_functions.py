@@ -62,30 +62,13 @@ class SimParameters(mle_functions.MLEParameters):
 			parameter_list["simulation_repeats_by_mode"]
 		self.sim_time = parameter_list["sim_time"]
 		self.sim_mem = parameter_list["sim_mem"]
-		# reset profile_points_by_mode to number of sim repeats by mode
-		self.profile_points_by_mode = self.sim_repeats_by_mode
+#		# reset profile_points_by_mode to number of sim repeats by mode
+#		self.profile_points_by_mode = self.sim_repeats_by_mode
+#			### ??? ###
+#			# in reality, profile_points_by_mode shouldn't be used anyways
+#			### ??? ###
 		# set default parameter_to_select for looping over parameters
 		self.parameter_to_select = 'unfixed'
-	def set_sim(self, sim_key, within_batch_counter_call):
-		'''
-		Sets names of input datafiles to retrieve sim data from
-		'''
-		self.sim_key = sim_key
-		self.input_datafile_values = []
-		for current_input_datafile_name in self.unmod_input_datafile_names:
-			new_input_datafile_label = _generate_sim_file_label(sim_key, \
-				current_input_datafile_name)
-			new_input_datafile_val = \
-				_generate_sim_filename(within_batch_counter_call, \
-					new_input_datafile_label)
-			self.input_datafile_values.append(new_input_datafile_val)
-	def set_mode(self, mode_name, output_identifier):
-		mode_idx = self.mode_list.index(mode_name)
-		self.current_sim_rep_num = self.sim_repeats_by_mode[mode_idx]
-		self.current_sim_CI_parameters = \
-			self.sim_CI_parameters_by_mode[mode_idx]
-		super(SimParameters, self).set_mode(mode_name, \
-				output_identifier)
 	def _id_parameters_to_loop_over(self):
 		'''
 		Replaces same function in mle_functions.MLEParameters
@@ -108,7 +91,6 @@ class SimParameters(mle_functions.MLEParameters):
 		# only allows for one mode to be kept
 		mode_idx = self.mode_list.index(mode_name)
 		self.CI_pval_by_mode = [self.CI_pval_by_mode[mode_idx]]
-		self.sim_repeats_by_mode = [self.sim_repeats_by_mode[mode_idx]]
 		self.ms_positions = [self.ms_positions[mode_idx]]
 		self.multistart_grid_parameters = \
 			[self.multistart_grid_parameters[mode_idx]]
@@ -183,22 +165,67 @@ class SimParameters(mle_functions.MLEParameters):
 		self.profile_upper_limits_by_mode[mode_idx][fixed_param_idx] = \
 			new_min_max_val
 		self.parameter_to_select = fixed_param
+	def set_sim(self, sim_key, within_batch_counter_call):
+		'''
+		Sets names of input datafiles to retrieve sim data from
+		'''
+		self.sim_key = sim_key
+		self.input_datafile_values = []
+		for current_input_datafile_name in self.unmod_input_datafile_names:
+			new_input_datafile_label = _generate_sim_file_label(sim_key, \
+				current_input_datafile_name)
+			new_input_datafile_val = \
+				_generate_sim_filename(within_batch_counter_call, \
+					new_input_datafile_label)
+			self.input_datafile_values.append(new_input_datafile_val)
+	def set_mode(self, mode_name, output_identifier):
+		mode_idx = self.mode_list.index(mode_name)
+		self.current_sim_rep_num = self.sim_repeats_by_mode[mode_idx]
+		self.current_sim_CI_parameters = \
+			self.sim_CI_parameters_by_mode[mode_idx]
+		super(SimParameters, self).set_mode(mode_name, \
+				output_identifier)
+		self.current_profile_point_num = self.sim_repeats_by_mode[mode_idx]
+	def set_parameter(self,parameter_name):
+		'''
+		Set current parameter, number of likelihood profile points for
+		it, and create a temporary list of fixed parameters that
+		includes it
+		Works like set_parameter in mle_functions.MLEParameters, but
+		does not reset self.current_profile_point_num to 1 if
+		parameter_name is 'unfixed'; in fact, doesn't set
+		self.current_profile_point_num at all, this is set in
+		self.set_mode
+		'''
+		self.current_fixed_parameter = parameter_name
+		self.current_tempfixed_parameter_bool = \
+			copy.copy(self.current_permafixed_parameter_bool)
+		if self.current_fixed_parameter != 'unfixed':
+			# find index of current_fixed_parameter in parameter list
+			self.current_fixed_parameter_idx = \
+				self.current_parameter_list.index(parameter_name)
+			# temporarily fix current parameter
+			self.current_tempfixed_parameter_bool[self.current_fixed_parameter_idx] = \
+				True
+		self.output_id_parameter = self.output_identifier + '_' + self.current_fixed_parameter
+		# identify how many dimensions are being used in multistart
+		self.current_ms_grid_dimensions = sum([x != self.current_fixed_parameter \
+			for x in self.current_ms_grid_parameters])
+		self.current_parallel_processors = min(self.parallel_processors,
+			self.current_ms_positions**self.current_ms_grid_dimensions)
 	def change_profile_pt_number(self, new_profile_pt_num):
 		'''
-		Allows profile_points_by_mode and current_profile_points_list to
+		Allows sim_repeats_by_mode and current_profile_point_num to
 		be altered to new_profile_pt_num, which is an int
 		'''
-		old_profile_pts_by_mode = self.profile_points_by_mode
-		new_profile_pts_by_mode = []
-		for current_pts_list in old_profile_pts_by_mode:
-			new_pts_list = [new_profile_pt_num] * len(current_pts_list)
-			new_profile_pts_by_mode.append(new_pts_list)
-		self.profile_points_by_mode = new_profile_pts_by_mode
+		old_sim_repeats_by_mode = self.sim_repeats_by_mode
+		new_sim_repeats_by_mode = []
+		for current_pts_list in old_sim_repeats_by_mode:
+			new_sim_repeats_by_mode.append(new_profile_pt_num)
+		self.sim_repeats_by_mode = new_sim_repeats_by_mode
 		if hasattr(self, 'current_mode'):
 			mode_idx = self.mode_list.index(self.current_mode)
-			self.current_profile_point_list = \
-				np.array(self._retrieve_current_values(self.profile_points_by_mode,\
-					mode_idx, self.current_mode, self.total_param_num))
+			self.current_profile_point_num = new_profile_pt_num
 	def respecify_for_hypothesis_testing(self, mode_name, fixed_param, starting_vals):
 		self._select_mode_to_keep(mode_name)
 		self._change_starting_param_vals(mode_name, starting_vals)
@@ -251,6 +278,7 @@ class KeyOrganizer(object):
 					pd.read_csv(filepath_or_buffer = self.key_file, \
 						index_col = 'idx', \
 						converters={self.param_val_colname: _csv_list_converter})
+				self.key_df.index = self.key_df.index.astype('str')
 			except pd.io.common.EmptyDataError:
 				# if file is empty, just create an empty df for self.LL_df
 				self._create_key_df()
@@ -310,6 +338,16 @@ class KeyOrganizer(object):
 		else:
 			key_val = None
 		return(key_val)
+	def _create_new_key_index(self):
+		'''
+		Creates a new key (index) for a datapoint that is not already
+		used in self.key_df
+		'''
+		new_key_index = 0
+		used_key_list = [str(x) for x in self.key_df.index.values]
+		while str(new_key_index) in used_key_list:
+			new_key_index = new_key_index + 1
+		return(str(new_key_index))
 	def get_key(self, key_holder):
 		'''
 		Takes in a KeyHolder object and determines whether it's already
@@ -320,13 +358,12 @@ class KeyOrganizer(object):
 		'''
 		current_key = self._find_matching_key(key_holder)
 		if current_key is None:
-			print('---- ... before appending ... ----')
-			print(self.key_df)
+			new_key_index = self._create_new_key_index()
+			new_series = key_holder.get_params()
+			new_series.rename(new_key_index, inplace = True)
 			self.key_df = \
-				self.key_df.append(key_holder.get_params(), sort = False, \
-					ignore_index = True)
-			print('---- ... after appending ... ----')
-			print(self.key_df)
+				self.key_df.append(new_series, sort = False, \
+					ignore_index = False)
 			current_key = self._find_matching_key(key_holder)
 			self.write_key_df()
 		return(current_key)
@@ -722,8 +759,6 @@ class SimRunner(SimPreparer):
 			sim_folders, additional_code_run_keys, additional_code_run_values)
 		self.sim_completeness = False
 		# create Simulator object
-		print('Profile points to run')
-		print(self.sim_param_dict['H1'].current_profile_point_num)
 		self.simulator = Simulator(self.sim_param_dict['H1'], \
 			self.cluster_parameters, self.cluster_folders, \
 			self.sim_folders, additional_code_run_keys, \
@@ -873,9 +908,6 @@ class FixedPointCDFvalCalculator(object):
 			# sim_key_organizer
 		sim_key_holder = SimKeyHolder(self.mode_dict['H1'], H1_starting_param_vals)
 		self.sim_key_organizer.set_key(sim_key_holder, sim_key)
-		print('----- setting key ----')
-		print(sim_key_holder.get_params())
-		print(self.sim_key_organizer.key_df)
 		# set up hypothesis testing info for original data
 		self._set_up_hypothesis_testing_info('original', H1_key_holder, \
 			H0_key_holder)
@@ -906,13 +938,7 @@ class FixedPointCDFvalCalculator(object):
 		# create sim_key_holder and get sim_key from sim_key_organizer
 		sim_key_holder = SimKeyHolder(self.mode_dict['H1'], \
 			H1_starting_param_vals)
-		print('----- before getting key ... ----')
-		print(self.sim_key_organizer.key_df)
 		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
-		print('----- getting key ----')
-		print(sim_key_holder.get_params())
-		print(self.sim_key_organizer.key_df)
-		print(sim_key)
 		# create hypothesis_key_holder
 		H1_key_holder = self._generate_hypothesis_key_holder('H1', sim_key, \
 			H1_starting_param_vals)
@@ -964,11 +990,6 @@ class FixedPointCDFvalCalculator(object):
 			self.hypothesis_testing_info_dict[data_type]
 		current_completeness_tracker = \
 			self.completeness_tracker_dict[data_type]
-		print('#################################')
-		print('data type is ' + data_type)
-		print('original pt num: ' + str(self.sim_param_dict['original'].current_profile_point_num))
-		print('simulated pt num: ' + str(self.sim_param_dict['simulated'].current_profile_point_num))
-		print('current pt num: ' + str(self.sim_param_dict[data_type].current_profile_point_num))
 		current_sim_parameters = self.sim_param_dict[data_type]
 		data_type_complete = current_completeness_tracker.get_completeness()
 		if not data_type_complete:
