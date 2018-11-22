@@ -315,8 +315,6 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			[os.path.join(input_data_folder, \
 				current_input_datafile) for current_input_datafile in \
 				mle_parameters.input_datafile_values]
-		print('/#/#/#/#/#/#/#/#/#')
-		print(self.input_datafile_paths)
 		# run __init__ from parent class, which in turn runs
 			# _create_code_run_input_lists
 		super(MLEstimation, self).__init__(cluster_parameters, \
@@ -474,8 +472,12 @@ class BoundAbuttingPointRemoverParamAware(BoundAbuttingPointRemover):
 		return(filtered_array)
 	def get_removed_param_vals(self):
 		if len(self.LL_df_prefilter.index) > 0:
+			if self.fixed_param == 'unfixed':
+				parameters_to_return = self.parameter_names
+			else:
+				parameters_to_return = self.fixed_param
 			removed_param_vals = \
-				np.array(self.LL_df_prefilter[self.fixed_param].loc[self.indices_to_remove])
+				np.array(self.LL_df_prefilter[parameters_to_return].loc[self.indices_to_remove])
 		else:
 			removed_param_vals = np.array([])
 		return(removed_param_vals)
@@ -529,7 +531,7 @@ class LLHolder(object):
 		Returns order of rows in self.LL_df sorted by the parameter
 		being profiled
 		'''
-		if not self.LL_df.empty:
+		if not self.LL_df.empty and not (self.fixed_param == 'unfixed'):
 			self.LL_df_sorted = self.LL_df.sort_values(self.fixed_param)
 		else:
 			self.LL_df_sorted = self.LL_df
@@ -713,6 +715,7 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	parameters_to_loop_over = \
 		mle_parameters.get_fitted_parameter_list(include_unfixed_parameter)
 	for current_fixed_parameter in parameters_to_loop_over:
+		print(current_fixed_parameter)
 		# set current parameter
 		mle_parameters.set_parameter(current_fixed_parameter)
 		# create MLEstimation object

@@ -45,7 +45,7 @@ function MLE_gaussian_test(key_list, value_list)
     combined_profile_lb_array = value_rescaler(combined_profile_lb_array_unscaled,combined_logspace_array,combined_scaling_array);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get data
-    disp(phenotype_file)
+    %disp(phenotype_file)
     data_table = readtable(phenotype_file);
 
     test_data = data_table.data;
@@ -96,10 +96,6 @@ function MLE_gaussian_test(key_list, value_list)
     global_upper_bounds_fitted = global_max_array(~global_fixed_parameter_indices);
     global_start_vals_fitted = global_start_values(~global_fixed_parameter_indices);
 
-    global_param_number_fitted = length(global_lower_bounds_fitted);
-
-    global_profile_lb_fitted = global_profile_lb_array(~global_fixed_parameter_indices);
-    global_profile_ub_fitted = global_profile_ub_array(~global_fixed_parameter_indices);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Set up global search structure
 
@@ -122,12 +118,6 @@ function MLE_gaussian_test(key_list, value_list)
     fmincon_opts = optimoptions('fmincon','TolX',tolx_val,'TolFun',tolfun_val,...
         'Algorithm','interior-point','MaxIter',5000,'MaxFunEvals',12000,...
         'SpecifyObjectiveGradient',true,'CheckGradients',false,'Display','off');
-
-    % To find parameters corresponding to each strain, use simple
-        % space search with one start point or global search with
-        % multiple starts?
-    %strainwise_search_type = 'local';   
-    strainwise_search_type = 'global';    
 
     global_start_time = tic;
 
