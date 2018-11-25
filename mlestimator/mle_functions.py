@@ -46,14 +46,17 @@ class FolderManager(object):
 		self.path_dict['sim_profile_fixed_pt_folder'] = \
 			os.path.join(self.path_dict['LL_list_path'], \
 				'sim_profile_fixed_points')
-		self.path_dict['sim_profile_fixed_pt_folder'] = \
-			os.path.join(self.path_dict['LL_list_path'], \
-				'sim_profile_fixed_points')
+#		self.path_dict['sim_output_list_folder'] = \
+#			os.path.join(self.path_dict['LL_list_path'], \
+#				'sim_output_list_folder')
 		self.path_dict['sim_output_list_folder'] = \
-			os.path.join(self.path_dict['LL_list_path'], \
-				'sim_output_list_folder')
-		self.path_dict['key_organizer_folder'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name, 'sim_output_list_folder')
+		self.path_dict['key_organizer_home_folder'] = \
 			os.path.join(self.path_dict['experiment_path'],'key_organizers')
+		self.path_dict['key_organizer_folder'] = \
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name, 'key_organizers')
 		# create folders in path_dict
 		self._set_up_folders()
 		# set up organizer files for sim
