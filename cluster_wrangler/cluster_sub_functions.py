@@ -269,7 +269,8 @@ class SlurmManager(JobSubmissionManager):
 			module_output = ''
 		relevant_module_list = re.findall(' (' + self.job_parameters.module + \
 			os.sep + '.+?)\\n', module_output)
-		# latest module is the last one in the list
+		# latest module is the last one in the sorted list
+		relevant_module_list.sort()
 		latest_module_path = re.findall('(' + self.job_parameters.module + \
 			os.sep + '\S+)', relevant_module_list[-1])[0]
 		self.module_path = latest_module_path

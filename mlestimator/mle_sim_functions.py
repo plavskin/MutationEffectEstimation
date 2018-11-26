@@ -5,8 +5,10 @@
 import pandas as pd
 import numpy as np
 import os
+import math
 import warnings as war
 import mle_functions
+import subprocess
 from scipy.stats import norm
 from mlestimator import mle_filenaming_functions
 import cluster_wrangler.cluster_functions
@@ -764,8 +766,7 @@ class SimRunner(SimPreparer):
 		sim_key = hypothesis_testing_info.get_sim_key()
 		output_file_label = \
 			self._generate_sim_output_file_label(sim_parameters, sim_key)
-		print(output_file_label)
-		self.simulator = Simulator(self.sim_param_dict['H1'], \
+		self.simulator = Simulator(self.sim_param_dict['H0'], \
 			self.cluster_parameters, self.cluster_folders, \
 			self.sim_folders, additional_code_run_keys, \
 			additional_code_run_values, output_file_label)
@@ -801,11 +802,11 @@ class SimRunner(SimPreparer):
 		self.simulator.run_job_submission()
 		# track completeness within current mode
 		sim_completefile = self.simulator.get_completefile_path()
-		self.sim_param_dict['H1'].update_parameter_completeness(sim_completefile)
+		self.sim_param_dict['H0'].update_parameter_completeness(sim_completefile)
 		# if all parameters for this mode are complete, update mode completeness
 		# this also updates completeness across modes
 		self.sim_completeness = \
-			self.sim_param_dict['H1'].check_completeness_within_mode()
+			self.sim_param_dict['H0'].check_completeness_within_mode()
 	def submit_sim(self):
 		'''
 		If sim_key is 'original', copies original datafiles to
@@ -948,22 +949,22 @@ class FixedPointCDFvalCalculator(object):
 		''' Sets up hypothesis_testing_info for sim data '''
 		# get MLE parameter values from LL_df, and use them as new
 			# starting vals
-		# only H1 data will be used for running simulations, but
+		# only H0 data will be used for running simulations, but
 			# starting_param_vals for both will be used as MLE starting
 			# vals
-		H1_starting_param_vals = self._get_original_MLE_param_vals('H1')
-		# create sim_key_holder and get sim_key from sim_key_organizer
-		sim_key_holder = SimKeyHolder(self.mode_dict['H1'], \
-			H1_starting_param_vals)
-		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
-		# create hypothesis_key_holder
-		H1_key_holder = self._generate_hypothesis_key_holder('H1', sim_key, \
-			H1_starting_param_vals)
-		# now repeat for H0, using sim_key determined above
 		H0_starting_param_vals = self._get_original_MLE_param_vals('H0')
+		# create sim_key_holder and get sim_key from sim_key_organizer
+		sim_key_holder = SimKeyHolder(self.mode_dict['H0'], \
+			H0_starting_param_vals)
+		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
 		# create hypothesis_key_holder
 		H0_key_holder = self._generate_hypothesis_key_holder('H0', sim_key, \
 			H0_starting_param_vals)
+		# now repeat for H1, using sim_key determined above
+		H1_starting_param_vals = self._get_original_MLE_param_vals('H1')
+		# create hypothesis_key_holder
+		H1_key_holder = self._generate_hypothesis_key_holder('H1', sim_key, \
+			H1_starting_param_vals)
 		# pass hypothesis_key_holder to self.hypothesis_testing_info_dict['sim']
 		self._set_up_hypothesis_testing_info('simulated', H1_key_holder, \
 			H0_key_holder)
@@ -1039,11 +1040,12 @@ class FixedPointCDFvalCalculator(object):
 			self.cdf_val = np.nan
 		else:
 			original_deviance = self.original_deviance_array[0]
-			num_sim_deviances_above_original_deviance = \
-				sum(np.greater(original_deviance, sim_deviance_array))
+			num_sim_deviances_below_original_deviance = \
+				sum(np.less(sim_deviance_array, original_deviance))
 			num_sim_deviances = sum(~np.isnan(sim_deviance_array))
 			self.cdf_val = \
-				num_sim_deviances_above_original_deviance/num_sim_deviances
+				float(num_sim_deviances_below_original_deviance) / \
+				float(num_sim_deviances)
 		self.cdf_val_calc_complete = True
 		_write_fixed_pt_output(self.fixed_param_dict['H0'], \
 			self.fixed_param_val_dict['H0'], self.cdf_val, self.output_file)
@@ -1139,6 +1141,10 @@ class OneSidedSimProfiler(object):
 				'cdf_val': [np.nan] * self.profile_pt_num}, \
 				index = self.profile_pt_list)
 		self.side_completeness = False
+		self.fixed_param_logspace_convert = \
+			self._get_logspace_bool(mode, fixed_param, self.sim_parameters)
+		self.fixed_param_sim_number = \
+			self._get_sim_number(mode, self.sim_parameters)
 #	def _convert_profile_pt_num(self, profile_pt):
 #		'''
 #		Converts profile_pt to an index that will be unique across both
@@ -1155,20 +1161,86 @@ class OneSidedSimProfiler(object):
 #				'less than asymptotic_CI_val for sim-based CI estimation ' + \
 #				'on ' + self.output_id_prefix + '; cannot detect profile side')
 #		return(profile_pt_converted)
-	def _fixed_param_val_finder(self, current_fixed_param_val, current_cdf_val, \
-		target_cdf_val):
+	def _get_logspace_bool(self, mode, fixed_param, sim_parameters):
+		'''
+		Determines whether or not fixed_param is estimated in log space
+		(vs linear space)
+		'''
+		temp_sim_parameters = copy.deepcopy(sim_parameters)
+		temp_sim_parameters.set_mode(mode, self.output_id_prefix)
+		current_logspace_parameters = \
+			temp_sim_parameters.current_logspace_profile_list
+		param_in_logspace = fixed_param in current_logspace_parameters
+		return(param_in_logspace)
+	def _get_sim_number(self, mode, sim_parameters):
+		'''
+		Gets number of sims to be performed for current mode
+		'''
+		temp_sim_parameters = copy.deepcopy(sim_parameters)
+		temp_sim_parameters.set_mode(mode, self.output_id_prefix)
+		return(temp_sim_parameters.current_profile_point_num)
+	def _fixed_param_val_finder(self, current_fixed_param_val_unscaled, \
+		current_cdf_val_unscaled, target_cdf_val_unscaled, logspace_convert,
+		sim_number):
 		'''
 		Finds value of fixed_param that corresponds to target_cdf_val,
 		assuming density function of fixed parameter probabilities is
 		normal
+		Because current_cdf_val and target_cdf_val are one-sided,
+		converts their alpha values to two-sided (i.e. divides them by
+		two) before using them to calculate z-vals
+		If current_cdf_val is 1, decrease it by 1/(3*sim_number) so that
+		another starting location for simulations (i.e.
+		target_fixed_param_val) can be determined
 		'''
+		if logspace_convert:
+			mle_parameter_val = math.log(self.fixed_param_mle)
+			current_fixed_param_val = math.log(current_fixed_param_val_unscaled)
+		else:
+			mle_parameter_val = self.fixed_param_mle
+			current_fixed_param_val = current_fixed_param_val_unscaled
+		current_cdf_val = 1 - 0.5 * (1 - current_cdf_val_unscaled)
+		if current_cdf_val == 1:
+			current_cdf_val = 1 - 1 / float(3 * sim_number)
+		target_cdf_val = 1 - 0.5 * (1 - target_cdf_val_unscaled)
 		current_z_val = norm.ppf(current_cdf_val)
 		z_val_scaler = \
-			(current_fixed_param_val - self.fixed_param_mle) / current_z_val
+			(current_fixed_param_val - mle_parameter_val) / current_z_val
 		target_z_val = norm.ppf(target_cdf_val)
-		target_fixed_param_val = \
-			target_z_val * z_val_scaler + self.fixed_param_mle
+		target_fixed_param_val_scaled = \
+			target_z_val * z_val_scaler + mle_parameter_val
+		if logspace_convert:
+			target_fixed_param_val = math.exp(target_fixed_param_val_scaled)
+		else:
+			target_fixed_param_val = target_fixed_param_val_scaled
 		return(target_fixed_param_val)
+	def _interpolate_points(self, x_1_unscaled, y_1, x_2_unscaled, y_2, y_target, \
+		logspace_convert):
+		'''
+		Does linear interpolation between [x_1, y_1] and [x_2, y_2] to
+		find x-val at y_target;
+		If necessary, first converts x_1_unscaled and x_2_unscaled to
+		log space, does linear interpolation in log space, and then
+		converts x_target back to linear space
+		'''
+		if logspace_convert:
+			x_1 = math.log(x_1_unscaled)
+			x_2 = math.log(x_2_unscaled)
+		else:
+			x_1 = x_1_unscaled
+			x_2 = x_2_unscaled
+		# fit line to flipped coordinates to be able to interpolate
+			# target_y
+		line_fit = \
+			np.polyfit([y_1, y_2],
+				[x_1, x_2], 1)
+		interpolator = np.poly1d(line_fit)
+		x_target_scaled = interpolator(y_target)
+		if logspace_convert:
+			x_target = math.exp(x_target_scaled)
+		else:
+			x_target = x_target_scaled
+		return(x_target)
 	def _select_first_point(self):
 		'''
 		Assigns self.asymptotic_CI_val to fixed parameter val of 1st
@@ -1190,9 +1262,13 @@ class OneSidedSimProfiler(object):
 		first_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[0]]['cdf_val']
 		pval_scaler = 0.5
 		target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
+		if target_cdf_val == first_cdf_val:
+			pval_scaler = 0.75
+			target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 		second_pt_fixed_param_val = \
 			self._fixed_param_val_finder(first_fixed_param_val, first_cdf_val, \
-				target_cdf_val)
+				target_cdf_val, self.fixed_param_logspace_convert, \
+				self.fixed_param_sim_number)
 		current_fixed_param_val_dict = \
 			copy.copy(self.fixed_point_df.loc[self.profile_pt_list[1]]['fixed_param_val_dict'])
 		current_fixed_param_val_dict['H0'] = second_pt_fixed_param_val
@@ -1214,23 +1290,36 @@ class OneSidedSimProfiler(object):
 			self.fixed_point_df.loc[self.profile_pt_list[1]]['fixed_param_val_dict']['H0']
 		second_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[1]]['cdf_val']
 		if second_cdf_val > self.cdf_bound:
-			# interpolate (or if necessary extrapolate) between first
-				# and second fixed param val on x-axis to point
-				# corresponding to cdf_bound y-val
 			first_fixed_param_val = \
 				self.fixed_point_df.loc[self.profile_pt_list[0]]['fixed_param_val_dict']['H0']
 			first_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[0]]['cdf_val']
-			line_fit = \
-				np.polyfit([first_fixed_param_val, second_fixed_param_val],
-					[first_cdf_val, second_cdf_val], 1)
-			interpolator = poly1d(line_fit)
-			third_pt_fixed_param_val = interpolator(self.cdf_bound)
+			if first_cdf_val < self.cdf_bound:
+				# interpolate (or if necessary extrapolate) between
+					# first and second fixed param val on x-axis to
+					# point corresponding to cdf_bound y-val
+				third_pt_fixed_param_val = \
+					self._interpolate_points(first_fixed_param_val, \
+						first_cdf_val, second_fixed_param_val, second_cdf_val, \
+						self.cdf_bound, self.fixed_param_logspace_convert)
+			else:
+				# select point on opposite side of first_fixed_param_val
+				pval_scaler = 1.25
+				target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
+				third_pt_fixed_param_val = \
+					self._fixed_param_val_finder(second_fixed_param_val, \
+						second_cdf_val, target_cdf_val, \
+						self.fixed_param_logspace_convert, \
+						self.fixed_param_sim_number)
 		else:
 			pval_scaler = 0.25
 			target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
+			if target_cdf_val == second_cdf_val:
+				pval_scaler = 0.125
+				target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 			third_pt_fixed_param_val = \
 				self._fixed_param_val_finder(second_fixed_param_val, \
-					second_cdf_val, target_cdf_val)
+					second_cdf_val, target_cdf_val, self.fixed_param_logspace_convert, \
+					self.fixed_param_sim_number)
 		current_fixed_param_val_dict = \
 			copy.copy(self.fixed_point_df.loc[self.profile_pt_list[2]]['fixed_param_val_dict'])
 		current_fixed_param_val_dict['H0'] = third_pt_fixed_param_val
@@ -1268,12 +1357,15 @@ class OneSidedSimProfiler(object):
 		self._select_first_point()
 		first_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[0])
 		if first_fixed_pt_complete:
+			print('First fixed pt complete!')
 			self._select_second_point()
 			second_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[1])
 			if second_fixed_pt_complete:
+				print('Second fixed pt complete!')
 				self._select_third_point()
 				third_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[2])
 				if third_fixed_pt_complete:
+					print('Third fixed pt complete!')
 					self.side_completeness = True
 
 class TwoSidedProfiler(object):
@@ -1299,7 +1391,7 @@ class TwoSidedProfiler(object):
 		self.cdf_bound = cdf_bound
 		self.profile_points_per_side = 3
 		self.profile_pt_list = \
-			np.array(range(0, (self.profile_points_per_side * 2 + 1)))
+			np.array(range(1, (self.profile_points_per_side * 2 + 2)))
 		self.profile_path = sim_folders.get_path('sim_profile_fixed_pt_folder')
 		self.CI_sides = ['lower', 'upper']
 		self.completeness_tracker = \
@@ -1307,7 +1399,7 @@ class TwoSidedProfiler(object):
 		self._create_profile_pt_list_dict()
 		self.completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
-				'_'.join(['param_profile_', sim_parameters.output_identifier, \
+				'_'.join(['param_profile', sim_parameters.output_identifier, \
 					fixed_param, 'completefile.txt']))
 	def _create_profile_pt_list_dict(self):
 		lower_profile_pts = \
@@ -1321,7 +1413,7 @@ class TwoSidedProfiler(object):
 		return(self.completefile)
 	def run_profiler(self):
 		# write output file for 0th pt
-		profile_pt = 0
+		profile_pt = 1
 		output_file = generate_filename(self.profile_path, str(profile_pt), \
 			self.output_id_prefix, self.fixed_param, 'data')
 		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, profile_pt, \
@@ -1387,24 +1479,42 @@ def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, \
 def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 	additional_code_run_keys, additional_code_run_values, output_id_prefix, \
 	combined_results, cluster_folders, cluster_parameters):
-		cdf_bound = 1 - sim_parameters.current_CI_pval
-		for fixed_param in sim_parameters.current_sim_CI_parameters:
-			asymptotic_CI_complete = \
-				combined_results.check_step_completeness('asymptotic_CIs')
-			if asymptotic_CI_complete:
-				fixed_param_mle = \
-					combined_results.get_param_mle_val(fixed_param)
-				asymptotic_CI_dict = \
-					combined_results.get_CI_dict(fixed_param, 'asymptotic')
-				current_param_profiler = TwoSidedProfiler(fixed_param_mle, \
-					asymptotic_CI_dict, mode, fixed_param, sim_parameters, \
-					sim_folders, additional_code_run_keys, \
-					additional_code_run_values, output_id_prefix, cdf_bound, \
-					cluster_folders, cluster_parameters)
-				current_param_profiler.run_profiler()
-				profile_completefile = \
-					current_param_profiler.get_completefile()
-				sim_parameters.set_parameter(fixed_param)
-				sim_parameters.update_parameter_completeness(profile_completefile)
-
+		sim_MLEs_completefile = \
+			os.path.join(sim_folders.get_path('completefile_folder'), \
+				'_'.join(['mode', sim_parameters.current_mode, \
+					'sim_MLEs_complete']))
+		if not os.path.isfile(sim_MLEs_completefile):
+			cdf_bound = 1 - sim_parameters.current_CI_pval
+			sim_CI_parameters = sim_parameters.current_sim_CI_parameters
+			sim_MLEs_completeness_tracker = \
+				cluster_wrangler.cluster_functions.CompletenessTracker(sim_CI_parameters)
+			for fixed_param in sim_CI_parameters:
+				asymptotic_CI_complete = \
+					combined_results.check_step_completeness('asymptotic_CIs')
+				if asymptotic_CI_complete:
+					fixed_param_mle = \
+						combined_results.get_param_mle_val(fixed_param)
+					asymptotic_CI_dict = \
+						combined_results.get_CI_dict(fixed_param, 'asymptotic')
+					current_param_profiler = TwoSidedProfiler(fixed_param_mle, \
+						asymptotic_CI_dict, mode, fixed_param, sim_parameters, \
+						sim_folders, additional_code_run_keys, \
+						additional_code_run_values, output_id_prefix, cdf_bound, \
+						cluster_folders, cluster_parameters)
+					current_param_profiler.run_profiler()
+					profile_completefile = \
+						current_param_profiler.get_completefile()
+					sim_MLEs_completeness_tracker.update_key_status(fixed_param, \
+						profile_completefile)
+			# copy current contents of key_organizer_folder to home directory
+			key_organizer_folder = sim_folders.get_path('key_organizer_folder')
+			key_organizer_home_folder = \
+				sim_folders.get_path('key_organizer_home_folder')
+			subprocess.call("cp -rf " + key_organizer_folder + " " + \
+				key_organizer_home_folder, shell = True, \
+				stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+			sim_MLEs_complete = sim_MLEs_completeness_tracker.get_completeness()
+			if sim_MLEs_complete:
+				open(sim_MLEs_completefile,'a').close()
+		return(sim_MLEs_completefile)
 
