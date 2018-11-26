@@ -326,12 +326,11 @@ class CombinedResultSummary(object):
 				if non_unfixed_ML_identified:
 					self._correct_LL_profiles()
 				self._write_combined_df()
-	def _initialize_sim_based_results(self):
+	def initialize_sim_based_results(self, sim_MLEs_completefile):
 		# check whether initial sim profile building has been completed
-		sim_profile_complete = \
-			self.parameter_holder_dict['sim_based'].check_completeness_within_mode()
+		sim_profile_complete = os.path.isfile(sim_MLEs_completefile)
 		if sim_profile_complete:
-			self.completeness_tracker.switch_key_status('sim_based_initialization', \
+			self.completeness_tracker.switch_key_completeness('sim_based_initialization', \
 				True)
 	def generate_CIs(self, CI_type):
 		''' Generates and record CIs for fitted parameters '''
@@ -340,8 +339,8 @@ class CombinedResultSummary(object):
 		parameter_holder = self.parameter_holder_dict[CI_type]
 		# initialize combined results df
 		self._initialize_asymptotic_results()
-		# check whether sim_based profiles ready
-		self._initialize_sim_based_results()
+#		# check whether sim_based profiles ready
+#		self._initialize_sim_based_results()
 		# Only run CI estimation if initialization is complete but CIs are not
 		if self.completeness_tracker.get_key_completeness(CI_type + \
 			'_initialization'):

@@ -38,10 +38,11 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 			# parameter for which sim-based CIs are required
 		sim_folders = copy.deepcopy(mle_folders)
 		sim_folders.set_current_output_subfolder('sim')
-		generate_sim_based_profile_pts(current_mode, sim_parameters, \
+		sim_MLEs_completefile = generate_sim_based_profile_pts(current_mode, sim_parameters, \
 			sim_folders, additional_code_run_keys, additional_code_run_values, \
 			output_id_string_sim, current_combined_results, cluster_folders, \
 			cluster_parameters)
+		current_combined_results.initialize_sim_based_results(sim_MLEs_completefile)
 		current_combined_results.generate_CIs('sim_based')
 
 

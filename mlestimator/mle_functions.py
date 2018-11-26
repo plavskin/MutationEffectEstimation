@@ -394,11 +394,24 @@ class BoundAbuttingPointRemover(object):
 		# get abs val of difference between rescaled
 			# self.parameter_val_df and rescaled bound_array
 		if len(LL_df_prefilter.index) > 0:
-			self.parameter_val_df = LL_df_prefilter[self.parameter_names]
+			self._set_up_parameter_val_df(LL_df_prefilter)
 			self._get_scaled_array_diff()
 			self._remove_abutting_points()
 		else:
 			self.LL_df = LL_df_prefilter
+	def _set_up_parameter_val_df(self, LL_df_prefilter):
+		'''
+		Sets up a dataframe from LL_df_prefilter containing columns
+		corresponding to all the parameter names in self.parameter_names
+		'''
+		LL_df_cols = LL_df_prefilter.columns
+		new_columns = \
+			list(set(self.parameter_names).difference(set(LL_df_cols)))
+		old_columns_to_keep = \
+			list(set(self.parameter_names).intersection(set(LL_df_cols)))
+		self.parameter_val_df = copy.copy(LL_df_prefilter[old_columns_to_keep])
+		for current_col in new_columns:
+			self.parameter_val_df[current_col] = np.nan
 	def _rescale_df(self, df):
 		# rescales df by converting necessary columns to logspace and
 		# then multipying by scaling_array
@@ -627,16 +640,21 @@ class LLProfile(LLHolder):
 		self.LL_df = pd.DataFrame()
 	def _set_ML_params(self, ml_param_df):
 		self.ML_params = copy.copy(ml_param_df)
-		self.max_LL = ml_param_df.iloc[0]['LL']
+		if 'LL' in self.LL_df.columns:
+			self.max_LL = ml_param_df.iloc[0]['LL']
 		self.fixed_param_MLE_val = ml_param_df.iloc[0][self.fixed_param]
 	def _id_max_LL(self):
 		# identifies and sets the parameter values corresponding to the
 			# max likelihood
 		# id row of LL_df corresponding to max LL
 		if not self.LL_df.empty:
-			ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
-				# idxmax OK here because indices are reset during appending
-			# set this row to be the ML parameters
+			if 'LL' in self.LL_df.columns:
+				ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
+					# idxmax OK here because indices are reset during appending
+				# set this row to be the ML parameters
+			elif 'cdf_vals' in self.LL_df.columns:
+				ml_param_df = \
+					self.LL_df.iloc[[int((abs(self.LL_df['cdf_vals'] - 0)).idxmin())]]
 			self._set_ML_params(ml_param_df)
 	def _set_LL_df(self):
 		'''
