@@ -165,15 +165,23 @@ class FolderManager(object):
 	""" Creates and holds paths used by cluster_wrangler """
 	def __init__(self, cluster_parameters, experiment_folder_name):
 		self.path_dict = {}
-		self.path_dict['experiment_path'] = \
-			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
+#		self.path_dict['experiment_path'] = \
+#			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
+		self.path_dict['tempfolder_experiment_path'] = \
+			os.path.join(cluster_parameters.temp_storage_path, experiment_folder_name)
+#		self.path_dict['trackfile_path'] = \
+#			os.path.join(self.path_dict['experiment_path'],'trackfiles')
+#		self.path_dict['completefile_path'] = \
+#			os.path.join(self.path_dict['experiment_path'],'completefiles')
 		self.path_dict['trackfile_path'] = \
-			os.path.join(self.path_dict['experiment_path'],'trackfiles')
+			os.path.join(self.path_dict['tempfolder_experiment_path'], \
+				'trackfiles')
 		self.path_dict['completefile_path'] = \
-			os.path.join(self.path_dict['experiment_path'],'completefiles')
+			os.path.join(self.path_dict['tempfolder_experiment_path'],\
+				'completefiles')
 		self.path_dict['cluster_job_submission_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
-				experiment_folder_name,'cluster_job_submission_folder')
+			os.path.join(self.path_dict['tempfolder_experiment_path'], \
+				'cluster_job_submission_folder')
 		self._set_up_folders()
 	def _set_up_folders(self):
 		setup_complete_file = os.path.join(self.path_dict['completefile_path'], \
@@ -808,11 +816,12 @@ class TrackfileManager(object):
 	Handles writing and reading of trackfiles, which store information
 	on current job status of each job
 	"""
-	def __init__(self, job_parameters, cluster_parameters):
-		self.trackfile_path = os.path.join(job_parameters.experiment_folder, \
-			'trackfiles',('trackfile_'+job_parameters.name+'.csv'))
-		self.summaryfile_path = os.path.join(job_parameters.experiment_folder, \
-			'trackfiles',('summary_trackfile_'+job_parameters.name+'.csv'))
+	def __init__(self, job_parameters, cluster_parameters, trackfile_folder):
+		self.trackfile_path = \
+			os.path.join(trackfile_folder, \
+				('trackfile_' + job_parameters.name + '.csv'))
+		self.summaryfile_path = os.path.join(trackfile_folder, \
+			('summary_trackfile_'+job_parameters.name+'.csv'))
 		self.job_parameters = copy.deepcopy(job_parameters)
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 	def get_summaryfile_path(self):
@@ -1027,12 +1036,15 @@ class CodeSubmitter(object):
 		# handles submission of the job
 		cluster_job_submission_folder = \
 			self.cluster_folders.get_path('cluster_job_submission_path')
+		trackfile_folder = \
+			self.cluster_folders.get_path('trackfile_path')
 		# set up and run batch jobs
 		job_flow_handler(self.job_name, self.job_numbers, self.initial_sub_time, \
 			self.initial_sub_mem, self.cluster_parameters, self.output_path, self.output_extension, \
 			self.output_file_label, cluster_job_submission_folder, self.experiment_folder, \
 			self.module, self.code_run_input, self.additional_beginning_lines_in_job_sub, \
-			self.additional_end_lines_in_job_sub, self.parallel_processors, self.completefile)
+			self.additional_end_lines_in_job_sub, self.parallel_processors, self.completefile,
+			trackfile_folder)
 
 #######################################################
 def parse_setup_file(filename):
@@ -1072,7 +1084,7 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	cluster_parameters, output_folder, output_extension, output_file_label, \
 	cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 	additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
-	parallel_processors, completefile_path):
+	parallel_processors, completefile_path, trackfile_folder):
 	"""
 	Handles entire flow of job, from creation of new trackfile to
 	submission of jobs to updating trackfile
@@ -1086,7 +1098,8 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 			output_extension, output_file_label, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, parallel_processors)
-		current_trackfile = TrackfileManager(job_parameters, cluster_parameters)
+		current_trackfile = TrackfileManager(job_parameters, \
+			cluster_parameters, trackfile_folder)
 		# check whether trackfile exists; if so, use it to get job data and
 			# update statuses; otherwise, create new trackfile
 		current_trackfile_path = current_trackfile.get_trackfile_path()

@@ -61,6 +61,64 @@ class CIWarning(object):
 		warning_string = ';'.join(warning_list)
 		return(warning_string)
 
+class CIBoundEstimator(cluster_functions.CodeSubmitter):
+	'''
+	Submits info to cluster_wrangler.cluster_functions.job_flow_handler
+	to run code that performs CI bound estimation
+	'''
+	def __init__(self, cluster_parameters, cluster_folders, completefile, \
+		mle_folders, module, code_name, additional_beginning_lines_in_job_sub, \
+		additional_end_lines_in_job_sub, \
+		CI_bound_name, fixed_param, fixed_param_MLE_val, profile_side, \
+		CI_bound_proximal_points, CI_bound_output_file, CI_bound_fit_file, \
+		additional_code_run_keys, additional_code_run_values, cdf_bound):
+		self.fixed_param = fixed_param
+		self.fixed_param_MLE_val = fixed_param_MLE_val
+		self.CI_bound_proximal_points = CI_bound_proximal_points
+		self.profile_side = profile_side
+		self.CI_bound_output_file = CI_bound_output_file
+		self.CI_bound_fit_file = CI_bound_fit_file
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
+		self.cdf_bound = cdf_bound
+		job_name = \
+			'-'.join([mle_folders.get_experiment_folder_name(), \
+				CI_bound_name])
+		job_numbers = [1]
+		parallel_processors = 1
+		experiment_folder = mle_folders.get_path('experiment_path')
+		output_extension = 'csv'
+		initial_sub_time = 5
+		initial_sub_mem = 1024
+		output_folder = mle_folders.get_path('CI_bound_path')
+		output_file_label = CI_bound_name
+		super(CIBoundEstimator, self).__init__(cluster_parameters, \
+				cluster_folders, completefile, job_name, \
+				job_numbers, module, parallel_processors, \
+				experiment_folder, output_extension, code_name, \
+				additional_beginning_lines_in_job_sub, \
+				additional_end_lines_in_job_sub, initial_sub_time, \
+				initial_sub_mem, output_folder, output_file_label)
+	def _create_code_run_input_lists(self):
+		if (len(self.additional_code_run_keys) == \
+			len(self.additional_code_run_values)):
+			self.key_list = ['cdf_bound', \
+				'mle_param_val', \
+				'parameter_values',\
+				'cdf_vals', \
+				'output_file', \
+				'fit_file',
+				'profile_side'] + \
+				self.additional_code_run_keys
+			self.value_list = [self.cdf_bound, \
+				self.fixed_param_MLE_val, \
+				self.CI_bound_proximal_points[self.fixed_param].values, \
+				self.CI_bound_proximal_points['cdf_vals'].values, \
+				self.CI_bound_output_file, \
+				self.CI_bound_fit_file,
+				self.profile_side] + \
+				self.additional_code_run_values
+
 class OneSidedCIBound(object):
 	# Stores data for CI bound on one side of MLE
 	def __init__(self, pval, LL_df, df, fixed_param_MLE_val,fixed_param, \
@@ -102,8 +160,6 @@ class OneSidedCIBound(object):
 				# functions throw important warnings
 			self._find_CI_proximal_LL_points()
 			self._set_output_filenames()
-			if self.one_sided_LL_df.shape[0] > 1:
-				self._create_code_run_input()
 	def _set_output_filenames(self):
 		self.output_prename = '-'.join(['CI_bound', self.profile_side, \
 			self.CI_type])
@@ -211,62 +267,18 @@ class OneSidedCIBound(object):
 				self.points_to_fit_curve)
 		# create a new df with only points closest to CI bound
 		self.CI_bound_proximal_points = self.one_sided_LL_df.iloc[CI_bound_proximal_indices]
-	def _create_code_run_input(self):
-		key_list = ['cdf_bound', \
-			'mle_param_val', \
-			'parameter_values',\
-			'cdf_vals', \
-			'output_file', \
-			'fit_file',
-			'profile_side']
-		value_list = [self.cdf_bound, \
-			self.fixed_param_MLE_val, \
-			self.CI_bound_proximal_points[self.fixed_param].values, \
-			self.CI_bound_proximal_points['cdf_vals'].values, \
-			self.CI_bound_output_file, \
-			self.CI_bound_fit_file,
-			self.profile_side]
-		# take values from self.additional_code_run_keys and
-			# self.additional_code_run_values where
-			# self.additional_code_run_keys isn't already in key_list,
-			# and add remaining values to key_list and value_list
-		for current_key, current_val in \
-			zip(self.additional_code_run_keys,self.additional_code_run_values):
-			if not current_key in key_list:
-				key_list.append(current_key)
-				value_list.append(current_val)
-		# process key_list and value_list into a submission string
-		submission_string_processor = \
-			cluster_functions.SubmissionStringProcessor(self.module, key_list, value_list, \
-				self.code_name)
-		self.code_run_input = submission_string_processor.get_code_run_input()
 	def _run_CI_finder_submission(self):
 		# handles submission of the job
-		job_name = \
-			'-'.join([self.mle_folders.get_experiment_folder_name(), \
-				self.CI_bound_name])
-		job_numbers = [1]
-		initial_time = 5
-		initial_mem = 1024
-		cluster_parameters = self.cluster_parameters
-		output_folder = self.mle_folders.get_path('CI_bound_path')
-		output_extension = 'csv'
-		output_file_label = self.CI_bound_name
-		cluster_job_submission_folder = \
-			self.cluster_folders.get_path('cluster_job_submission_path')
-		experiment_folder = self.mle_folders.get_path('experiment_path')
-		module = self.module
-		code_run_input = self.code_run_input
-		additional_beginning_lines_in_job_sub = self.additional_beginning_lines_in_job_sub
-		additional_end_lines_in_job_sub = self.additional_end_lines_in_job_sub
-		parallel_processors = 1
-		completefile_path = self.completefile
-		# set up and run batch jobs
-		cluster_functions.job_flow_handler(job_name, job_numbers, initial_time, \
-			initial_mem, cluster_parameters, output_folder, output_extension, \
-			output_file_label, cluster_job_submission_folder, experiment_folder, \
-			module, code_run_input, additional_beginning_lines_in_job_sub, \
-			additional_end_lines_in_job_sub, parallel_processors, completefile_path)
+		ci_bound_estimator = CIBoundEstimator(self.cluster_parameters, \
+			self.cluster_folders, self.completefile, self.mle_folders, \
+			self.module, self.code_name, \
+			self.additional_beginning_lines_in_job_sub, \
+			self.additional_end_lines_in_job_sub, self.CI_bound_name, \
+			self.fixed_param, self.fixed_param_MLE_val, self.profile_side, \
+			self.CI_bound_proximal_points, self.CI_bound_output_file, \
+			self.CI_bound_fit_file, self.additional_code_run_keys, \
+			self.additional_code_run_values, self.cdf_bound)
+		ci_bound_estimator.run_job_submission()
 	def find_CI_bound(self):
 		# check if CI bound has been IDed
 		# if it has, read it in, assign it to self
@@ -321,7 +333,7 @@ class OneSidedCIBoundLower(OneSidedCIBound):
 			# max LL, then decrease monotonically after; if this
 			# isn't the case, throw a warning
 		y_diffs = np.diff(self.one_sided_LL_df['cdf_vals'])
-		monotonicity_state = np.all(y_diffs >= 0)
+		monotonicity_state = np.all(y_diffs <= 0)
 		if not monotonicity_state:
 			self.warning.set_non_monotonic()
 
@@ -346,7 +358,7 @@ class OneSidedCIBoundUpper(OneSidedCIBound):
 			# max LL, then decrease monotonically after; if this
 			# isn't the case, throw a warning
 		y_diffs = np.diff(self.one_sided_LL_df['cdf_vals'])
-		monotonicity_state = np.all(y_diffs <= 0)
+		monotonicity_state = np.all(y_diffs >= 0)
 		if not monotonicity_state:
 			self.warning.set_non_monotonic()
 
