@@ -56,9 +56,27 @@ function Quadratic_Bound_Finder(key_list, value_list)
 		(-starting_coefficients(2)^2 + 4 * starting_coefficients(1) * direct_fit_coefficients(3)) / ...
 		(4 * starting_coefficients(1)));
 
-	% Fit quadratic with constraints above
-	optimal_coefficients = lsqnonlin(@(coeffs) Quadratic_Fit_Vertex_Limited(coeffs, parameter_vals, cdf_vals),...
-		starting_coefficients,current_lb,current_ub);
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	% Perform global search for optimal parameters
+	gs = GlobalSearch;
+    gs.NumStageOnePoints = 10; % default = 200; sufficient is 50
+    gs.NumTrialPoints = 20; % default = 1000; sufficient is 200
+    gs.StartPointsToRun='bounds';
+    gs.Display='final';
+
+    fmincon_opts = optimoptions('fmincon', 'Algorithm','interior-point', 'Display','off');
+
+    global_start_time = tic;
+
+    quad_diff_squared = @(coefficients, x_vals, y_vals) ...
+    	sum((Quadratic_Fit_Vertex_Limited(coefficients,x_vals,y_vals)).^2);
+
+    min_problem_fixed_params = createOptimProblem('fmincon','objective',...
+        @(coeffs) quad_diff_squared(coeffs, parameter_vals, cdf_vals),...
+        'x0',starting_coefficients,'lb',current_lb,'ub',current_ub,...
+        'options',fmincon_opts);
+
+    optimal_coefficients = run(gs,min_problem_fixed_params);
 
 	a = optimal_coefficients(1);
 	b = -optimal_coefficients(2)*2*a;
