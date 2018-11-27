@@ -20,32 +20,31 @@ function Quadratic_Bound_Finder(key_list, value_list)
     profile_side = parameter_dict('profile_side');
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    % quadratic_fit_fun reframes quadratic function to allow bounds to
-    	% be placed on coefficients
-	quadratic_fit_fun = @(coeff_vector,x_vals,y_vals) y_vals-...
-		(coeff_vector(1)*x_vals.^2-...
-		2*coeff_vector(1)*coeff_vector(2)*x_vals+coeff_vector(3));
-		% coeff_vector = [a, 2*a*b, c]
-
 	% initialize starting coefficients and set constrains
-	% a must be negative
-	% x_max > -b/2a or x_max < -b/2a, depending on direction of CI bound
+	% coeffs(1) [a]: must be negative
+	% coeffs(2) [-b/2a]: x_max > -b/2a or x_max < -b/2a, depending on
+		% direction of CI bound
 		% this is the axis of the parabola; this requirement means that
 			% all parameter_vals are fitted on a single,
 			% 'ascending' side of the parabola
+	% coeffs(3) [(-b^2 + 4ac)/(4a)]: cdf_bound <= (-b^2 + 4ac)/(4a)
+		% this is the y-value of the vertex of the parabola; the
+			% lower bound of this requirement ensures that if cdf_bound
+			% needs to be extrapolated from the current data, it will
+			% return a real value
 	direct_fit_coefficients = polyfit(parameter_vals,cdf_vals,2);
 	starting_coefficients = NaN([1,3]);
 	starting_coefficients(1) = min(direct_fit_coefficients(1),(mle_param_val-10^-50));
 		% make sure a is negative, i.e. parabola 'faces' down
 %	if min(parameter_vals)<mle_param_val
 	if strcmp(profile_side,'lower')
-		current_lb = [-Inf,-Inf,-Inf];
+		current_lb = [-Inf,-Inf,cdf_bound];
 		current_ub = [0,min(parameter_vals),Inf];
 		starting_coefficients(2) = max(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),min(parameter_vals));
 			% second coefficient is -b/2a
 %	else
 	elseif strcmp(profile_side,'upper')
-		current_lb = [-Inf,max(parameter_vals),-Inf];
+		current_lb = [-Inf,max(parameter_vals),cdf_bound];
 		current_ub = [0,Inf,Inf];
 		starting_coefficients(2) = min(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),max(parameter_vals));
 	else
@@ -53,15 +52,17 @@ function Quadratic_Bound_Finder(key_list, value_list)
 		disp(profile_side)
 		error('Invalid profile_side')
 	end
-	starting_coefficients(3) = direct_fit_coefficients(3);
+	starting_coefficients(3) = max(cdf_bound, ...
+		(-starting_coefficients(2)^2 + 4 * starting_coefficients(1) * direct_fit_coefficients(3)) / ...
+		(4 * starting_coefficients(1)));
 
 	% Fit quadratic with constraints above
-	optimal_coefficients = lsqnonlin(@(coeffs) quadratic_fit_fun(coeffs,parameter_vals,cdf_vals),...
+	optimal_coefficients = lsqnonlin(@(coeffs) Quadratic_Fit_Vertex_Limited(coeffs, parameter_vals, cdf_vals),...
 		starting_coefficients,current_lb,current_ub);
 
 	a = optimal_coefficients(1);
 	b = -optimal_coefficients(2)*2*a;
-	c = optimal_coefficients(3);
+	c = optimal_coefficients(3)+(b^2)/(4*a);
 	quadratic_fit = [a,b,c];
     
 %    x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
