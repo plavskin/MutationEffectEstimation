@@ -10,11 +10,11 @@ function Quadratic_Bound_Finder(key_list, value_list)
     % get parameter values
     parameter_dict = containers.Map(key_list,value_list);
 
-    cdf_bound = parameter_dict('cdf_bound');
+    cdf_bound = log(1-parameter_dict('cdf_bound'));
     	% cdf_bound = 1-p_value
     mle_param_val = parameter_dict('mle_param_val');
     parameter_vals = parameter_dict('parameter_values');
-    cdf_vals = parameter_dict('cdf_vals');
+    cdf_vals = log(1-parameter_dict('cdf_vals'));
     output_file = parameter_dict('output_file');
     quad_fit_file = parameter_dict('fit_file');
     profile_side = parameter_dict('profile_side');
@@ -37,13 +37,13 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	starting_coefficients(1) = min(direct_fit_coefficients(1),(mle_param_val-10^-50));
 		% make sure a is negative, i.e. parabola 'faces' down
 %	if min(parameter_vals)<mle_param_val
-	if strcmp(profile_side,'lower')
+	if strcmp(profile_side,'upper')
 		current_lb = [-Inf,-Inf,cdf_bound];
 		current_ub = [0,min(parameter_vals),Inf];
 		starting_coefficients(2) = max(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),min(parameter_vals));
 			% second coefficient is -b/2a
 %	else
-	elseif strcmp(profile_side,'upper')
+	elseif strcmp(profile_side,'lower')
 		current_lb = [-Inf,max(parameter_vals),cdf_bound];
 		current_ub = [0,Inf,Inf];
 		starting_coefficients(2) = min(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),max(parameter_vals));
@@ -59,8 +59,8 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	% Perform global search for optimal parameters
 	gs = GlobalSearch;
-    gs.NumStageOnePoints = 10; % default = 200; sufficient is 50
-    gs.NumTrialPoints = 20; % default = 1000; sufficient is 200
+    gs.NumStageOnePoints = 20; % default = 200; sufficient is 50
+    gs.NumTrialPoints = 100; % default = 1000; sufficient is 200
     gs.StartPointsToRun='bounds';
     gs.Display='final';
 
