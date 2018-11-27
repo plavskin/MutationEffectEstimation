@@ -83,7 +83,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
 
 	runtime = toc;
 	
-    if runtime < 120
+    pause_at_end = true;
+
+    if pause_at_end & runtime < 120
         pausetime=120-runtime;
         pause(pausetime)
     end

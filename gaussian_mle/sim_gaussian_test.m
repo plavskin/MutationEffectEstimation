@@ -26,6 +26,7 @@ function sim_gaussian_test(key_list, value_list)
     rng(random_seed);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get data
+    tic;
     data_table = readtable(original_phenotype_file);
     test_data = data_table.data;
 
@@ -38,10 +39,14 @@ function sim_gaussian_test(key_list, value_list)
     data_table.data = sim_data;
     writetable(data_table,phenotype_file);
 
-%    if runtime < 120
-%        pausetime=120-runtime;
-%        pause(pausetime)
-%    end
+    runtime = toc;
+
+    pause_at_end = true;
+
+    if pause_at_end & runtime < 120
+        pausetime=120-runtime;
+        pause(pausetime)
+    end
 
 end
 

@@ -177,10 +177,12 @@ function MLE_gaussian_test(key_list, value_list)
     T = table(table_data{:},'VariableNames',table_headers);
     writetable(T,output_file);
 
-%    if runtime < 120
-%        pausetime=120-runtime;
-%        pause(pausetime)
-%    end
+    pause_at_end = true;
+
+    if pause_at_end & runtime < 120
+        pausetime=120-runtime;
+        pause(pausetime)
+    end
 
 end
 
