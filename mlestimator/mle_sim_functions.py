@@ -188,6 +188,9 @@ class SimParameters(mle_functions.MLEParameters):
 		super(SimParameters, self).set_mode(mode_name, \
 				output_identifier)
 		self.current_profile_point_num = self.sim_repeats_by_mode[mode_idx]
+		self.current_profile_point_list = \
+			np.array(self._retrieve_current_values([self.sim_repeats_by_mode],\
+				mode_idx, self.current_mode, self.total_param_num))
 	def set_parameter(self,parameter_name):
 		'''
 		Set current parameter, number of likelihood profile points for
@@ -844,6 +847,9 @@ class FixedPointCDFvalCalculator(object):
 		2. 	Run sim_number simulations using starting parameter values
 			from (1d)
 		3. Repeat and record (1) but with sim data rather than real data
+	NB, performs a heuristic correction if the cdf val calculated comes
+	out to be 1 that is meant to account for simulation noise and allows
+	for reasonable downstream fitting of curves to cdf values
 	'''
 	def __init__(self, mode_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
@@ -1024,8 +1030,13 @@ class FixedPointCDFvalCalculator(object):
 					data_type)
 	def _calculate_cdf_val(self):
 		'''
-		Calculates proportion of sim data deviances above deviance of
+		Calculates proportion of sim data deviances below deviance of
 		original data
+		If all sim data deviances below original data deviance, rather
+		than setting cdf val to 1, sets it to 1-1/(3 * # of simulations)
+		This is an artificial and relatively arbitrary way to account
+		for simulation noise but allows reasonable fitting of curves to
+		cdf vals downstream
 		'''
 		# sim_deviance_array and original_deviance_array are np arrays
 		if len(self.original_deviance_array) > 1:
@@ -1043,9 +1054,12 @@ class FixedPointCDFvalCalculator(object):
 			num_sim_deviances_below_original_deviance = \
 				sum(np.less(sim_deviance_array, original_deviance))
 			num_sim_deviances = sum(~np.isnan(sim_deviance_array))
-			self.cdf_val = \
-				float(num_sim_deviances_below_original_deviance) / \
-				float(num_sim_deviances)
+			if num_sim_deviances == num_sim_deviances_below_original_deviance:
+				self.cdf_val = 1 - 1 / (3 * float(num_sim_deviances))
+			else:
+				self.cdf_val = \
+					float(num_sim_deviances_below_original_deviance) / \
+					float(num_sim_deviances)
 		self.cdf_val_calc_complete = True
 		_write_fixed_pt_output(self.fixed_param_dict['H0'], \
 			self.fixed_param_val_dict['H0'], self.cdf_val, self.output_file)
@@ -1180,15 +1194,11 @@ class OneSidedSimProfiler(object):
 		temp_sim_parameters.set_mode(mode, self.output_id_prefix)
 		return(temp_sim_parameters.current_profile_point_num)
 	def _fixed_param_val_finder(self, current_fixed_param_val_unscaled, \
-		current_cdf_val_unscaled, target_cdf_val_unscaled, logspace_convert,
-		sim_number):
+		current_cdf_val, target_cdf_val, logspace_convert, sim_number):
 		'''
 		Finds value of fixed_param that corresponds to target_cdf_val,
 		assuming density function of fixed parameter probabilities is
 		normal
-		Because current_cdf_val and target_cdf_val are one-sided,
-		converts their alpha values to two-sided (i.e. divides them by
-		two) before using them to calculate z-vals
 		If current_cdf_val is 1, decrease it by 1/(3*sim_number) so that
 		another starting location for simulations (i.e.
 		target_fixed_param_val) can be determined
@@ -1199,10 +1209,8 @@ class OneSidedSimProfiler(object):
 		else:
 			mle_parameter_val = self.fixed_param_mle
 			current_fixed_param_val = current_fixed_param_val_unscaled
-		current_cdf_val = 1 - 0.5 * (1 - current_cdf_val_unscaled)
 		if current_cdf_val == 1:
 			current_cdf_val = 1 - 1 / float(3 * sim_number)
-		target_cdf_val = 1 - 0.5 * (1 - target_cdf_val_unscaled)
 		current_z_val = norm.ppf(current_cdf_val)
 		z_val_scaler = \
 			(current_fixed_param_val - mle_parameter_val) / current_z_val
@@ -1311,7 +1319,7 @@ class OneSidedSimProfiler(object):
 						self.fixed_param_logspace_convert, \
 						self.fixed_param_sim_number)
 		else:
-			pval_scaler = 0.25
+			pval_scaler = 0.75
 			target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 			if target_cdf_val == second_cdf_val:
 				pval_scaler = 0.125
@@ -1357,15 +1365,12 @@ class OneSidedSimProfiler(object):
 		self._select_first_point()
 		first_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[0])
 		if first_fixed_pt_complete:
-			print('First fixed pt complete!')
 			self._select_second_point()
 			second_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[1])
 			if second_fixed_pt_complete:
-				print('Second fixed pt complete!')
 				self._select_third_point()
 				third_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[2])
 				if third_fixed_pt_complete:
-					print('Third fixed pt complete!')
 					self.side_completeness = True
 
 class TwoSidedProfiler(object):
@@ -1412,12 +1417,13 @@ class TwoSidedProfiler(object):
 	def get_completefile(self):
 		return(self.completefile)
 	def run_profiler(self):
-		# write output file for 0th pt
+		# write output file for 0th pt (with profile_pt = 1)
 		profile_pt = 1
+		zeroth_pt_cdf = 0
 		output_file = generate_filename(self.profile_path, str(profile_pt), \
 			self.output_id_prefix, self.fixed_param, 'data')
-		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, profile_pt, \
-			output_file)
+		_write_fixed_pt_output(self.fixed_param, self.fixed_param_mle, \
+			zeroth_pt_cdf, output_file)
 		# run through sides
 		for current_profile_side in self.CI_sides:
 			current_profile_pt_list = \
@@ -1484,7 +1490,7 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 				'_'.join(['mode', sim_parameters.current_mode, \
 					'sim_MLEs_complete']))
 		if not os.path.isfile(sim_MLEs_completefile):
-			cdf_bound = 1 - sim_parameters.current_CI_pval
+			cdf_bound = 1 - sim_parameters.current_CI_pval/2
 			sim_CI_parameters = sim_parameters.current_sim_CI_parameters
 			sim_MLEs_completeness_tracker = \
 				cluster_wrangler.cluster_functions.CompletenessTracker(sim_CI_parameters)
