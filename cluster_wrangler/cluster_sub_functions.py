@@ -113,13 +113,13 @@ class MacOSXManager(JobSubmissionManager):
 		# calculate this by assuming only jobs from module (e.g.
 			# matlab) are relevant, i.e. count those
 		jobs_running = int(subprocess.check_output(
-			('ps aux | grep ' + self.job_parameters.module + \
+			('ps aux | grep -i ' + self.job_parameters.module + \
 				' | grep -v "grep" | wc -l'),shell=True))
 		# find the max number of jobs you can run at one time
 		max_allowed_jobs = number_cpus - self.free_processors
 		# find max amount of jobs that can be added to queue without
 			# making it overflow
-		space_in_queue = max_allowed_jobs-jobs_running
+		space_in_queue = max_allowed_jobs - jobs_running
 		return(space_in_queue)
 	def job_process_finder(self):
 		"""
