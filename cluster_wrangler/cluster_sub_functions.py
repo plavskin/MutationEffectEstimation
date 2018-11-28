@@ -94,8 +94,9 @@ class MacOSXManager(JobSubmissionManager):
 		self.within_batch_counter = 'ARRAY_TASK_ID'
 	def set_job_parameters(self,job_parameters):
 		self.job_parameters = copy.deepcopy(job_parameters)
-		self.sh_filename_prefix = os.path.join(self.job_parameters.cluster_job_submission_folder,\
-			(self.job_parameters.name + '_'))
+		self.sh_filename_prefix = \
+			os.path.join(self.job_parameters.cluster_job_submission_folder, \
+			self.job_parameters.name)
 	def free_job_calculator(self):
 		"""
 		Gets the number of jobs that can still be submitted to
@@ -112,8 +113,11 @@ class MacOSXManager(JobSubmissionManager):
 		# how many jobs are currently running on computer?
 		# calculate this by assuming only jobs from module (e.g.
 			# matlab) are relevant, i.e. count those
+		module_execution_path = \
+			subprocess.check_output('which ' + self.job_parameters.module, \
+				shell = True).rstrip()
 		jobs_running = int(subprocess.check_output(
-			('ps aux | grep -i ' + self.job_parameters.module + \
+			('ps aux | grep -i ' + module_execution_path + \
 				' | grep -v "grep" | wc -l'),shell=True))
 		# find the max number of jobs you can run at one time
 		max_allowed_jobs = number_cpus - self.free_processors
@@ -138,16 +142,17 @@ class MacOSXManager(JobSubmissionManager):
 	def _create_submission_job(self, job_number_string, *unused):
 		""" Writes files to submit to cluster queue """
 		# take first int in job_number_string as the required job number
-		job_number = str(re.findall('\d+',job_number_string)[0])
-		self.sh_filename = self.sh_filename_prefix + job_number + \
-			self.sh_filename_suffix
+		self.sh_filename = \
+			self.sh_filename_prefix + self.sh_filename_suffix
 		# write submission file
 		with open(self.sh_filename,'w') \
 			as batch_job_file:
 			batch_job_file.write('#!/bin/bash\n')
-			batch_job_file.write(\
-				self.within_batch_counter + '=' + \
-				job_number + '\n')
+			batch_job_file.write('ARRAY_TASK_LIST=(' + \
+				' '.join(re.findall('\d+',job_number_string))+')' + '\n')
+			batch_job_file.write('for ' + self.within_batch_counter + \
+				' in ${ARRAY_TASK_LIST[@]}\n')
+			batch_job_file.write('do\n')
 			batch_job_file.write('output_file=\'' + \
 				os.path.join(self.job_parameters.cluster_job_submission_folder, \
 				self.job_parameters.name) + '.o1-\'${' + \
@@ -168,11 +173,13 @@ class MacOSXManager(JobSubmissionManager):
 			code_run_input = self.job_parameters.code_run_input
 			code_run_input.set_full_code_run_string('macosx')
 			code_run_string = code_run_input.get_code_run_string()
-			batch_job_file.write(code_run_string  + '> ${output_file}\n')
+			batch_job_file.write('screen -d -m ' + code_run_string  + \
+				'> ${output_file}\n')
 			# move  any error message in output_file into error file
-			batch_job_file.write('sed -n -e "/[Ee][Rr][Rr][Oo][Rr]/,\$w ${error_file}" "${output_file}"')
+			batch_job_file.write('sed -n -e "/[Ee][Rr][Rr][Oo][Rr]/,\$w ${error_file}" "${output_file}"\n')
 			# add any rows that need to be written at the end of each
 				# particular file
+			batch_job_file.write('done\n')
 			if self.job_parameters.additional_end_lines_in_job_sub:
 				for additional_sbatch_end_row in \
 					self.job_parameters.additional_end_lines_in_job_sub:

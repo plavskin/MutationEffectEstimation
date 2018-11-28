@@ -15,7 +15,7 @@ starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant 
 starting_time,1200,float,time (in mins) alotted for running single MLE (not relevant on macosx mode)
 max_mem,10000,float,max memory (in Mb) a job is allowed to request (not relevant on macosx mode)
 max_time,2400,float,max time (in minutes) a job is allowed to request (not relevant on macosx mode)
-max_jobs_per_batch,1,int,maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)
+max_jobs_per_batch,10000,int,maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)
 ,,,
 general_mle_variables,,,
 input_datafile_keys,phenotype_file,str_list,list of variable names for input files that MLE program will look for
