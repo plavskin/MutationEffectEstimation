@@ -94,8 +94,17 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	% find the point out of possible_bounds that is closest to mle_param_val:
 		% this is the intercept on the correct side of the parabola
 
-	[~,bound_index] = min(abs(possible_bounds-mle_param_val));
-	parameter_bound = possible_bounds(bound_index);
+%	[~,bound_index] = max(abs(possible_bounds-mle_param_val));
+%   parameter_bound = possible_bounds(bound_index);
+	% look for parameter_bound on the correct side of the
+        % parabola's axis
+    if strcmp(profile_side,'upper')
+        parameter_bound = ...
+            possible_bounds(possible_bounds > optimal_coefficients(2));
+    elseif strcmp(profile_side,'lower')
+        parameter_bound = ...
+            possible_bounds(possible_bounds < optimal_coefficients(2));
+    end
 
 	dlmwrite(output_file,parameter_bound,'delimiter',',','precision',9);
 	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
