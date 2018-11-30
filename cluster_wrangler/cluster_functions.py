@@ -8,7 +8,7 @@ of their progress
 import os
 import csv
 import subprocess
-import numpy
+import numpy as np
 import copy
 import re
 import cluster_sub_functions
@@ -224,7 +224,7 @@ class JobParameters(object):
 		elif isinstance(parameter, basestring):
 			output_parameter = [parameter]
 		else:
-			print('Error! Non-string, non-list passed to JobParameters')
+			print('Error: Non-string, non-list passed to JobParameters')
 		return(output_parameter)
 
 class CompletenessTracker(object):
@@ -267,171 +267,6 @@ class CompletenessTracker(object):
 		""" Checks and returns completeness status """
 		self._check_completeness()
 		return(self.completeness_status)
-
-class BatchSubmissionManager(object):
-	"""
-	Holds parameters for current job submission session, and manages
-	which jobs from current batch are submitted
-	Algorithm here assumes space_in_queue is typically more limiting
-	than max_char_num and batches_remaining
-	"""
-	def __init__(self, job_list, max_char_num, max_jobs_per_batch, \
-		space_in_queue, batches_remaining):
-		self.space_in_queue = space_in_queue
-		self.batches_remaining = batches_remaining
-		self.job_list = job_list
-		self.jobs_to_submit = []
-		self.job_submission_string_list = ['']
-		self.max_char_num = max_char_num
-		self.remaining_chars = max_char_num
-		self.max_jobs_per_batch = max_jobs_per_batch
-		self.remaining_jobs_in_batch = max_jobs_per_batch
-		self.jobs_to_error = []
-	def get_error_jobs(self):
-		"""
-		Returns jobs whose corresponding strings (for the job alone
-		plus a comma) are longer than max_char_num
-		"""
-		return(self.jobs_to_error)
-	def get_submission_string_list(self):
-		return(self.job_submission_string_list)
-	def get_submitted_jobs(self):
-		return(self.jobs_to_submit)
-	def get_batches_remaining(self):
-		return(self.batches_remaining)
-	def get_space_left_in_queue(self):
-		return(self.space_in_queue)
-	def _update_space_in_queue(self, job_number):
-		self.space_in_queue = self.space_in_queue - job_number
-	def _update_batches_remaining(self, batch_number):
-		self.batches_remaining = self.batches_remaining - batch_number
-	def _update_remaining_chars(self, char_number):
-		self.remaining_chars = self.remaining_chars - char_number
-	def _update_remaining_jobs_in_batch(self, job_number):
-		self.remaining_jobs_in_batch = self.remaining_jobs_in_batch - job_number
-	def _add_to_submission_string(self, new_string):
-		self.job_submission_string_list[-1] = self.job_submission_string_list[-1]+new_string
-	def _add_jobs_to_submission_list(self, job_sublist, job_string):
-		self._add_to_submission_string(job_string)
-		self.jobs_to_submit.extend(job_sublist)
-		self._update_space_in_queue(len(job_sublist))
-		self._update_remaining_chars(len(job_string))
-		self._update_remaining_jobs_in_batch(len(job_sublist))
-	def _reset_batch(self):
-		self._update_batches_remaining(1)
-		self.remaining_chars = self.max_char_num
-	#	if not self.job_submission_string_list[-1] == '':
-	#		self.job_submission_string_list.append('')
-		self.job_submission_string_list.append('')
-		self.remaining_jobs_in_batch = self.max_jobs_per_batch
-	def _consecutive_parser(self, job_list, stepsize = 1):
-		"""
-		Splits list of integers into list of lists of consecutive nums
-		Returns the list of consecutive integer lists, as well as a
-		list of lists of the indices of each member of each consecutive
-		integer lists in the original job_list
-		"""
-		np_job_list = numpy.array(job_list)
-		sorted_indices = numpy.argsort(np_job_list)
-		sorted_job_list = np_job_list[sorted_indices]
-		# Find position of indices where the number is higher than
-			# previous number + stepsize
-		split_indices = numpy.where(numpy.diff(sorted_job_list) != stepsize)[0]+1
-		# Split data at split_indices
-		split_job_list = numpy.array(numpy.split(sorted_job_list,split_indices))
-		return(split_job_list)
-	def _job_list_string_converter(self, consecutive_job_list):
-		"""
-		Converts a consecutive list of job numbers into a job
-		submission string for SLURM
-		"""
-		# test that consecutive_job_list is actually consecutive
-		test_list = self._consecutive_parser(consecutive_job_list)
-		if len(test_list) > 1:
-			print('Error! BatchSubmissionManager._job_list_string_converter provided unparsed list')
-		# Denote consecutive job sublists by dashes between the min
-			# and max of the sublist; separate job sublists by commas
-		current_job_num = len(consecutive_job_list)
-		if current_job_num==1:
-			current_job_string = (str(consecutive_job_list[0])+',')
-		else:
-			current_job_string = (str(min(consecutive_job_list))+'-'+
-				str(max(consecutive_job_list))+',')
-		return(current_job_string)
-	def _update_job_sublist(self, job_sublist, current_job_sublist, current_job_string):
-		"""
-		Adds current_job_sublist to job_submission_list,
-		removes current_job_sublist from job_list
-		"""
-		self._add_jobs_to_submission_list(current_job_sublist,current_job_string)
-		job_sublist = [x for x in job_sublist if x not in current_job_sublist]
-		return(job_sublist)
-	def _job_list_parser(self, job_sublist):
-		"""
-		Taking in a list of jobs, reorganizes them so that consecutive
-		jobs can be called as intervals (e.g. '5-8' for '5,6,7,8'), and
-		finds the optimal arrangement that maximizes job number so that
-		the character count for the list of jobs doesn't exceed
-		max_char_num
-		Assumes that max_char_num is sufficiently large
-		i.e. >(2*(max number of digits in a job number)+2)
-		"""
-		if self.space_in_queue < len(job_sublist):
-			# reorder job_sublist and truncate
-			job_sublist = numpy.sort(job_sublist)[0:self.space_in_queue]
-		while len(job_sublist) > 0 and self.batches_remaining > 0:
-			if self.remaining_jobs_in_batch > 0:
-				# move number of jobs that can be from job_sublist to current_job_sublist
-				num_jobs_to_run = int(min(len(job_sublist),self.remaining_jobs_in_batch))
-				current_job_sublist = job_sublist[0:num_jobs_to_run]
-				# create a string that can be used to submit those jobs
-					# to SLURM, and count the number of characters in that string
-				current_job_string = self._job_list_string_converter(current_job_sublist)
-				if len(current_job_string) <= self.remaining_chars:
-					job_sublist = self._update_job_sublist(job_sublist, \
-						current_job_sublist, current_job_string)
-				else:
-					# try splitting up job_list one-by-one
-					for current_job in current_job_sublist:
-						current_job_string = self._job_list_string_converter([current_job])
-						# for single jobs, first check whether string
-							# is longer than max chars; if it is, add
-							# it to errors; otherwise, if length is
-							# less than remaining chars, add it to
-							# current batch; otherwise, start new batch
-						if len(current_job_string) > self.max_char_num:
-							self.jobs_to_error.append(current_job)
-							job_sublist.remove(current_job)
-						elif len(current_job_string) <= self.remaining_chars:
-							job_sublist = self._update_job_sublist(job_sublist, \
-								[current_job], current_job_string)
-						else:
-							self._reset_batch()
-							job_sublist = self._update_job_sublist(job_sublist, \
-								[current_job], current_job_string)
-			else:
-				self._reset_batch()
-	def select_jobs_to_sub(self):
-		"""
-		Based on the amount of space available in the queue, splits
-		jobs into ones that can be run now vs those that have to be run
-		later
-		Takes the maximum number of jobs that can be submitted from
-		initial_job_list, and parse them to ensure that
-			1. they're listed in the most efficient SLURM-readable
-			format
-			2. this list doesn't exceed the max number of chars
-			allowed by SLURM
-		"""
-		################# maybe correct? #################
-		job_list_split = self._consecutive_parser(self.job_list)
-		job_number_list = numpy.array([len(i) for i in job_list_split])
-		order_by_job_num = numpy.argsort(job_number_list)
-		job_list_split_sorted = job_list_split[order_by_job_num]
-		for current_job_list in job_list_split_sorted:
-			if self.space_in_queue > 0 and self.batches_remaining > 0:
-				self._job_list_parser(current_job_list)
-		self._update_batches_remaining(1)
 
 class JobListManager(object):
 	"""
@@ -665,18 +500,18 @@ class JobListManager(object):
 	def _group_jobs_by_time_and_mem(self, times, mems, order):
 		"""
 		Groups jobs based on common time and mem requirement
-			times, mems, order must all by numpy.arrays
+			times, mems, order must all by np.arrays
 		Reorders job_candidate_times and job_candidate_mems
 		"""
 		times_sorted = times[order]
 		mems_sorted = mems[order]
 		# identify positions where time and mem don't change from previous position
-		time_unchanged = numpy.diff(times_sorted) == 0
-		mem_unchanged = numpy.diff(mems_sorted) == 0
+		time_unchanged = np.diff(times_sorted) == 0
+		mem_unchanged = np.diff(mems_sorted) == 0
 		properties_unchanged = time_unchanged*mem_unchanged
-		split_indices = numpy.where(numpy.logical_not(properties_unchanged))[0]+1
+		split_indices = np.where(np.logical_not(properties_unchanged))[0]+1
 		# Split data at split_indices
-		split_order = numpy.split(order,split_indices)
+		split_order = np.split(order,split_indices)
 		return(split_order)
 	def _group_jobs_for_sub(self, job_num_list):
 		"""
@@ -686,12 +521,12 @@ class JobListManager(object):
 		aborted_to_restart status
 		"""
 		job_candidate_times = \
-			numpy.array(self.get_job_times(job_num_list))
+			np.array(self.get_job_times(job_num_list))
 		job_candidate_mems = \
-			numpy.array(self.get_job_mems(job_num_list))
+			np.array(self.get_job_mems(job_num_list))
 		# sort first by job times, then by memory
 			# (lexsort input looks backwards)
-		new_job_order_indices = numpy.lexsort((job_candidate_mems,job_candidate_times))[::-1]
+		new_job_order_indices = np.lexsort((job_candidate_mems,job_candidate_times))[::-1]
 		# group sorted jobs by common memory and time
 		grouped_job_order_indices = \
 			self._group_jobs_by_time_and_mem(job_candidate_times,job_candidate_mems, \
@@ -713,11 +548,10 @@ class JobListManager(object):
 		space_in_queue = job_submission_manager.free_job_calculator()
 		for current_batch in job_sub_candidate_nums_grouped:
 			# initialize batch submission manager
-			submission_manager = BatchSubmissionManager(current_batch, \
-				self.cluster_parameters.max_char_num, \
-				self.cluster_parameters.max_jobs_per_batch, space_in_queue, \
-				batch_number_remaining)
-			submission_manager.select_jobs_to_sub()
+			submission_manager = \
+				copy.deepcopy(job_submission_manager.get_submission_manager())
+			submission_manager.select_jobs_to_sub(current_batch, \
+				space_in_queue, batch_number_remaining)
 			# update batch_number_remaining and space_in_queue
 			batch_number_remaining = submission_manager.get_batches_remaining()
 			space_in_queue = submission_manager.get_space_left_in_queue()
@@ -910,7 +744,7 @@ class MatlabInputProcessor(object):
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'try ' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
-				"\"\"); catch error_contents; fprintf('There was an error!\\n');" + \
+				"\"\"); catch error_contents; fprintf('There was an error:\\n');" + \
 				" fprintf(1,'The identifier was:\\n%s\\n',error_contents.identifier);" + \
 				" fprintf(1,'The error message was:\\n%s\\n',error_contents.message); end; exit\""
 	def get_code_run_string(self):
@@ -971,7 +805,7 @@ class MatlabInputProcessor(object):
 			converted_value = self.convert_mixed_list(current_value)
 		return(converted_value)
 	def convert_val(self,current_value):
-		if isinstance(current_value, numpy.ndarray):
+		if isinstance(current_value, np.ndarray):
 			current_value_listified = current_value.tolist()
 			converted_value = self.convert_any_list(current_value_listified)
 		elif isinstance(current_value, list):
@@ -983,7 +817,7 @@ class MatlabInputProcessor(object):
 		elif isinstance(current_value, basestring):
 			converted_value = self.convert_str(current_value)
 		else:
-			print('Error! Trying to convert list element of unrecognized type in submission string conversion:')
+			print('Error: Trying to convert list element of unrecognized type in submission string conversion:')
 			print(current_value)
 		return(converted_value)
 
