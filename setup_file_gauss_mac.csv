@@ -19,7 +19,7 @@ max_jobs_per_batch,10000,int,maximum number of jobs that can be submitted in a s
 ,,,
 general_mle_variables,,,
 input_datafile_keys,phenotype_file,str_list,list of variable names for input files that MLE program will look for
-input_datafile_values,SC_phenotype_file.csv,str_list,list of files corresponding to each variable name listed in datafile_keys
+input_datafile_values,phenotype_file.csv,str_list,list of files corresponding to each variable name listed in datafile_keys
 mode_list,gaussian_test,str_list,list of 'modes' in which MLE fitting happens separated by vertical bars ('|'); matlab code for performing MLE for a given mode should be called 'MLE_<mode_name>.m' and matlab code for simulating data for a given mode should be called 'sim_<mode_name>.m'
 parameters_by_mode,mu;sigma,nested_str_list,list of parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list
 starting_parameter_vals_by_mode,0;1,nested_float_list,list of mstarting values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
