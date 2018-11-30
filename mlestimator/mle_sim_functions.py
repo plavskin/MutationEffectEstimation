@@ -1268,7 +1268,7 @@ class OneSidedSimProfiler(object):
 		first_fixed_param_val = \
 			self.fixed_point_df.loc[self.profile_pt_list[0]]['fixed_param_val_dict']['H0']
 		first_cdf_val = self.fixed_point_df.loc[self.profile_pt_list[0]]['cdf_val']
-		pval_scaler = 0.5
+		pval_scaler = 0.6
 		target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 		if target_cdf_val == first_cdf_val:
 			pval_scaler = 0.75
@@ -1319,7 +1319,7 @@ class OneSidedSimProfiler(object):
 						self.fixed_param_logspace_convert, \
 						self.fixed_param_sim_number)
 		else:
-			pval_scaler = 0.75
+			pval_scaler = 0.6
 			target_cdf_val = 1 - pval_scaler * (1 - self.cdf_bound)
 			if target_cdf_val == second_cdf_val:
 				pval_scaler = 0.125
