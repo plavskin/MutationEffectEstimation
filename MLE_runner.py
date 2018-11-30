@@ -112,7 +112,7 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 		sim_parameters = mle_sim_functions.SimParameters(parameter_list)
 
 		# create MLE_running.txt so no new instances of MLE_runner.py run
-#		open(currently_running_checkfile,'w+').close()
+		open(currently_running_checkfile,'w+').close()
 
 		# Get names of necessary folders, and, if this hasn't been done
 			# before, create those folders
@@ -124,13 +124,11 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 		##########
 		# Run data analysis
 
-		try:
-			phenotype_file_list = subprocess.check_output('ls -lrt '
-				+ os.path.join(('"' + experiment_path + '"'),'*_phenotype_file.csv'),shell=True)
-		except subprocess.CalledProcessError:
-			phenotype_file_list = ''
-		growth_condition_list = re.findall(os.path.join(experiment_path,'(.+?)_phenotype_file.csv'),
-			phenotype_file_list,re.MULTILINE)
+#		try:
+#			phenotype_file_list = subprocess.check_output('ls -lrt '
+#				+ os.path.join(('"' + experiment_path + '"'),'*_phenotype_file.csv'),shell=True)
+#		except subprocess.CalledProcessError:
+#			phenotype_file_list = ''
 
 		############### ??? TO DO ??? ###############
 #		rep_list = ['1','2']
@@ -139,39 +137,37 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 		# as output of data analysis, create phenotype_file
 		############### ??? TO DO ??? ###############
 
-		# Run all steps for one phenotype (growth condition) at a time,
-			# but loop through modes separately for each step
-		for current_growth_condition in growth_condition_list:
-
-			############### ??? TO DO ??? ###############
-			# Update file types being taken in
-
-			# Check for data analysis complete_file before running anything in this loop
-			############### ??? TO DO ??? ###############
-
-		#	current_input_data_prefix = os.path.join(cluster_folders.experiment_path, \
-		#		(current_growth_condition + '_'))
 		
-			##########
-			# Run MLE - fixed and unfixed
-			# Run 2 reps - one 'fast' with standard grid_power and L,
-				# and a second one to ensure same results when
-				# grid_power and L are increased
 
-			for rep_index, rep in enumerate(rep_list):
-				rep_float = float(rep)
+		############### ??? TO DO ??? ###############
+		# Update file types being taken in
 
-				# set L and gridpower values for FFT
-				current_L = parameter_list["starting_L"]*pow(1.5,rep_float-1)
-					# returns starting_L for rep1 and starting_L*1.5 for rep2
-				current_gridpower = parameter_list["starting_gridpower"]+(rep_float-1)
+		# Check for data analysis complete_file before running anything in this loop
+		############### ??? TO DO ??? ###############
 
-				# set memory and time for current run
-				cluster_parameters.set_current_time(rep_float*cluster_parameters.starting_time)
-				cluster_parameters.set_current_mem(rep_float*cluster_parameters.starting_mem)
+	#	current_input_data_prefix = os.path.join(cluster_folders.experiment_path, \
+	#		(current_growth_condition + '_'))
+	
+		##########
+		# Run MLE - fixed and unfixed
+		# Run 2 reps - one 'fast' with standard grid_power and L,
+			# and a second one to ensure same results when
+			# grid_power and L are increased
+		rep_completeness_tracker = cluster_functions.CompletenessTracker(rep_list)
+		for rep_index, rep in enumerate(rep_list):
+			rep_float = float(rep)
 
-				# set subfolder to be in current rep
-				mle_folders.set_current_output_subfolder('rep_' + rep)
+			# set L and gridpower values for FFT
+			current_L = parameter_list["starting_L"]*pow(1.5,rep_float-1)
+				# returns starting_L for rep1 and starting_L*1.5 for rep2
+			current_gridpower = parameter_list["starting_gridpower"]+(rep_float-1)
+
+			# set memory and time for current run
+			cluster_parameters.set_current_time(rep_float*cluster_parameters.starting_time)
+			cluster_parameters.set_current_mem(rep_float*cluster_parameters.starting_mem)
+
+			# set subfolder to be in current rep
+			mle_folders.set_current_output_subfolder('rep_' + rep)
 
 #				current_petite_file = os.path.join(cluster_folders.get_path('experiment_path'), \
 #					current_growth_condition + '_petite_GR_data.csv')
@@ -185,26 +181,34 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 #					current_phenotype_file = os.path.join(cluster_folders.get_path('experiment_path'), \
 #						(current_growth_condition + '_phenotype_file.csv'))
 
-				# use additional_code_run_keys and values to specify where input
-					# data comes from (and any other extra information that
-					# doesn't come from setup_file)
-				
-				additional_code_run_keys = ['L', 'gridpower']
-				additional_code_run_values = [current_L, current_gridpower]
-				output_id_string_start = '_'.join([current_growth_condition, rep])
+			# use additional_code_run_keys and values to specify where input
+				# data comes from (and any other extra information that
+				# doesn't come from setup_file)
+			
+			additional_code_run_keys = ['L', 'gridpower']
+			additional_code_run_values = [current_L, current_gridpower]
+			#output_id_string_start = '_'.join([current_growth_condition, rep])
+			output_id_string_start = rep
 
-				# run MLE and LL profile creation, as well as CI
-					# identification, for the current mode
-				mle_run_functions.loop_over_modes(mle_parameters, \
-					cluster_parameters, cluster_folders, mle_folders, \
-					experiment_path, additional_code_run_keys, \
-					additional_code_run_values, output_id_string_start, \
-					sim_parameters)
+			# run MLE and LL profile creation, as well as CI
+				# identification, for the current mode
+			mode_loop_completeness = mle_run_functions.loop_over_modes(mle_parameters, \
+				cluster_parameters, cluster_folders, mle_folders, \
+				experiment_path, additional_code_run_keys, \
+				additional_code_run_values, output_id_string_start, \
+				sim_parameters)
+			rep_completeness_tracker.switch_key_completeness(rep, \
+				mode_loop_completeness)
+
+		rep_completeness = rep_completeness_tracker.get_completeness()
+		if rep_completeness:
+			open(complete_checkfile,'a').close()
+
 
 
 
 		# remove MLE_running.txt so MLE_runner.py can run again
-#		os.remove(currently_running_checkfile)
+		os.remove(currently_running_checkfile)
 
 
 
