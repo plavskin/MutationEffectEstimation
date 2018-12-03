@@ -436,7 +436,8 @@ class CombinedResultSummary(object):
 	def get_param_mle_val(self, fixed_param):
 		return(self.combined_results_df.loc[fixed_param]['param_MLE'])
 	def get_completeness(self):
-		self.completeness_tracker.get_completeness()
+		return(self.completeness_tracker.get_completeness())
+
 
 
 			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
