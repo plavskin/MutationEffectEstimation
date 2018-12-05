@@ -18,6 +18,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
     output_file = parameter_dict('output_file');
     quad_fit_file = parameter_dict('fit_file');
     profile_side = parameter_dict('profile_side');
+    pause_at_end = parameter_dict('pause_at_end');
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	% initialize starting coefficients and set constrains
@@ -110,8 +111,6 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
 
 	runtime = toc;
-	
-    pause_at_end = true;
 
     if pause_at_end & runtime < 120
         pausetime=120-runtime;

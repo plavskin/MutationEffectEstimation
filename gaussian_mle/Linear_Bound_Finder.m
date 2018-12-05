@@ -17,6 +17,7 @@ function Linear_Bound_Finder(key_list, value_list)
     cdf_vals = parameter_dict('cdf_vals');
     output_file = parameter_dict('output_file');
     linear_fit_file = parameter_dict('fit_file');
+    pause_at_end = parameter_dict('pause_at_end');
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	optimal_coefficients = polyfit(parameter_vals,cdf_vals,1);
@@ -37,8 +38,6 @@ function Linear_Bound_Finder(key_list, value_list)
 	dlmwrite(linear_fit_file,linear_fit,'delimiter',',','precision',9);
 
 	runtime = toc;
-
-    pause_at_end = true;
 
     if pause_at_end & runtime < 120
         pausetime=120-runtime;

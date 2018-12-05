@@ -107,16 +107,18 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 				'parameter_values',\
 				'cdf_vals', \
 				'output_file', \
-				'fit_file',
-				'profile_side'] + \
+				'fit_file', \
+				'profile_side', \
+				'pause_at_end'] + \
 				self.additional_code_run_keys
 			self.value_list = [self.cdf_bound, \
 				self.fixed_param_MLE_val, \
 				self.CI_bound_proximal_points[self.fixed_param].values, \
 				self.CI_bound_proximal_points['cdf_vals'].values, \
 				self.CI_bound_output_file, \
-				self.CI_bound_fit_file,
-				self.profile_side] + \
+				self.CI_bound_fit_file, \
+				self.profile_side, \
+				self.cluster_parameters.pause_at_end] + \
 				self.additional_code_run_values
 
 class OneSidedCIBound(object):
