@@ -137,6 +137,10 @@ class ClusterParameters(object):
 		self.max_char_num = parameter_list["max_char_num"]
 		self.max_jobs_per_batch = parameter_list["max_jobs_per_batch"]
 		self.cluster_architecture = parameter_list["cluster_architecture"].lower()
+		if self.cluster_architecture == 'macosx':
+			self.pause_at_end = False
+		else:
+			self.pause_at_end = True
 		self._set_cluster_architecture_properties()
 		self.current_mem = self.starting_mem
 		self.current_time = self.starting_time
@@ -798,6 +802,8 @@ class MatlabInputProcessor(object):
 		else:
 			converted_bool = 'false'
 		return(converted_bool)
+	def convert_none(self):
+		return('NaN')
 	def convert_any_list(self, current_value):
 		if all(isinstance(temp_val,bool) for temp_val in current_value):
 			converted_value = self.convert_bool_list(current_value)
@@ -811,7 +817,9 @@ class MatlabInputProcessor(object):
 			converted_value = self.convert_mixed_list(current_value)
 		return(converted_value)
 	def convert_val(self,current_value):
-		if isinstance(current_value, np.ndarray):
+		if current_value is None:
+			converted_value = self.convert_none()
+		elif isinstance(current_value, np.ndarray):
 			current_value_listified = current_value.tolist()
 			converted_value = self.convert_any_list(current_value_listified)
 		elif isinstance(current_value, list):
