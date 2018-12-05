@@ -66,11 +66,11 @@ class Parameter(object):
 		elif self.type == "nested_str_list":
 			value_str = '[['+'],['.join(','.join(current_sublist) for \
 				current_sublist in self.value) + ']]'
-		elif self.type == "float" or self.type == 'int':
+		elif self.type == "float" or self.type == 'int' or self.type == 'bool':
 			value_str = str(self.value)
-		elif self.type == "float_list" or self.type == "int_list":
+		elif self.type == "float_list" or self.type == "int_list" or self.type == "bool_list":
 			value_str = ','.join(str(element) for element in self.value)
-		elif self.type == "nested_float_list" or self.type == "nested_int_list":
+		elif self.type == "nested_float_list" or self.type == "nested_int_list" or self.type == "nested_bool_list":
 			value_str = '[['+'],['.join(','.join(str(element) for element in \
 				current_sublist) for current_sublist in self.value) + ']]'
 		concatenated_string += '\n'+value_str
@@ -97,6 +97,12 @@ class Parameter(object):
 			self.value = [[int(j) for j in i.split(";")] for i in self.value.split("|")]
 		elif self.type == "int_list":
 			self.value = [int(i) for i in self.value.split("|")]
+		elif self.type == "bool":
+			self.value = bool(self.value)
+		elif self.type == "nested_bool_list":
+			self.value = [[bool(j) for j in i.split(";")] for i in self.value.split("|")]
+		elif self.type == "bool_list":
+			self.value = [bool(i) for i in self.value.split("|")]
 		else:
 			raise ValueError("invalid data type: " + self.type)
 
