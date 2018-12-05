@@ -824,6 +824,8 @@ class MatlabInputProcessor(object):
 			converted_value = self.convert_any_list(current_value_listified)
 		elif isinstance(current_value, list):
 			converted_value = self.convert_any_list(current_value)
+		elif isinstance(current_value, bool):
+			converted_value = self.convert_bool(current_value)
 		elif isinstance(current_value, int):
 			converted_value = self.convert_int(current_value)
 		elif isinstance(current_value, float):
