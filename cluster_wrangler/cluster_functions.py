@@ -253,6 +253,7 @@ class CompletenessTracker(object):
 		Creates dictionary with parameter names as keys and False
 		as values
 		"""
+		key_list = [str(x) for x in key_list]
 		completeness_list = [False]*len(key_list)
 		self.completeness_dict = dict(zip(key_list,completeness_list))
 	def update_key_status(self, key, completefile_path):
@@ -261,15 +262,15 @@ class CompletenessTracker(object):
 		status accordingly
 		"""
 		if os.path.isfile(completefile_path):
-			self.completeness_dict[key] = True
+			self.completeness_dict[str(key)] = True
 	def switch_key_completeness(self, key, value_bool):
 		"""
 		Switches a key value to value_bool
 		Useful for cases when completefiles not kept track of
 		"""
-		self.completeness_dict[key] = value_bool
+		self.completeness_dict[str(key)] = value_bool
 	def get_key_completeness(self, key):
-		return(self.completeness_dict[key])
+		return(self.completeness_dict[str(key)])
 	def _check_completeness(self):
 		""" Checks whethere all parameters completed """
 		if all(self.completeness_dict.values()):
