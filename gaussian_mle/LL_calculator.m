@@ -28,19 +28,22 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     tic;
     
     if gradient_specification
-        [neg_combined_LL, unscaled_global_gradient_vector] = ...
+        [combined_LL, unscaled_global_gradient_vector] = ...
             current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict)
-        global_gradient_vector = gradient_value_rescaler(unscaled_global_gradient_vector,...
+        neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector;
+        global_gradient_vector = gradient_value_rescaler(neg_unscaled_global_gradient_vector,...
         param_vals,global_logspace_array,global_scaling_array);
     
         global_gradient_vector_partial = global_gradient_vector(~global_fixed_parameter_indices);
         global_gradient_vector_partial(global_gradient_vector_partial>max_neg_LL_val) = max_neg_LL_val;
         global_gradient_vector_partial(global_gradient_vector_partial<-max_neg_LL_val) = -max_neg_LL_val;
     else
-        [neg_combined_LL] = ...
+        [combined_LL] = ...
             current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict)
         global_gradient_vector_partial = []
     end
+
+    neg_combined_LL = -combined_LL;
 
     if neg_combined_LL > max_neg_LL_val
         neg_combined_LL = max_neg_LL_val;

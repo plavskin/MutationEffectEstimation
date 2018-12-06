@@ -1,4 +1,4 @@
-function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
+function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
     input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
@@ -29,7 +29,7 @@ function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gauss
 
     data_likelihoods = lambda*pdf('normal',test_data,mu_1,sigma_1)+...
         (1-lambda)*pdf('normal',test_data,mu_2,sigma_2);
-    neg_combined_LL = -sum(log(data_likelihoods));
+    combined_LL = sum(log(data_likelihoods));
 
     d_LL_d_mu_1 = d_LL_d_mu_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
     d_LL_d_sigma_1 = d_LL_d_sigma_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
@@ -37,8 +37,8 @@ function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gauss
     d_LL_d_sigma_2 = d_LL_d_sigma_dinorm_calc(test_data,(1-lambda),mu_2,sigma_2,mu_1,sigma_1);
     d_LL_d_lambda = d_LL_d_lambda_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
 
-    unscaled_global_gradient_vector = [-sum(d_LL_d_lambda),-sum(d_LL_d_mu_1),...
-        -sum(d_LL_d_sigma_1),-sum(d_LL_d_mu_2),-sum(d_LL_d_sigma_2)];
+    unscaled_gradient_vector = [sum(d_LL_d_lambda),sum(d_LL_d_mu_1),...
+        sum(d_LL_d_sigma_1),sum(d_LL_d_mu_2),sum(d_LL_d_sigma_2)];
 
 end
     

@@ -1,4 +1,4 @@
-function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
+function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
     input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
@@ -21,12 +21,12 @@ function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gauss
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Calculate likelihood of observing test_data given mu and sigma
     data_likelihoods = pdf('normal',test_data,mu,sigma);
-    neg_combined_LL = -sum(log(data_likelihoods));
+    combined_LL = sum(log(data_likelihoods));
 
     d_LL_d_mu = d_LL_d_mu_norm_calc(test_data,mu,sigma);
     d_LL_d_sigma = d_LL_d_sigma_norm_calc(test_data,mu,sigma);
 
-    unscaled_global_gradient_vector = [-sum(d_LL_d_mu),-sum(d_LL_d_sigma)];
+    unscaled_gradient_vector = [sum(d_LL_d_mu),sum(d_LL_d_sigma)];
 
 end
     
