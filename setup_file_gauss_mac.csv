@@ -22,6 +22,7 @@ input_datafile_keys,phenotype_file,str_list,list of variable names for input fil
 input_datafile_values,phenotype_file.csv,str_list,list of files corresponding to each variable name listed in datafile_keys
 mode_list,gaussian_test,str_list,list of 'modes' in which MLE fitting happens separated by vertical bars ('|'); matlab code for performing MLE for a given mode should be called 'MLE_<mode_name>.m' and matlab code for simulating data for a given mode should be called 'sim_<mode_name>.m'
 parameters_by_mode,mu;sigma,nested_str_list,list of parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list
+top_level_parameters_by_mode,,nested_str_list,in the case of a model whose LL is estimated hierarchically (i.e. LL_calculator only fits a subset of the parameter list while internal functions fit the rest) this is a list of parameters in each mode of 'mode list' that is estimated at the topmost level of the model; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list. If same as parameters_by_mode (ie LL calculation is not hierarchical) can leave blank
 starting_parameter_vals_by_mode,0;1,nested_float_list,list of mstarting values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
 min_parameter_vals_by_mode,-10;.0001,nested_float_list,list of lower bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
 max_parameter_vals_by_mode,10;100,nested_float_list,list of upper bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
@@ -31,6 +32,13 @@ logspace_profile_list,sigma,nested_str_list,parameters whose profiles (and MLE r
 scaling_arrays_by_mode,0.16;0.25,nested_float_list,values that scale the approximate CI of each parameter to a consistent value (e.g. 1); for parameters estimated in logspace the scaling occurs after converting the parameter to logspace; so the distance between the natural log of the CI bounds should be scaled to the consistent value
 x_tolerance_by_mode,0.001,float_list,tolerance on ML-identified values in scaled and if needed log-transformed parameter space
 fun_tolerance_by_mode,0.01,float_list,tolerance on ML-identified LL or gradient
+,,,
+code_to_run,,,
+LL_calculator_by_mode,LL_calculator_gaussian_test,str_list,list of function/module names that calculate negative log likelihood (and possibly gradient of -LL) for every mode separated by '|'
+simulator_by_mode,sim_gaussian_test,str_list,list of function/module names that simulate data for every mode separated by '|'
+pre_MLE_function_by_mode,pre_MLE_gaussian_test,str_list,list of function/module names that perform pre-MLE-fitting functions for every mode separated by '|'; if none leave blank
+post_MLE_function_by_mode,,str_list,list of function/module names that perform post-MLE-fitting functions for every mode separated by '|'; if none leave blank
+gradient_specification_by_mode,TRUE,bool_list,list of bools specifying whether or not LL_calculator returns a negative LL gradient for a given mode
 ,,,
 log_likelihood_profile_and_CI_variables,,,
 profile_points_by_mode,10;10,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile

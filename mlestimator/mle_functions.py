@@ -123,6 +123,16 @@ class MLEParameters(object):
 			parameter_list["x_tolerance_by_mode"]
 		self.fun_tolerance_by_mode = \
 			parameter_list["fun_tolerance_by_mode"]
+		self.gradient_specification_by_mode = \
+			parameter_list["gradient_specification_by_mode"]
+		self.LL_calculator_by_mode = \
+			parameter_list["LL_calculator_by_mode"]
+		self.pre_MLE_function_by_mode = \
+			parameter_list["pre_MLE_function_by_mode"]
+		self.post_MLE_function_by_mode = \
+			parameter_list["post_MLE_function_by_mode"]
+		self.global_mle_parameters_by_mode = \
+			parameter_list["top_level_parameters_by_mode"]
 		self.ms_positions = parameter_list["multistart_positions"]
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
 		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
@@ -181,6 +191,17 @@ class MLEParameters(object):
 		self.current_parameter_list = self.parameters_by_mode[mode_idx]
 		self.current_x_tolerance = self.x_tolerance_by_mode[mode_idx]
 		self.current_fun_tolerance = self.fun_tolerance_by_mode[mode_idx]
+		self.current_LL_calculator = self.LL_calculator_by_mode[mode_idx]
+		self.current_pre_MLE_function = self.pre_MLE_function_by_mode[mode_idx]
+		self.current_post_MLE_function = self.post_MLE_function_by_mode[mode_idx]
+		self.current_gradient_specification = self.gradient_specification_by_mode[mode_idx]
+		self.current_global_mle_parameters = self.global_mle_parameters_by_mode[mode_idx]
+		if self.current_pre_MLE_function == '':
+			self.current_pre_MLE_function = None
+		if self.current_post_MLE_function == '':
+			self.current_post_MLE_function = None
+		if self.current_global_mle_parameters == '':
+			self.current_global_mle_parameters = self.current_parameter_list
 		# find the total number of parameters, including fixed ones
 		self.total_param_num = len(self.current_parameter_list)
 		# create lists, of length total_param_num, of settings for each
@@ -294,7 +315,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		module = 'matlab'
 		parallel_processors = mle_parameters.current_parallel_processors
 		output_extension = 'csv'
-		code_name = '_'.join(['MLE',mle_parameters.current_mode])
+#		code_name = '_'.join(['MLE',mle_parameters.current_mode])
+		code_name = 'MLE_finder'
 		additional_beginning_lines_in_job_sub = []
 		additional_end_lines_in_job_sub = []
 		initial_sub_time = cluster_parameters.current_time
@@ -343,7 +365,10 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				'combined_profile_lb_array','ms_grid_parameter_array', \
 				'combined_logspace_parameters', \
 				'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
-				'tolfun_val'] + self.input_datafile_keys + \
+				'tolfun_val', 'pause_at_end', 'LL_calculator', \
+				'pre_MLE_function', 'post_MLE_function', \
+				'global_mle_parameters', 'gradient_specification'] + \
+				self.input_datafile_keys + \
 				self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
 				self.mle_parameters.current_tempfixed_parameter_bool, \
@@ -366,7 +391,13 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				self.mle_parameters.output_id_parameter, \
 				self.mle_parameters.current_scaling_val_list, \
 				self.mle_parameters.current_x_tolerance, \
-				self.mle_parameters.current_fun_tolerance] + \
+				self.mle_parameters.current_fun_tolerance, \
+				self.cluster_parameters.pause_at_end, \
+				self.mle_parameters.current_LL_calculator, \
+				self.mle_parameters.current_pre_MLE_function, \
+				self.mle_parameters.current_post_MLE_function, \
+				self.mle_parameters.current_global_mle_parameters, \
+				self.mle_parameters.current_gradient_specification] + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:
 			raise RuntimeError('input_datafile_paths or ' + \
@@ -429,7 +460,8 @@ class BoundAbuttingPointRemover(object):
 			index = self.parameter_val_df.index.values, \
 			columns = self.parameter_names)
 		bound_df_rescaled = self._rescale_df(bound_df)
-		parameter_val_df_rescaled = self._rescale_df(self.parameter_val_df)
+		parameter_val_df_rescaled = \
+			self._rescale_df(self.parameter_val_df[self.parameter_names])
 		self.LL_df_diff = abs(parameter_val_df_rescaled - bound_df_rescaled)
 	def _remove_abutting_points(self):
 		# identify indices to remove from df, remove them, and save

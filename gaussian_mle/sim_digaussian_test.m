@@ -1,4 +1,4 @@
-function sim_gaussian_test(key_list, value_list)
+function sim_digaussian_test(key_list, value_list)
 
     % takes input from a data file, and simulates the same number of datapoints
 
@@ -31,10 +31,19 @@ function sim_gaussian_test(key_list, value_list)
     test_data = data_table.data;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mu = combined_start_values_array_unscaled(1);
-    sigma = combined_start_values_array_unscaled(2);
-    
-    sim_data = normrnd(mu, sigma, size(test_data));
+    lambda = combined_start_values_array_unscaled(1);
+    mu_1 = combined_start_values_array_unscaled(2);
+    sigma_1 = combined_start_values_array_unscaled(3);
+    mu_2 = combined_start_values_array_unscaled(4);
+    sigma_2 = combined_start_values_array_unscaled(5);
+
+    n = max(size(test_data));
+    n_1 = binornd(n, lambda);
+    n_2 = n-n_1;
+
+    sim_data_1 = normrnd(mu_1, sigma_1, [n_1 1]);
+    sim_data_2 = normrnd(mu_2, sigma_2, [n_2 1]);
+    sim_data = [sim_data_1; sim_data_2];
 
     data_table.data = sim_data;
     writetable(data_table,phenotype_file);
