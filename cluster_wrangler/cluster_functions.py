@@ -243,8 +243,11 @@ class CompletenessTracker(object):
 	and checks their completeness
 	"""
 	def __init__(self,key_list):
-		self._create_completeness_dict(key_list)
-		self.completeness_status = False
+		if len(key_list) == 0:
+			self.completeness_status = True
+		else:
+			self._create_completeness_dict(key_list)
+			self.completeness_status = False
 	def _create_completeness_dict(self,key_list):
 		"""
 		Creates dictionary with parameter names as keys and False
