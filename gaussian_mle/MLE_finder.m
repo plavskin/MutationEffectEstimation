@@ -9,33 +9,32 @@ function MLE_finder(key_list, value_list)
         % be equal to throughout the MLE
     max_neg_LL_val = 10^50;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % get parameter values
-    parameter_dict = containers.Map(key_list,value_list);
+    % get input values
+    input_value_dict = containers.Map(key_list,value_list);
 
-    external_counter = str2num(parameter_dict('external_counter'));
-    combined_fixed_parameter_array = parameter_dict('combined_fixed_parameter_array');
-    combined_min_array_unscaled = parameter_dict('combined_min_array');
-    combined_max_array_unscaled = parameter_dict('combined_max_array');
-    combined_length_array = parameter_dict('combined_length_array');
-    combined_position_array = cellfun(@str2num,parameter_dict('combined_position_array'));
-    combined_start_values_array_unscaled = parameter_dict('combined_start_values_array');
-    combined_scaling_array = parameter_dict('combined_scaling_array');
-    parameter_list = parameter_dict('parameter_list');
-    output_file = parameter_dict('output_file');
-    parallel_processors = parameter_dict('parallel_processors');
-    ms_positions = parameter_dict('ms_positions');
-    combined_profile_ub_array_unscaled = parameter_dict('combined_profile_ub_array');
-    combined_profile_lb_array_unscaled = parameter_dict('combined_profile_lb_array');
-    ms_grid_parameter_array = parameter_dict('ms_grid_parameter_array');
-    combined_logspace_parameters = parameter_dict('combined_logspace_parameters');
-    global_mle_parameters = parameter_dict('global_mle_parameters');
-    tolx_val = parameter_dict('tolx_val');
-    tolfun_val = parameter_dict('tolfun_val');
-    pause_at_end = parameter_dict('pause_at_end');
-    LL_calculator_name = parameter_dict('LL_calculator');
-    pre_MLE_function_name = parameter_dict('pre_MLE_function');
-    post_MLE_function_name = parameter_dict('post_MLE_function');
-    gradient_specification = parameter_dict('gradient_specification');
+    external_counter = str2num(input_value_dict('external_counter'));
+    combined_fixed_parameter_array = input_value_dict('combined_fixed_parameter_array');
+    combined_min_array_unscaled = input_value_dict('combined_min_array');
+    combined_max_array_unscaled = input_value_dict('combined_max_array');
+    combined_length_array = input_value_dict('combined_length_array');
+    combined_position_array = cellfun(@str2num,input_value_dict('combined_position_array'));
+    combined_start_values_array_unscaled = input_value_dict('combined_start_values_array');
+    combined_scaling_array = input_value_dict('combined_scaling_array');
+    parameter_list = input_value_dict('parameter_list');
+    output_file = input_value_dict('output_file');
+    parallel_processors = input_value_dict('parallel_processors');
+    ms_positions = input_value_dict('ms_positions');
+    combined_profile_ub_array_unscaled = input_value_dict('combined_profile_ub_array');
+    combined_profile_lb_array_unscaled = input_value_dict('combined_profile_lb_array');
+    ms_grid_parameter_array = input_value_dict('ms_grid_parameter_array');
+    combined_logspace_parameters = input_value_dict('combined_logspace_parameters');
+    global_mle_parameters = input_value_dict('global_mle_parameters');
+    tolx_val = input_value_dict('tolx_val');
+    tolfun_val = input_value_dict('tolfun_val');
+    pause_at_end = input_value_dict('pause_at_end');
+    pre_MLE_function_name = input_value_dict('pre_MLE_function');
+    post_MLE_function_name = input_value_dict('post_MLE_function');
+    gradient_specification = input_value_dict('gradient_specification');
     % process parameter name arrays into bool arrays
     combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
@@ -98,9 +97,7 @@ function MLE_finder(key_list, value_list)
     global_start_vals_fitted = global_start_values(~global_fixed_parameter_indices);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % convert any supplied function names into function handles, and run
-        % pre_MLE_function_name
-    LL_calculator = str2func(LL_calculator_name);
+    % run pre_MLE_function, if it's supplied
     if ~isnan(pre_MLE_function_name)
         pre_MLE_function = str2func(pre_MLE_function_name);
         pre_MLE_output_dict = pre_MLE_function(key_list, value_list);
@@ -134,7 +131,7 @@ function MLE_finder(key_list, value_list)
     min_problem_fixed_params = createOptimProblem('fmincon','objective',...
         @(v) LL_calculator(v,...
             global_fixed_parameter_indices,global_fixed_parameter_values,...
-            global_logspace_array,global_scaling_array, max_neg_LL_val, parameter_dict, pre_MLE_output_dict),...
+            global_logspace_array,global_scaling_array, max_neg_LL_val, input_value_dict, pre_MLE_output_dict),...
         'x0',global_start_vals_fitted,'lb',global_lower_bounds_fitted,'ub',global_upper_bounds_fitted,...
         'options',fmincon_opts);
     

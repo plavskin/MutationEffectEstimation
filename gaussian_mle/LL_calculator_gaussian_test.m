@@ -1,25 +1,17 @@
-function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator_gaussian_test(param_vals_partial,...
-    global_fixed_parameter_indices,global_fixed_parameter_values,...
-    global_logspace_array, global_scaling_array, max_neg_LL_val, parameter_dict, pre_MLE_output_dict)
+function [neg_combined_LL,unscaled_global_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
+    input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
     % Calculates likelihood and gradient of test_data from a gaussian, given mu and sigma parameters
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % identify parameter values
-
-    % some parameters may be 'fixed' (i.e. not fitted by current iteration of
-        % MLE); these are provided to the function in a separate list
-    % compile a list of all parameters, fixed or fitted, and identify values
-        % belonging to each individual parameter using that list
-    param_vals = NaN(size(global_fixed_parameter_indices));
-    param_vals(global_fixed_parameter_indices) = global_fixed_parameter_values(~isnan(global_fixed_parameter_values));
-    param_vals(~global_fixed_parameter_indices) = param_vals_partial;
-    param_vals = reverse_value_scaler(param_vals,global_logspace_array,global_scaling_array);
+    parameter_list = input_value_dict('parameter_list');
+    parameter_dict = containers.Map(parameter_list,param_vals);
     
-    mu = param_vals(1);
+    mu = parameter_dict('mu');
         % mean of distribution
-    sigma = param_vals(2);
+    sigma = parameter_dict('sigma');
         % s.d. of distribution
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -27,8 +19,7 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator_gaussi
     test_data = pre_MLE_output_dict('test_data');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Calculate likelihood of observing test_data given current global parameters
-    tic;
+    % Calculate likelihood of observing test_data given mu and sigma
     data_likelihoods = pdf('normal',test_data,mu,sigma);
     neg_combined_LL = -sum(log(data_likelihoods));
 
@@ -36,18 +27,6 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator_gaussi
     d_LL_d_sigma = d_LL_d_sigma_norm_calc(test_data,mu,sigma);
 
     unscaled_global_gradient_vector = [-sum(d_LL_d_mu),-sum(d_LL_d_sigma)];
-    global_gradient_vector = gradient_value_rescaler(unscaled_global_gradient_vector,...
-        param_vals,global_logspace_array,global_scaling_array);
-    
-    global_gradient_vector_partial = global_gradient_vector(~global_fixed_parameter_indices);
-    global_gradient_vector_partial(global_gradient_vector_partial>max_neg_LL_val) = max_neg_LL_val;
-    global_gradient_vector_partial(global_gradient_vector_partial<-max_neg_LL_val) = -max_neg_LL_val;
-
-    if neg_combined_LL > max_neg_LL_val
-        neg_combined_LL = max_neg_LL_val;
-    end
-    
-    runtime = toc;
 
 end
     
