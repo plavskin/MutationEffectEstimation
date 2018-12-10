@@ -93,7 +93,6 @@ class FolderManager(object):
 
 
 class MLEParameters(object):
-	# mle_sim_functions.SimParameters inherits from this list
 	############### ??? TO DO ??? ###############
 	# Check that each mode or parameter is in the list once?
 		# (currently only pays attention to the first time mode or parameter listed)
@@ -131,7 +130,7 @@ class MLEParameters(object):
 			parameter_list["pre_MLE_function_by_mode"]
 		self.post_MLE_function_by_mode = \
 			parameter_list["post_MLE_function_by_mode"]
-		self.global_mle_parameters_by_mode = \
+		self.top_level_parameters_by_mode = \
 			parameter_list["top_level_parameters_by_mode"]
 		self.ms_positions = parameter_list["multistart_positions"]
 		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
@@ -194,13 +193,13 @@ class MLEParameters(object):
 		self.current_pre_MLE_function = self.pre_MLE_function_by_mode[mode_idx]
 		self.current_post_MLE_function = self.post_MLE_function_by_mode[mode_idx]
 		self.current_gradient_specification = self.gradient_specification_by_mode[mode_idx]
-		self.current_global_mle_parameters = self.global_mle_parameters_by_mode[mode_idx]
+		self.current_top_level_parameters = self.top_level_parameters_by_mode[mode_idx]
 		if self.current_pre_MLE_function == '':
 			self.current_pre_MLE_function = None
 		if self.current_post_MLE_function == '':
 			self.current_post_MLE_function = None
-		if self.current_global_mle_parameters == '':
-			self.current_global_mle_parameters = self.current_parameter_list
+		if self.current_top_level_parameters == '':
+			self.current_top_level_parameters = self.current_parameter_list
 		# find the total number of parameters, including fixed ones
 		self.total_param_num = len(self.current_parameter_list)
 		# create lists, of length total_param_num, of settings for each
@@ -366,7 +365,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
 				'tolfun_val', 'pause_at_end', 'LL_calculator', \
 				'pre_MLE_function', 'post_MLE_function', \
-				'global_mle_parameters', 'gradient_specification'] + \
+				'top_level_parameters', 'gradient_specification'] + \
 				self.input_datafile_keys + \
 				self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
@@ -395,7 +394,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				self.mle_parameters.current_LL_calculator, \
 				self.mle_parameters.current_pre_MLE_function, \
 				self.mle_parameters.current_post_MLE_function, \
-				self.mle_parameters.current_global_mle_parameters, \
+				self.mle_parameters.current_top_level_parameters, \
 				self.mle_parameters.current_gradient_specification] + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:
