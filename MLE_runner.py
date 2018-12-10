@@ -8,16 +8,15 @@ import sys, os, getopt
 import csv
 import subprocess
 import math
-import numpy
-from scipy.stats import chi2
-import re 
+#import numpy
+#import re 
 from shutil import copyfile
 from cluster_wrangler import cluster_functions
 from mlestimator import mle_functions
 from mlestimator import mle_run_functions
 from mlestimator import mle_sim_functions
-import warnings as war
-war.filterwarnings("ignore", message="numpy.dtype size changed")
+#import warnings as war
+#war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 usage = '''
 
@@ -197,8 +196,18 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 				experiment_path, additional_code_run_keys, \
 				additional_code_run_values, output_id_string_start, \
 				sim_parameters)
+			# run model comparisons
+			if mode_loop_completeness:
+				model_comparison_completeness = \
+					mle_run_functions.loop_over_model_comparisons(mle_folders, \
+						sim_parameters, cluster_folders, cluster_parameters, \
+						output_id_string_start, additional_code_run_keys, \
+						additional_code_run_values)
+			# update current rep completeness
+			current_rep_completeness = \
+				mode_loop_completeness and model_comparison_completeness
 			rep_completeness_tracker.switch_key_completeness(rep, \
-				mode_loop_completeness)
+				current_rep_completeness)
 
 		rep_completeness = rep_completeness_tracker.get_completeness()
 		if rep_completeness:

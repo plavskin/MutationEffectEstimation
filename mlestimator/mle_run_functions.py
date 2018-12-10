@@ -6,14 +6,16 @@ import os
 import copy
 from mlestimator.mle_functions import MLEParameters, run_MLE
 from mlestimator.mle_result_combiner import CombinedResultSummary
-from mlestimator.mle_sim_functions import generate_sim_based_profile_pts
+from mlestimator.mle_sim_functions import generate_sim_based_profile_pts, ModelComparisonOrganizer
 from cluster_wrangler.cluster_functions import CompletenessTracker
 
 def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mle_folders, experiment_path, additional_code_run_keys, \
 	additional_code_run_values, output_id_string_start, sim_parameters):
-	# Handles all of MLE across modes, including confidence
-		# interval identification
+	'''
+	Handles all of MLE and (if necessary) simulation across modes, followed by
+	confidence interval identification
+	'''
 	mode_completeness_tracker = CompletenessTracker(mle_parameters.mode_list)
 	for current_mode in mle_parameters.mode_list:
 		##### RUN MLE #####
@@ -54,4 +56,24 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	mode_loop_completeness = mode_completeness_tracker.get_completeness()
 	return(mode_loop_completeness)
 
+def loop_over_model_comparisons(mle_folders, sim_parameters, cluster_folders, \
+	cluster_parameters, output_id_prefix, additional_code_run_keys, \
+	additional_code_run_values):
+	'''
+	Calculates p-vals for comparisons of models
+	'''
+	model_sets_to_compare = sim_parameters.model_comparison_sets
+	model_comparison_tracker = CompletenessTracker(model_sets_to_compare)
+	sim_folders = copy.deepcopy(mle_folders)
+	sim_folders.set_current_output_subfolder('sim')
+	model_comparison_organizer = ModelComparisonOrganizer(sim_folders, \
+		sim_parameters, cluster_folders, cluster_parameters, output_id_prefix)
+	for current_model_set in model_sets_to_compare:
+		current_comparison_completeness = \
+			model_comparison_organizer.compare_models(current_model_set, \
+				additional_code_run_keys, additional_code_run_values)
+		model_comparison_tracker.switch_key_completeness(current_model_set, \
+			current_comparison_completeness)
+	model_comparison_completeness = model_comparison_tracker.get_completeness()
+	return(model_comparison_completeness)
 

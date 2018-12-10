@@ -156,7 +156,6 @@ class MLEParameters(object):
 		elif output_list_length < param_num:
 			print('Warning! Fewer elements in list than parameters in mode ' + \
 				current_mode)
-			print(output_list)
 			print('Replacing all values with NAs')
 			output_list_trimmed = [np.NaN]*param_num
 		else:

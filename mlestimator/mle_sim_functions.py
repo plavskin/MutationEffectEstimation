@@ -9,7 +9,8 @@ import math
 import warnings as war
 import mle_functions
 import subprocess
-from scipy.stats import norm
+import operator
+from scipy.stats import norm, chi2
 from mlestimator import mle_filenaming_functions
 import cluster_wrangler.cluster_functions
 import copy
@@ -62,8 +63,12 @@ class SimParameters(mle_functions.MLEParameters):
 			parameter_list["sim_CI_parameters_by_mode"]
 		self.sim_repeats_by_mode = \
 			parameter_list["simulation_repeats_by_mode"]
+		self.simulator_by_mode = \
+			parameter_list["simulator_by_mode"]
 		self.sim_time = parameter_list["sim_time"]
 		self.sim_mem = parameter_list["sim_mem"]
+		model_comparisons = parameter_list["model_comparisons"]
+		self.model_comparison_sets = [x.split(':') for x in model_comparisons]
 #		# reset profile_points_by_mode to number of sim repeats by mode
 #		self.profile_points_by_mode = self.sim_repeats_by_mode
 #			### ??? ###
@@ -92,6 +97,7 @@ class SimParameters(mle_functions.MLEParameters):
 		'''
 		# only allows for one mode to be kept
 		mode_idx = self.mode_list.index(mode_name)
+		self.mode_list = [self.mode_list[mode_idx]]
 		self.CI_pval_by_mode = [self.CI_pval_by_mode[mode_idx]]
 		self.ms_positions = [self.ms_positions[mode_idx]]
 		self.multistart_grid_parameters = \
@@ -117,6 +123,18 @@ class SimParameters(mle_functions.MLEParameters):
 			[self.sim_repeats_by_mode[mode_idx]]
 		self.sim_CI_parameters_by_mode = \
 			[self.sim_CI_parameters_by_mode[mode_idx]]
+		self.simulator_by_mode = \
+			[self.simulator_by_mode[mode_idx]]
+		self.gradient_specification_by_mode = \
+			[self.gradient_specification_by_mode[mode_idx]]
+		self.LL_calculator_by_mode = \
+			[self.LL_calculator_by_mode[mode_idx]]
+		self.pre_MLE_function_by_mode = \
+			[self.pre_MLE_function_by_mode[mode_idx]]
+		self.post_MLE_function_by_mode = \
+			[self.post_MLE_function_by_mode[mode_idx]]
+		self.global_mle_parameters_by_mode = \
+			[self.global_mle_parameters_by_mode[mode_idx]]
 		# reset mode_completeness_tracker
 		self.mode_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
@@ -185,11 +203,16 @@ class SimParameters(mle_functions.MLEParameters):
 		self.current_sim_rep_num = self.sim_repeats_by_mode[mode_idx]
 		self.current_sim_CI_parameters = \
 			self.sim_CI_parameters_by_mode[mode_idx]
+		if self.current_sim_CI_parameters == ['']:
+			self.current_sim_CI_parameters = []
+		self.current_simulator = \
+			self.simulator_by_mode[mode_idx]
 		super(SimParameters, self).set_mode(mode_name, \
 				output_identifier)
 		self.current_profile_point_num = self.sim_repeats_by_mode[mode_idx]
 		self.current_profile_point_list = \
-			np.array(self._retrieve_current_values([self.sim_repeats_by_mode],\
+			np.array(self._retrieve_current_values(\
+				[[x] for x in self.sim_repeats_by_mode],\
 				mode_idx, self.current_mode, self.total_param_num))
 	def set_parameter(self,parameter_name):
 		'''
@@ -302,8 +325,9 @@ class KeyOrganizer(object):
 			# for any columns that contain parameter values (first
 			# filter by columns containing the correct mode to avoid
 			# nonsensical parameter value comparisons)
+		current_mode = key_holder.get_params()['mode']
+		self.sim_parameters.set_mode(current_mode, '')
 		if len(self.key_df.index) > 0:
-			current_mode = key_holder.get_params()['mode']
 			key_df_current_mode = \
 				self.key_df.loc[self.key_df['mode'] == current_mode]
 		else:
@@ -315,7 +339,6 @@ class KeyOrganizer(object):
 					np.vstack(key_df_current_mode[self.param_val_colname].values), \
 					columns = self.sim_parameters.get_complete_parameter_list(), \
 					index = key_df_current_mode.index.values.tolist())
-			self.sim_parameters.set_mode(current_mode, '')
 			bound_abutting_point_identifier = \
 				mle_functions.BoundAbuttingPointRemover(param_df, \
 					self.sim_parameters.current_x_tolerance, bound_array, \
@@ -689,7 +712,8 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		module = 'matlab'
 		parallel_processors = 1
 		output_extension = 'csv'
-		code_name = '_'.join(['sim',sim_parameters.current_mode])
+#		code_name = '_'.join(['sim',sim_parameters.current_mode])
+		code_name = sim_parameters.current_simulator
 		additional_beginning_lines_in_job_sub = []
 		additional_end_lines_in_job_sub = []
 		initial_sub_time = sim_parameters.sim_time
@@ -736,11 +760,12 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 				and (len(self.additional_code_run_keys) == \
 				len(self.additional_code_run_values)):
 			self.key_list = ['external_counter','combined_start_values_array', \
-				'parameter_list'] + self.original_input_datafile_keys + \
+				'parameter_list', 'pause_at_end'] + self.original_input_datafile_keys + \
 				self.input_datafile_keys + self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
 				self.sim_parameters.current_start_parameter_val_list, \
-				self.sim_parameters.current_parameter_list] + \
+				self.sim_parameters.current_parameter_list, \
+				self.cluster_parameters.pause_at_end] + \
 				self.original_input_datafile_paths + self.input_datafile_paths \
 				+ self.additional_code_run_values
 		else:
@@ -1091,6 +1116,8 @@ class FixedPointCDFvalCalculator(object):
 					self.completeness_tracker_dict['simulated'].get_completeness()
 				if simulated_completeness:
 					self._calculate_cdf_val()
+	def get_llr_calculator_object(self, data_type):
+		return(self.llr_calculator_dict[data_type])
 	def get_cdf_val(self):
 		return(self.cdf_val)
 	def get_cdf_val_completeness(self):
@@ -1445,10 +1472,192 @@ class TwoSidedProfiler(object):
 		if self.completeness_tracker.get_completeness():
 			open(self.completefile,'a').close()
 
+class ModelComparer(object):
+	'''
+	Runs comparisons of hypotheses with all unfixed parameters between
+	modes
+	'''
+	def __init__(self, model_list, sim_parameters, output_id_prefix, \
+		sim_folders, additional_code_run_keys, additional_code_run_values, \
+		cluster_folders, cluster_parameters):
+		self.sim_parameters = copy.deepcopy(sim_parameters)
+		self.output_id_prefix = output_id_prefix
+		self._df_finder(model_list)
+		self.fixed_param_dict = {'H1': 'unfixed', 'H0': 'unfixed'}
+		self.fixed_param_val_dict = {'H1': np.nan, 'H0': np.nan}
+		self.sim_folders = sim_folders
+		self.additional_code_run_keys = additional_code_run_keys
+		self.additional_code_run_values = additional_code_run_values
+		self.cluster_folders = cluster_folders
+		self.cluster_parameters = cluster_parameters
+		self.profile_path = sim_folders.get_path('sim_profile_fixed_pt_folder')
+		self.output_file = os.path.join(self.profile_path, \
+			'model_comparison_' + \
+			'-'.join(['H1', self.model_dict['H1'], 'H0', \
+				self.model_dict['H0']]) + '.csv')
+		self.cdf_val_complete = False
+	def _df_finder(self, model_list):
+		'''
+		Makes sure model list has two models, one of which is a nested
+		model of the other
+		Sets model with more free parameters to be H0, the one with
+		fewer to H1
+		Counts df as the difference in the number of parameters between
+		the two models
+		'''
+		if len(model_list) > 2:
+			raise ValueError('ModelComparer can only compare two models at ' + \
+				'a time; current model list contains a different number of ' + \
+				'models: ' + str(model_list))
+		params_by_model = {}
+		param_nums_by_model = {}
+		for current_model in model_list:
+			# check which parameters are in each model
+			self.sim_parameters.set_mode(current_model, self.output_id_prefix)
+			params_by_model[current_model] = \
+				self.sim_parameters.current_parameter_list
+			param_nums_by_model[current_model] = \
+				len(self.sim_parameters.current_parameter_list)
+		# if params_by_model are the same length, raise an error
+		if len(set(param_nums_by_model.values())) != 2:
+			raise ValueError('Models do not have differing number of ' +\
+				'parameters: ' + str(param_nums_by_model))
+		# set up a dictionary of which model corresponds to each hypothesis
+		self.model_dict = \
+			{'H1': max(param_nums_by_model.iteritems(), \
+				key=operator.itemgetter(1))[0], \
+			'H0': min(param_nums_by_model.iteritems(), key=operator.itemgetter(1))[0]}
+		# check whether H0 parameters nested within H1 parameters; if
+			# so, calculate df as the difference in parameter numbers
+		if set(params_by_model[self.model_dict['H0']]).\
+			issubset(params_by_model[self.model_dict['H1']]):
+			self.df = param_nums_by_model[self.model_dict['H1']] - \
+				param_nums_by_model[self.model_dict['H0']]
+		else:
+			raise ValueError('H1 parameters are not a subset of H0 ' \
+				'parameters. H1: ' + str(params_by_model[self.model_dict['H1']]) + \
+				'; H0: ' + str(params_by_model[self.model_dict['H0']]))
+	def _calculate_asymptotic_cdf_val(self, original_data_llr_calculator):
+		'''
+		Calculates the asymptotic cdf val based on degrees freedom and
+		deviance between the two models run on the original data
+		'''
+		original_deviance_array = original_data_llr_calculator.get_deviances()
+		if (len(original_deviance_array) != 1) or \
+			np.all(np.isnan(original_deviance_array)):
+			asymptotic_cdf_val = np.nan
+		else:
+			asymptotic_deviance = original_deviance_array[0]
+			asymptotic_cdf_val = chi2.cdf(asymptotic_deviance, self.df)
+		return(asymptotic_cdf_val)
+	def run_cdf_calc(self):
+		'''
+		Runs FixedPointCDFvalCalculator comparing the two models, and
+		creates a pandas Series containing the resulting cdf value
+		Returns bool of completeness of cdf val calculation
+		'''
+		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.model_dict, \
+			self.fixed_param_dict, self.fixed_param_val_dict, \
+			self.sim_parameters, self.sim_folders, \
+			self.additional_code_run_keys, self.additional_code_run_values, \
+			self.output_id_prefix, self.output_file, self.cluster_folders, \
+			self.cluster_parameters)
+		fixed_point_pval_calc.run_fixed_pt_cdf_val_estimation()
+		self.cdf_val_complete = \
+			fixed_point_pval_calc.get_cdf_val_completeness()
+		if self.cdf_val_complete:
+			self.cdf_val = fixed_point_pval_calc.get_cdf_val()
+			original_data_llr_calculator = \
+				fixed_point_pval_calc.get_llr_calculator_object('original')
+			self.asymptotic_cdf_val = \
+				self._calculate_asymptotic_cdf_val(original_data_llr_calculator)
+			self.result_series = \
+				pd.Series([self.model_dict['H1'], self.model_dict['H0'], \
+						self.df, self.cdf_val, self.asymptotic_cdf_val], \
+					index = ['H1', 'H0', 'degrees_freedom', 'sim_based_cdf_val', \
+						'asymptotic_cdf_val'])
+		return(self.cdf_val_complete)
+	def get_comparison_result(self):
+		return(self.result_series)
+
+class ModelComparisonOrganizer(object):
+	'''
+	Organizes a table of model comparisons
+	'''
+	def __init__(self, sim_folders, sim_parameters, cluster_folders, \
+		cluster_parameters, output_id_prefix):
+		self.sim_folders = sim_folders
+		self.sim_parameters = sim_parameters
+		self.cluster_folders = cluster_folders
+		self.cluster_parameters = cluster_parameters
+		self.output_id_prefix = output_id_prefix
+		self.model_comparison_org_file = \
+			os.path.join(sim_folders.get_path('experiment_path'), \
+				'Model_Comparison_' + self.output_id_prefix + '.csv')
+		self._read_model_comparison_org_file()
+	def _read_model_comparison_org_file(self):
+		'''
+		If self.model_comparison_org_file exists, reads it in;
+		Otherwise, create one model_comparison_df as an empty df
+		'''
+		if os.path.isfile(self.model_comparison_org_file):
+			try:
+				self.model_comparison_df = \
+					pd.read_csv(filepath_or_buffer = \
+						self.model_comparison_org_file, \
+						index_col = False)
+			except pd.io.common.EmptyDataError:
+				# if file is empty, just create an empty df for self.LL_df
+				self._create_model_comparison_df()
+		else:
+			self._create_model_comparison_df()
+	def _create_model_comparison_df(self):
+		''' Creates new key_df '''
+		self.model_comparison_df = pd.DataFrame(columns = ['H0', 'H1', \
+			'degrees_freedom', 'sim_based_cdf_val', 'asymptotic_cdf_val'])
+	def _check_model_presence(self, model_list):
+		'''
+		Checks whether models in model_list are already in
+		model_comparison_df
+		'''
+		hypothesis_df = self.model_comparison_df[['H1', 'H0']]
+		models_in_df = hypothesis_df.values.tolist()
+		model_set = set(model_list)
+		model_equivalency_list = [model_set == set(current_model_list) for \
+			current_model_list in models_in_df]
+		model_list_in_df_bool = any(model_equivalency_list)
+		return(model_list_in_df_bool)
+	def _write_model_comparison_df(self):
+		'''
+		Writes self.model_comparison_df to
+		self.model_comparison_org_file
+		'''
+		self.model_comparison_df.to_csv(\
+			path_or_buf = self.model_comparison_org_file, \
+			index = False)
+	def compare_models(self, model_list, additional_code_run_keys, \
+		additional_code_run_values):
+		'''
+		Checks whether models in model_list are already in
+		self.model_comparison_df; if not, runs model comparison
+		'''
+		self.current_model_list_completeness = \
+			self._check_model_presence(model_list)
+		if not self.current_model_list_completeness:
+			model_comparer = ModelComparer(model_list, self.sim_parameters, \
+				self.output_id_prefix, self.sim_folders, \
+				additional_code_run_keys, additional_code_run_values, \
+				self.cluster_folders, self.cluster_parameters)
+			cdf_calc_complete = model_comparer.run_cdf_calc()
+			if cdf_calc_complete:
+				current_result_series = model_comparer.get_comparison_result()
+				self.model_comparison_df = \
+					self.model_comparison_df.append(current_result_series, \
+					ignore_index = True)
+				self._write_model_comparison_df()
+		return(self._check_model_presence(model_list))
 
 
-			
-# For comparing models, don't run FixedPointIdentifier, just run FixedPointCDFvalCalculator on the two models
 #####################################################################
 
 def _csv_list_converter(instr):
@@ -1523,4 +1732,11 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 			if sim_MLEs_complete:
 				open(sim_MLEs_completefile,'a').close()
 		return(sim_MLEs_completefile)
+
+def generate_sim_based_mode_pval():
+	'''
+	Determines what the pval is of the original data's LL among
+	simulations of data using a given mode
+	'''
+	pass
 

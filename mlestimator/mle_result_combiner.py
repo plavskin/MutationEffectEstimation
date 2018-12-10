@@ -344,7 +344,6 @@ class CombinedResultSummary(object):
 		# Only run CI estimation if initialization is complete but CIs are not
 		if self.completeness_tracker.get_key_completeness(CI_type + \
 			'_initialization'):
-			self._read_combined_df()
 			if not \
 				self.completeness_tracker.get_key_completeness(CI_type + \
 					'_CIs'):
@@ -356,52 +355,54 @@ class CombinedResultSummary(object):
 						parameter_holder.current_sim_CI_parameters
 				CI_completeness_tracker = \
 					cluster_functions.CompletenessTracker(parameters_to_loop_over)
-				for current_fixed_parameter in parameters_to_loop_over:
-					# check whether this CI has been identified
-					# read line for current_fixed_parameter from
-						# combined_results_df
-					current_results_line = SingleParamResultSummary()
-					current_results_line.read_from_df_line(self.combined_results_df, \
-						current_fixed_parameter)
-					# identify columns containing the string
-						# (CI_type + '_CI') and check that such columns
-						# exist and that none of them contain NaN)
-					current_CI_complete = \
-						current_results_line.check_column_filledness_by_keyword(CI_type + '_CI')
-					if current_CI_complete:
-						CI_completeness_tracker.switch_key_completeness(current_fixed_parameter, \
-							True)
-					else:
-						# first set current parameter
-						parameter_holder.set_parameter(current_fixed_parameter)
-						# create an LLProfile for current parameter
-						ll_profile = mle_functions.LLProfile(parameter_holder, \
-							self.datafile_path_dict[CI_type], \
-							self.LL_profile_folder, \
-							pd.DataFrame())
-						ll_profile.run_LL_list_compilation()
-						ll_profile.run_CI(self.pval, self.mle_folders, \
-							self.cluster_parameters, self.cluster_folders, \
-							parameter_holder, CI_type)
-						CI_dict = ll_profile.get_CI()
-							# if jobs to calculate both CI bounds have not yet been
-								# completed, returns None
-						if CI_dict:
-							# set the new confidence interval
-							current_results_line.set_CI(CI_type, CI_dict)
-							# replace previous warning entry--all warnings are
-								# recalculated individually when a CI bound is
-								# initialized, so having a CI_bound completely
-								# identified previously will not cause a problem
-								# in skipping warnings
-							current_warning = ll_profile.get_warnings()
-							current_results_line.set_warnings(current_warning)
-							# replace line in combined_results_df with updated line
-								# that has CI and warnings
-							current_results_dict = current_results_line.get_contents()
-							self._add_line_to_combined_df(current_fixed_parameter, current_results_dict)
-							CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
-				self._write_combined_df()
+				if parameters_to_loop_over:
+					self._read_combined_df()
+					for current_fixed_parameter in parameters_to_loop_over:
+						# check whether this CI has been identified
+						# read line for current_fixed_parameter from
+							# combined_results_df
+						current_results_line = SingleParamResultSummary()
+						current_results_line.read_from_df_line(self.combined_results_df, \
+							current_fixed_parameter)
+						# identify columns containing the string
+							# (CI_type + '_CI') and check that such columns
+							# exist and that none of them contain NaN)
+						current_CI_complete = \
+							current_results_line.check_column_filledness_by_keyword(CI_type + '_CI')
+						if current_CI_complete:
+							CI_completeness_tracker.switch_key_completeness(current_fixed_parameter, \
+								True)
+						else:
+							# first set current parameter
+							parameter_holder.set_parameter(current_fixed_parameter)
+							# create an LLProfile for current parameter
+							ll_profile = mle_functions.LLProfile(parameter_holder, \
+								self.datafile_path_dict[CI_type], \
+								self.LL_profile_folder, \
+								pd.DataFrame())
+							ll_profile.run_LL_list_compilation()
+							ll_profile.run_CI(self.pval, self.mle_folders, \
+								self.cluster_parameters, self.cluster_folders, \
+								parameter_holder, CI_type)
+							CI_dict = ll_profile.get_CI()
+								# if jobs to calculate both CI bounds have not yet been
+									# completed, returns None
+							if CI_dict:
+								# set the new confidence interval
+								current_results_line.set_CI(CI_type, CI_dict)
+								# replace previous warning entry--all warnings are
+									# recalculated individually when a CI bound is
+									# initialized, so having a CI_bound completely
+									# identified previously will not cause a problem
+									# in skipping warnings
+								current_warning = ll_profile.get_warnings()
+								current_results_line.set_warnings(current_warning)
+								# replace line in combined_results_df with updated line
+									# that has CI and warnings
+								current_results_dict = current_results_line.get_contents()
+								self._add_line_to_combined_df(current_fixed_parameter, current_results_dict)
+								CI_completeness_tracker.switch_key_completeness(current_fixed_parameter,True)
+					self._write_combined_df()
 				CIs_just_completed = \
 					CI_completeness_tracker.get_completeness()
 				if CIs_just_completed:
