@@ -32,14 +32,16 @@ function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(pa
         (1-lambda)*pdf('normal',test_data,mu_2,sigma_2);
     combined_LL = sum(log(data_likelihoods));
 
-    d_LL_d_mu_1 = d_LL_d_mu_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
     d_LL_d_sigma_1 = d_LL_d_sigma_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
     d_LL_d_mu_2 = d_LL_d_mu_dinorm_calc(test_data,(1-lambda),mu_2,sigma_2,mu_1,sigma_1);
     d_LL_d_sigma_2 = d_LL_d_sigma_dinorm_calc(test_data,(1-lambda),mu_2,sigma_2,mu_1,sigma_1);
     d_LL_d_lambda = d_LL_d_lambda_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2);
 
+    d_LL_d_rel_mu2 = d_LL_d_mu_2;
+    d_LL_d_mu_1 = d_LL_d_mu_dinorm_calc(test_data,lambda,mu_1,sigma_1,mu_2,sigma_2) + d_LL_d_mu_2;
+
     unscaled_gradient_vector = [sum(d_LL_d_lambda),sum(d_LL_d_mu_1),...
-        sum(d_LL_d_sigma_1),sum(d_LL_d_mu_2),sum(d_LL_d_sigma_2)];
+        sum(d_LL_d_sigma_1),sum(d_LL_d_rel_mu2),sum(d_LL_d_sigma_2)];
 
 end
     
