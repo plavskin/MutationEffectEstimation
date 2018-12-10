@@ -279,7 +279,8 @@ class CompletenessTracker(object):
 			self.completeness_status = False
 	def get_completeness(self):
 		""" Checks and returns completeness status """
-		self._check_completeness()
+		if not self.completeness_status:
+			self._check_completeness()
 		return(self.completeness_status)
 
 class JobListManager(object):
