@@ -28,7 +28,7 @@ function MLE_finder(key_list, value_list)
     combined_profile_lb_array_unscaled = input_value_dict('combined_profile_lb_array');
     ms_grid_parameter_array = input_value_dict('ms_grid_parameter_array');
     combined_logspace_parameters = input_value_dict('combined_logspace_parameters');
-    global_mle_parameters = input_value_dict('global_mle_parameters');
+    global_mle_parameters = input_value_dict('top_level_parameters');
     tolx_val = input_value_dict('tolx_val');
     tolfun_val = input_value_dict('tolfun_val');
     pause_at_end = input_value_dict('pause_at_end');
@@ -100,7 +100,7 @@ function MLE_finder(key_list, value_list)
     % run pre_MLE_function, if it's supplied
     if ~isnan(pre_MLE_function_name)
         pre_MLE_function = str2func(pre_MLE_function_name);
-        pre_MLE_output_dict = pre_MLE_function(key_list, value_list);
+        pre_MLE_output_dict = pre_MLE_function(input_value_dict);
     end
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Set up global search structure

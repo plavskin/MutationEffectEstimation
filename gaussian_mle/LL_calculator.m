@@ -29,7 +29,7 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     
     if gradient_specification
         [combined_LL, unscaled_global_gradient_vector] = ...
-            current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict)
+            current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict);
         neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector;
         global_gradient_vector = gradient_value_rescaler(neg_unscaled_global_gradient_vector,...
         param_vals,global_logspace_array,global_scaling_array);
