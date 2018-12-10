@@ -31,11 +31,20 @@ function sim_digaussian_test(key_list, value_list)
     test_data = data_table.data;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    lambda = combined_start_values_array_unscaled(1);
-    mu_1 = combined_start_values_array_unscaled(2);
-    sigma_1 = combined_start_values_array_unscaled(3);
-    mu_2 = combined_start_values_array_unscaled(4);
-    sigma_2 = combined_start_values_array_unscaled(5);
+    parameter_dict = containers.Map(parameter_list,...
+        combined_start_values_array_unscaled);
+    
+    lambda = parameter_dict('lambda');
+        % proportion of total distribution coming from distribution 1
+    mu_1 = parameter_dict('mu');
+        % mean of distribution 1
+    sigma_1 = parameter_dict('sigma');
+        % s.d. of distribution 1
+    rel_mu2 = parameter_dict('rel_mu2');
+    mu_2 = mu_1 + rel_mu2;
+        % mean of distribution 2
+    sigma_2 = parameter_dict('sigma2');
+
 
     n = max(size(test_data));
     n_1 = binornd(n, lambda);

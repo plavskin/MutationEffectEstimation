@@ -11,13 +11,14 @@ function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(pa
     
     lambda = parameter_dict('lambda');
         % proportion of total distribution coming from distribution 1
-    mu_1 = parameter_dict('mu_1');
+    mu_1 = parameter_dict('mu');
         % mean of distribution 1
-    sigma_1 = parameter_dict('sigma_1');
+    sigma_1 = parameter_dict('sigma');
         % s.d. of distribution 1
-    mu_2 = parameter_dict('mu_2');
+    rel_mu2 = parameter_dict('rel_mu2');
+    mu_2 = mu_1 + rel_mu2;
         % mean of distribution 2
-    sigma_2 = parameter_dict('sigma_2');
+    sigma_2 = parameter_dict('sigma2');
         % s.d. of distribution 2
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
