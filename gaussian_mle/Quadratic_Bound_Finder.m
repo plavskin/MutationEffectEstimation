@@ -5,6 +5,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	% Takes list of parameter values, as well as cdf values based on
 		% LRT corresponding to each of these parameter values, and fits
 		% the parameter value corresponding to cdf_bound
+    min_scaled_cdf_val = log(10^-50);
 	tic;
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get parameter values
@@ -19,6 +20,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
     quad_fit_file = parameter_dict('fit_file');
     profile_side = parameter_dict('profile_side');
     pause_at_end = parameter_dict('pause_at_end');
+    
+    % prevent errors due to parameter_dict('cdf_vals') == 1
+    cdf_vals(cdf_vals < min_scaled_cdf_val) = min_scaled_cdf_val;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	% initialize starting coefficients and set constrains
@@ -60,8 +64,8 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	% Perform global search for optimal parameters
 	gs = GlobalSearch;
-    gs.NumStageOnePoints = 20; % default = 200; sufficient is 50
-    gs.NumTrialPoints = 100; % default = 1000; sufficient is 200
+    gs.NumStageOnePoints = 50; % default = 200; sufficient is 50
+    gs.NumTrialPoints = 200; % default = 1000; sufficient is 200
     gs.StartPointsToRun='bounds';
     gs.Display='final';
 
@@ -84,9 +88,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	c = optimal_coefficients(3)+(b^2)/(4*a);
 	quadratic_fit = [a,b,c];
     
-%    x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
-%    figure; plot(parameter_vals,cdf_vals,'ob'); hold on;
-%    plot(x_plot_vals,polyval(quadratic_fit,x_plot_vals),'-r'); hold off;
+    x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
+    figure; plot(parameter_vals,cdf_vals,'ob'); hold on;
+    plot(x_plot_vals,polyval(quadratic_fit,x_plot_vals),'-r'); hold off;
     
 	possible_bounds = roots(quadratic_fit+[0,0,-cdf_bound]);
 		% here, cdf_bound is subtracted from the value for c to
@@ -110,7 +114,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	dlmwrite(output_file,parameter_bound,'delimiter',',','precision',9);
 	dlmwrite(quad_fit_file,quadratic_fit,'delimiter',',','precision',9);
 
-	runtime = toc;
+	runtime = toc(global_start_time);
 
     if pause_at_end & runtime < 120
         pausetime=120-runtime;
