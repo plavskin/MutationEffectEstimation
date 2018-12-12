@@ -5,14 +5,13 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	% Takes list of parameter values, as well as cdf values based on
 		% LRT corresponding to each of these parameter values, and fits
 		% the parameter value corresponding to cdf_bound
-    min_scaled_cdf_val = log(10^-50);
+    min_scaled_log_p_val = log(10^-50);
 	tic;
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get parameter values
     parameter_dict = containers.Map(key_list,value_list);
 
-    cdf_bound = log(1-parameter_dict('cdf_bound'));
-    	% cdf_bound = 1-p_value
+    cdf_bound = parameter_dict('cdf_bound');
     mle_param_val = parameter_dict('mle_param_val');
     parameter_vals = parameter_dict('parameter_values');
     cdf_vals = log(1-parameter_dict('cdf_vals'));
@@ -21,8 +20,11 @@ function Quadratic_Bound_Finder(key_list, value_list)
     profile_side = parameter_dict('profile_side');
     pause_at_end = parameter_dict('pause_at_end');
     
+    log_p_bound = log(1-cdf_bound);
+    	% cdf_bound = 1-p_value
+    log_p_vals = log(1-cdf_vals);
     % prevent errors due to parameter_dict('cdf_vals') == 1
-    cdf_vals(cdf_vals < min_scaled_cdf_val) = min_scaled_cdf_val;
+    log_p_vals(log_p_vals < min_scaled_log_p_val) = min_scaled_log_p_val;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	% initialize starting coefficients and set constrains
@@ -32,24 +34,24 @@ function Quadratic_Bound_Finder(key_list, value_list)
 		% this is the axis of the parabola; this requirement means that
 			% all parameter_vals are fitted on a single,
 			% 'ascending' side of the parabola
-	% coeffs(3) [(-b^2 + 4ac)/(4a)]: cdf_bound <= (-b^2 + 4ac)/(4a)
+	% coeffs(3) [(-b^2 + 4ac)/(4a)]: log_p_bound <= (-b^2 + 4ac)/(4a)
 		% this is the y-value of the vertex of the parabola; the
-			% lower bound of this requirement ensures that if cdf_bound
+			% lower bound of this requirement ensures that if log_p_bound
 			% needs to be extrapolated from the current data, it will
 			% return a real value
-	direct_fit_coefficients = polyfit(parameter_vals,cdf_vals,2);
+	direct_fit_coefficients = polyfit(parameter_vals,log_p_vals,2);
 	starting_coefficients = NaN([1,3]);
 	starting_coefficients(1) = min(direct_fit_coefficients(1),(mle_param_val-10^-50));
 		% make sure a is negative, i.e. parabola 'faces' down
 %	if min(parameter_vals)<mle_param_val
 	if strcmp(profile_side,'upper')
-		current_lb = [-Inf,-Inf,cdf_bound];
+		current_lb = [-Inf,-Inf,log_p_bound];
 		current_ub = [0,min(parameter_vals),Inf];
 		starting_coefficients(2) = max(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),min(parameter_vals));
 			% second coefficient is -b/2a
 %	else
 	elseif strcmp(profile_side,'lower')
-		current_lb = [-Inf,max(parameter_vals),cdf_bound];
+		current_lb = [-Inf,max(parameter_vals),log_p_bound];
 		current_ub = [0,Inf,Inf];
 		starting_coefficients(2) = min(-direct_fit_coefficients(2)/(2*starting_coefficients(1)),max(parameter_vals));
 	else
@@ -57,7 +59,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
 		disp(profile_side)
 		error('Invalid profile_side')
 	end
-	starting_coefficients(3) = max(cdf_bound, ...
+	starting_coefficients(3) = max(log_p_bound, ...
 		(-starting_coefficients(2)^2 + 4 * starting_coefficients(1) * direct_fit_coefficients(3)) / ...
 		(4 * starting_coefficients(1)));
 
@@ -77,7 +79,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
     	sum((Quadratic_Fit_Vertex_Limited(coefficients,x_vals,y_vals)).^2);
 
     min_problem_fixed_params = createOptimProblem('fmincon','objective',...
-        @(coeffs) quad_diff_squared(coeffs, parameter_vals, cdf_vals),...
+        @(coeffs) quad_diff_squared(coeffs, parameter_vals, log_p_vals),...
         'x0',starting_coefficients,'lb',current_lb,'ub',current_ub,...
         'options',fmincon_opts);
 
@@ -89,12 +91,12 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	quadratic_fit = [a,b,c];
     
     x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
-    figure; plot(parameter_vals,cdf_vals,'ob'); hold on;
+    figure; plot(parameter_vals,log_p_vals,'ob'); hold on;
     plot(x_plot_vals,polyval(quadratic_fit,x_plot_vals),'-r'); hold off;
     
-	possible_bounds = roots(quadratic_fit+[0,0,-cdf_bound]);
-		% here, cdf_bound is subtracted from the value for c to
-			% find the x-intercepts of the parabola at height cdf_bound
+	possible_bounds = roots(quadratic_fit+[0,0,-log_p_bound]);
+		% here, log_p_bound is subtracted from the value for c to
+			% find the x-intercepts of the parabola at height log_p_bound
 
 	% find the point out of possible_bounds that is closest to mle_param_val:
 		% this is the intercept on the correct side of the parabola
