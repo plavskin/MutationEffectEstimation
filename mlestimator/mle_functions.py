@@ -461,10 +461,15 @@ class BoundAbuttingPointRemover(object):
 		parameter_val_df_rescaled = \
 			self._rescale_df(self.parameter_val_df[self.parameter_names])
 		self.LL_df_diff = abs(parameter_val_df_rescaled - bound_df_rescaled)
+		# since self.LL_df_diff will throw NaN when Inf or -Inf values
+			# are being compared, also use an equality df for comparing
+			# parameter_val_df and bound_df (which will have True when
+			# values are both Inf or -Inf)
+		self.LL_df_equality = parameter_val_df_rescaled == bound_df_rescaled
 	def _remove_abutting_points(self):
 		# identify indices to remove from df, remove them, and save
 		# removed vals of fixed_param as self.removed_param_vals
-		comparison_df = self.LL_df_diff < self.x_tolerance
+		comparison_df = (self.LL_df_diff < self.x_tolerance) | self.LL_df_equality
 		if self.row_removal_criteria == 'any':
 			indices_to_remove_bool = comparison_df.any(axis = 'columns')
 		elif self.row_removal_criteria == 'all':
