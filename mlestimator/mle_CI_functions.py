@@ -160,6 +160,7 @@ class OneSidedCIBound(object):
 			# need to run _find_CI_proximal_LL_points even if curve
 				# fitting to LL points has already occurred, since these
 				# functions throw important warnings
+			self._remove_maxed_out_cdf_values()
 			self._find_CI_proximal_LL_points()
 			self._set_output_filenames()
 	def _set_output_filenames(self):
@@ -253,6 +254,11 @@ class OneSidedCIBound(object):
 		# sets self.CI_bound and changed self.CI_bound_set to true
 		self.CI_bound = CI_bound
 		self.CI_bound_set = True
+	def _remove_maxed_out_cdf_values(self):
+		# removes values from self.one_sided_LL_df where the cdf value
+			# is 1, creating self.one_sided_LL_df_filtered
+		self.one_sided_LL_df_filtered = \
+			self.one_sided_LL_df[self.one_sided_LL_df.cdf_vals != 1.0]
 	def _find_CI_proximal_LL_points(self):
 		# identify points that are most proximal to
 			# conf int cutoff
@@ -263,23 +269,27 @@ class OneSidedCIBound(object):
 		# importantly, this algorithm may return nonsense points if the
 			# profile is non-monotonic on the current side of the max
 			# mle parameter value!
-		number_profile_points = self.one_sided_LL_df.shape[0]
-		if number_profile_points <= 1:
+		if self.one_sided_LL_df_filtered.shape[0] <= 1:
 			self._set_CI_bound(self.default_CI_bound)
-		elif number_profile_points == 2:
-			self.code_name = 'Linear_Bound_Finder'
-		elif number_profile_points > 2:
-			self.code_name = 'Quadratic_Bound_Finder'
+			number_profile_points = self.one_sided_LL_df_filtered.shape[0]
+		else:
+			# get indices of closest points to CI bound whose cdf val does not equal 1
+			CI_bound_proximal_indices = \
+				self._id_proximal_points(np.log(1-self.cdf_bound), \
+					np.log(1-self.one_sided_LL_df_filtered['cdf_vals'].transpose().values), \
+					self.points_to_fit_curve)
+			# create a new df with only points closest to CI bound
+			self.CI_bound_proximal_points = \
+				self.one_sided_LL_df_filtered.iloc[CI_bound_proximal_indices]
+			number_profile_points = len(CI_bound_proximal_indices)
+				if number_profile_points == 2:
+					self.code_name = 'Linear_Bound_Finder'
+				if number_profile_points > 2:
+					self.code_name = 'Quadratic_Bound_Finder'
+		# note appropriate warnings
 		self.warning.set_points_to_create_CI(number_profile_points)
-		if np.max(self.one_sided_LL_df['cdf_vals']) < self.cdf_bound:
+		if np.max(self.one_sided_LL_df_filtered['cdf_vals']) < self.cdf_bound:
 			self.warning.set_all_points_within_CI_bound()
-		# get indices of closest points to CI bound
-		CI_bound_proximal_indices = \
-			self._id_proximal_points(np.log(1-self.cdf_bound), \
-				np.log(1-self.one_sided_LL_df['cdf_vals'].transpose().values), \
-				self.points_to_fit_curve)
-		# create a new df with only points closest to CI bound
-		self.CI_bound_proximal_points = self.one_sided_LL_df.iloc[CI_bound_proximal_indices]
 	def _run_CI_finder_submission(self):
 		# handles submission of the job
 		ci_bound_estimator = CIBoundEstimator(self.cluster_parameters, \
