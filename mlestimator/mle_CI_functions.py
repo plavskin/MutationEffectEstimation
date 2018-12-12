@@ -230,14 +230,24 @@ class OneSidedCIBound(object):
 				# indices closest to target besides those two, include
 				# indices surrounding target and anything else that's
 				# close in closest_indices
-			indices_flanking_target = self._id_flanking_indices(target_y, y_vals)
-			nonflanking_distances = np.delete(dist_to_target, indices_flanking_target)
-			abs_dist = np.absolute(nonflanking_distances)
-			sorted_abs_indices = np.argsort(abs_dist)
-			nonflanking_indices = sorted_abs_indices[0:(num_points-indices_flanking_target.size)]
-			closest_nonflanking_distances = nonflanking_distances[nonflanking_indices]
-			closest_nonflanking_indices = np.argwhere(np.isin(dist_to_target,closest_nonflanking_distances))
-			closest_indices = np.sort(np.append(closest_nonflanking_indices, indices_flanking_target))
+			indices_flanking_target = \
+				self._id_flanking_indices(target_y, y_vals)
+			nonflanking_distances = \
+				np.delete(dist_to_target, indices_flanking_target)
+			abs_dist = \
+				np.absolute(nonflanking_distances)
+			sorted_abs_indices = \
+				np.argsort(abs_dist)
+			nonflanking_indices = \
+				sorted_abs_indices[0:(num_points-indices_flanking_target.size)]
+			closest_nonflanking_distances = \
+				nonflanking_distances[nonflanking_indices]
+			closest_nonflanking_indices = \
+				np.argwhere(np.isin(dist_to_target,\
+					closest_nonflanking_distances))\
+				[0:(num_points-indices_flanking_target.size)]
+			closest_indices = \
+				np.sort(np.append(closest_nonflanking_indices, indices_flanking_target))
 		return(closest_indices)
 	def _set_CI_bound(self, CI_bound):
 		# sets self.CI_bound and changed self.CI_bound_set to true
@@ -265,7 +275,8 @@ class OneSidedCIBound(object):
 			self.warning.set_all_points_within_CI_bound()
 		# get indices of closest points to CI bound
 		CI_bound_proximal_indices = \
-			self._id_proximal_points(self.cdf_bound, self.one_sided_LL_df['cdf_vals'].transpose().values, \
+			self._id_proximal_points(np.log(1-self.cdf_bound), \
+				np.log(1-self.one_sided_LL_df['cdf_vals'].transpose().values), \
 				self.points_to_fit_curve)
 		# create a new df with only points closest to CI bound
 		self.CI_bound_proximal_points = self.one_sided_LL_df.iloc[CI_bound_proximal_indices]
