@@ -3,7 +3,7 @@ variable name,value,type,explanation
 pathnames_and_user_info,,,
 username,username_here,str,username on cluster
 composite_data_folder,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
-code_folder,~/Documents/MutationEffectEstimation/gaussian_mle,str,absolute path to directory in home directory that contains all maximum likelihood estimation code
+code_folder,~/Documents/MutationEffectEstimation/matlab_mle_functions,str,absolute path to directory in home directory that contains all maximum likelihood estimation code
 temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
 ,,,
