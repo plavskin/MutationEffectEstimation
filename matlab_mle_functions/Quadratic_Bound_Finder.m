@@ -14,7 +14,7 @@ function Quadratic_Bound_Finder(key_list, value_list)
     cdf_bound = parameter_dict('cdf_bound');
     mle_param_val = parameter_dict('mle_param_val');
     parameter_vals = parameter_dict('parameter_values');
-    cdf_vals = log(1-parameter_dict('cdf_vals'));
+    cdf_vals = parameter_dict('cdf_vals');
     output_file = parameter_dict('output_file');
     quad_fit_file = parameter_dict('fit_file');
     profile_side = parameter_dict('profile_side');
@@ -90,9 +90,9 @@ function Quadratic_Bound_Finder(key_list, value_list)
 	c = optimal_coefficients(3)+(b^2)/(4*a);
 	quadratic_fit = [a,b,c];
     
-    x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
-    figure; plot(parameter_vals,log_p_vals,'ob'); hold on;
-    plot(x_plot_vals,polyval(quadratic_fit,x_plot_vals),'-r'); hold off;
+%    x_plot_vals = linspace(min(parameter_vals),max(parameter_vals),50);
+%    figure; plot(parameter_vals,log_p_vals,'ob'); hold on;
+%    plot(x_plot_vals,polyval(quadratic_fit,x_plot_vals),'-r'); hold off;
     
 	possible_bounds = roots(quadratic_fit+[0,0,-log_p_bound]);
 		% here, log_p_bound is subtracted from the value for c to
