@@ -28,13 +28,19 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     tic;
     
     if gradient_specification
-        [combined_LL, unscaled_global_gradient_vector] = ...
+        [combined_LL, unscaled_global_gradient_vector, unscaled_global_gradient_key] = ...
             current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict);
-        neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector;
+        % reorder unscaled_global_gradient_vector to match order of parameters in parameter_list
+        parameter_list = input_value_dict('parameter_list');
+        [~, parameter_order] = ismember(unscaled_global_gradient_key, parameter_list);
+        unscaled_global_gradient_vector_ordered = unscaled_global_gradient_vector(parameter_order);
+        % convert gradient vector to negative and rescale
+        neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector_ordered;
         global_gradient_vector = gradient_value_rescaler(neg_unscaled_global_gradient_vector,...
-        param_vals,global_logspace_array,global_scaling_array);
-    
+            param_vals,global_logspace_array,global_scaling_array);
+        % return only those values in gradient vector that correspond to fitted parameters
         global_gradient_vector_partial = global_gradient_vector(~global_fixed_parameter_indices);
+        % deal with overflow
         global_gradient_vector_partial(global_gradient_vector_partial>max_neg_LL_val) = max_neg_LL_val;
         global_gradient_vector_partial(global_gradient_vector_partial<-max_neg_LL_val) = -max_neg_LL_val;
     else
@@ -43,6 +49,7 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
         global_gradient_vector_partial = []
     end
 
+    % convert LL to negative LL
     neg_combined_LL = -combined_LL;
 
     if neg_combined_LL > max_neg_LL_val

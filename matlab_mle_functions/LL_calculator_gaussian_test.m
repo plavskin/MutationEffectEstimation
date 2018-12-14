@@ -1,4 +1,4 @@
-function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(param_vals,...
+function [combined_LL, unscaled_gradient_vector, grad_parameter_names] = LL_calculator_gaussian_test(param_vals,...
     input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
@@ -27,6 +27,7 @@ function [combined_LL,unscaled_gradient_vector] = LL_calculator_gaussian_test(pa
     d_LL_d_sigma = d_LL_d_sigma_norm_calc(test_data,mu,sigma);
 
     unscaled_gradient_vector = [sum(d_LL_d_mu),sum(d_LL_d_sigma)];
+    grad_parameter_names = {'mu','sigma'};
 
 end
     
