@@ -157,9 +157,9 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 			rep_float = float(rep)
 
 			# set L and gridpower values for FFT
-			current_L = parameter_list["starting_L"]*pow(1.5,rep_float-1)
+#			current_L = parameter_list["starting_L"]*pow(1.5,rep_float-1)
 				# returns starting_L for rep1 and starting_L*1.5 for rep2
-			current_gridpower = parameter_list["starting_gridpower"]+(rep_float-1)
+#			current_gridpower = parameter_list["starting_gridpower"]+(rep_float-1)
 
 			# set memory and time for current run
 			cluster_parameters.set_current_time(rep_float*cluster_parameters.starting_time)
@@ -183,9 +183,10 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 			# use additional_code_run_keys and values to specify where input
 				# data comes from (and any other extra information that
 				# doesn't come from setup_file)
-			
-			additional_code_run_keys = ['L', 'gridpower']
-			additional_code_run_values = [current_L, current_gridpower]
+			additional_code_run_keys = []
+			additional_code_run_values = []			
+#			additional_code_run_keys = ['L', 'gridpower']
+#			additional_code_run_values = [current_L, current_gridpower]
 			#output_id_string_start = '_'.join([current_growth_condition, rep])
 			output_id_string_start = rep
 
