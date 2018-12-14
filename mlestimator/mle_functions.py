@@ -591,8 +591,11 @@ class LLHolder(object):
 		Writes LL_df to file regardless of whether file already exists
 		'''
 		self.LL_df_cleaned.to_csv(path_or_buf = self.LL_file , index = False)
-		self.LL_df_sorted.to_csv(path_or_buf = self.LL_file_unfiltered, \
-			index = False)
+		# only write unfiltered file if it hasn't been written before,
+			# otherwise pre-filtration values get deleted
+		if not os.path.isfile(self.LL_file_unfiltered):
+			self.LL_df_sorted.to_csv(path_or_buf = self.LL_file_unfiltered, \
+				index = False)
 	def _read_LL_df(self):
 		''' Reads self.LL_df from a pre-recorded file '''
 		try:
