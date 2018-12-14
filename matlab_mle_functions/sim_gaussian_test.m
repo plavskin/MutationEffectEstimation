@@ -4,14 +4,14 @@ function sim_gaussian_test(key_list, value_list)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get parameter values
-    parameter_dict = containers.Map(key_list,value_list);
+    input_value_dict = containers.Map(key_list,value_list);
     
-    external_counter = str2num(parameter_dict('external_counter'));
-    combined_start_values_array_unscaled = parameter_dict('combined_start_values_array');
-    parameter_list = parameter_dict('parameter_list');
-    original_phenotype_file = parameter_dict('original_phenotype_file');
-    phenotype_file = parameter_dict('phenotype_file');
-    pause_at_end = parameter_dict('pause_at_end');
+    external_counter = str2num(input_value_dict('external_counter'));
+    combined_start_values_array_unscaled = input_value_dict('combined_start_values_array');
+    parameter_list = input_value_dict('parameter_list');
+    original_phenotype_file = input_value_dict('original_phenotype_file');
+    phenotype_file = input_value_dict('phenotype_file');
+    pause_at_end = input_value_dict('pause_at_end');
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Use a random seed that's the sum of the current time in seconds and
@@ -31,8 +31,11 @@ function sim_gaussian_test(key_list, value_list)
     test_data = data_table.data;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    mu = combined_start_values_array_unscaled(1);
-    sigma = combined_start_values_array_unscaled(2);
+    parameter_dict = containers.Map(parameter_list,...
+        combined_start_values_array_unscaled);
+
+    mu = parameter_dict('mu');
+    sigma = parameter_dict('sigma');
     
     sim_data = normrnd(mu, sigma, size(test_data));
 
