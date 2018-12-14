@@ -210,7 +210,8 @@ class CombinedResultSummary(object):
 					current_fixed_parameter)
 			# check if LL of current_ll_profile is higher than current max_LL, and update true_max_param_df accordingly
 			current_ML_params = ll_profile_outputs['ML_params']
-			if not current_ML_params.empty:
+			#if not current_ML_params.empty:
+			if not current_ML_params is None:
 				self._check_and_update_ML(current_ML_params, current_fixed_parameter)
 			# get runtime
 			runtime_quantile = ll_profile_outputs['runtime_quantile']
