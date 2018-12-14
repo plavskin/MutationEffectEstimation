@@ -133,8 +133,8 @@ class SimParameters(mle_functions.MLEParameters):
 			[self.pre_MLE_function_by_mode[mode_idx]]
 		self.post_MLE_function_by_mode = \
 			[self.post_MLE_function_by_mode[mode_idx]]
-		self.global_mle_parameters_by_mode = \
-			[self.global_mle_parameters_by_mode[mode_idx]]
+		self.top_level_parameters_by_mode = \
+			[self.top_level_parameters_by_mode[mode_idx]]
 		# reset mode_completeness_tracker
 		self.mode_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
@@ -1389,16 +1389,28 @@ class OneSidedSimProfiler(object):
 		Determines three fixed pts at which to run sims, and runs sims
 		and mle on them
 		'''
-		self._select_first_point()
-		first_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[0])
-		if first_fixed_pt_complete:
-			self._select_second_point()
-			second_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[1])
-			if second_fixed_pt_complete:
-				self._select_third_point()
-				third_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[2])
-				if third_fixed_pt_complete:
-					self.side_completeness = True
+		if abs(self.asymptotic_CI_val) == float('Inf'):
+			# asymptotic_CI_val can be inf or -inf if CI bound not
+			# found, or if no point on correct side of MLE parameter
+			# value
+			for current_pt in self.profile_pt_list:
+				output_file = generate_filename(self.profile_path, \
+					str(current_pt), self.output_id_prefix, \
+					self.fixed_param_dict['H0'], 'data')
+				_write_fixed_pt_output(self.fixed_param_dict['H0'], \
+					self.fixed_param_mle, numpy.nan, output_file)
+			self.side_completeness = True
+		else:
+			self._select_first_point()
+			first_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[0])
+			if first_fixed_pt_complete:
+				self._select_second_point()
+				second_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[1])
+				if second_fixed_pt_complete:
+					self._select_third_point()
+					third_fixed_pt_complete = self._run_fixed_pt_calc(self.profile_pt_list[2])
+					if third_fixed_pt_complete:
+						self.side_completeness = True
 
 class TwoSidedProfiler(object):
 	'''
