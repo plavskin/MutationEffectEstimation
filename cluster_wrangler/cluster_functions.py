@@ -126,7 +126,7 @@ class Parameters(object):
 class ClusterParameters(object):
 	""" holds parameters general to the system """
 	def __init__(self,parameter_list):
-		self.code_path = parameter_list["code_folder"]
+		self.pipeline_path = parameter_list["code_folder"]
 #		self.home_path = parameter_list["home_folder"]
 		self.composite_data_path = parameter_list["composite_data_folder"]
 		self.max_mem = parameter_list["max_mem"]
@@ -211,7 +211,7 @@ class JobParameters(object):
 	def __init__(self, name, output_folder, output_extension, output_file_label, \
 		cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
-		parallel_processors):
+		parallel_processors, code_path):
 		self.name = name
 		self.output_folder = output_folder
 		self.output_extension = output_extension
@@ -219,6 +219,7 @@ class JobParameters(object):
 		self.cluster_job_submission_folder = cluster_job_submission_folder
 		self.experiment_folder = experiment_folder
 		self.module = module
+		self.code_path = code_path
 		self.code_run_input = code_run_input
 		self.additional_beginning_lines_in_job_sub = \
 			self._string_to_list(additional_beginning_lines_in_job_sub)
@@ -648,9 +649,6 @@ class SubmissionStringProcessor(object):
 		if module == 'matlab':
 			code_sub_input_processor = \
 				MatlabInputProcessor(code_name)
-		elif module == 'r':
-			code_sub_input_processor = \
-				RInputProcessor(code_name)
 		else:
 			raise ValueError('%s is not an available module at the moment' \
 				% (module))
@@ -852,7 +850,7 @@ class CodeSubmitter(object):
 	def __init__(self, cluster_parameters, cluster_folders, completefile, job_name, \
 		job_numbers, module, parallel_processors, experiment_folder, output_extension, code_name, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
-		initial_sub_time, initial_sub_mem, output_path, output_file_label):
+		initial_sub_time, initial_sub_mem, output_path, output_file_label, code_path):
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
 		self.parallel_processors = parallel_processors
@@ -872,6 +870,7 @@ class CodeSubmitter(object):
 		self.output_path = output_path
 		self.output_file_label = output_file_label
 		self.experiment_folder = experiment_folder
+		self.code_path = code_path
 		self._create_code_run_input()
 	def get_completefile_path(self):
 		return(self.completefile)
@@ -901,7 +900,7 @@ class CodeSubmitter(object):
 			self.output_file_label, cluster_job_submission_folder, self.experiment_folder, \
 			self.module, self.code_run_input, self.additional_beginning_lines_in_job_sub, \
 			self.additional_end_lines_in_job_sub, self.parallel_processors, self.completefile,
-			trackfile_folder)
+			trackfile_folder, self.code_path)
 
 #######################################################
 def parse_setup_file(filename):
@@ -941,7 +940,7 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	cluster_parameters, output_folder, output_extension, output_file_label, \
 	cluster_job_submission_folder, experiment_folder, module, code_run_input, \
 	additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
-	parallel_processors, completefile_path, trackfile_folder):
+	parallel_processors, completefile_path, trackfile_folder, code_path):
 	"""
 	Handles entire flow of job, from creation of new trackfile to
 	submission of jobs to updating trackfile
@@ -954,7 +953,7 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 		job_parameters = JobParameters(job_name, output_folder, \
 			output_extension, output_file_label, cluster_job_submission_folder, experiment_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
-			additional_end_lines_in_job_sub, parallel_processors)
+			additional_end_lines_in_job_sub, parallel_processors, code_path)
 		current_trackfile = TrackfileManager(job_parameters, \
 			cluster_parameters, trackfile_folder)
 		# check whether trackfile exists; if so, use it to get job data and

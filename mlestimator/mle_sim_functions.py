@@ -667,7 +667,8 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			'sim', str(sim_parameters.sim_key)])
 		job_numbers = [x + 1 for x in \
 			list(range(sim_parameters.get_option('profile_point_num')))]
-		module = 'matlab'
+		module = sim_parameters.get_option('module')
+		code_path = sim_parameters.get_option('mode_code_location')
 		parallel_processors = 1
 		output_extension = 'csv'
 		code_name = sim_parameters.get_option('simulator')
@@ -695,7 +696,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			experiment_folder, output_extension, code_name, \
 			additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, initial_sub_time, \
-			initial_sub_mem, sim_output_path, output_file_label)
+			initial_sub_mem, sim_output_path, output_file_label, code_path)
 	def _create_original_input_lists(self, sim_parameters, sim_output_path):
 		''' Creates lists of original data to include in code input '''
 		temp_sim_parameters = copy.deepcopy(sim_parameters)

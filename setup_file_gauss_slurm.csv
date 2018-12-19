@@ -3,7 +3,7 @@ variable name,value,type,explanation
 pathnames_and_user_info,,,
 username,username_here,str,username on cluster
 composite_data_folder,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
-code_folder,~/Documents/MutationEffectEstimation/matlab_mle_functions,str,absolute path to directory in home directory that contains all maximum likelihood estimation code
+code_folder,~/Documents/MutationEffectEstimation,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including model-specific code such as likelihood calculator)
 temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
 ,,,
@@ -40,6 +40,8 @@ simulator,sim_gaussian_test,str_list,list of function/module names that simulate
 pre_MLE_function,pre_MLE_gaussian_test,str_list,list of function/module names that perform pre-MLE-fitting functions for every mode separated by '|'; if none leave blank
 post_MLE_function,,str_list,list of function/module names that perform post-MLE-fitting functions for every mode separated by '|'; if none leave blank
 gradient_specification,TRUE,bool_list,list of bools specifying whether or not LL_calculator returns a negative LL gradient for a given mode
+mode_code_location,~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim|~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim,str_list,absolute path to code that performs LL calculation simulation and any other necessary functions for every mode; modes separated by '|'
+module,matlab,str,language in which LL calculation etc code is written (currently available: 'matlab'; later will include support for 'python')
 ,,,
 log_likelihood_profile_and_CI_variables,,,
 profile_point_num_list,10;10,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile

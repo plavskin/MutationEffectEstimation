@@ -57,6 +57,10 @@ class FolderManager(object):
 		self.path_dict['key_organizer_folder'] = \
 			os.path.join(cluster_parameters.temp_storage_path, \
 				experiment_folder_name, 'key_organizers')
+		self.path_dict['mle_finder_folder'] = \
+			os.path.join(cluster_parameters.pipeline_path, 'mle_finder')
+		self.path_dict['CI_finder_folder'] = \
+			os.path.join(cluster_parameters.pipeline_path, 'CI_finder')
 		# create folders in path_dict
 		self._set_up_folders()
 		# set up organizer files for sim
@@ -296,7 +300,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			mle_parameters.get_option('output_id_parameter')])
 		job_numbers = [x + 1 for x in \
 			list(range(mle_parameters.get_option('profile_point_num')))]
-		module = 'matlab'
+		module = mle_parameters.get_option('module')
 		parallel_processors = mle_parameters.get_option('parallel_processors')
 		output_extension = 'csv'
 		code_name = 'MLE_finder'
@@ -325,13 +329,14 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 				mle_parameters.get_option('input_datafile_values')]
 		# run __init__ from parent class, which in turn runs
 			# _create_code_run_input_lists
+		code_path = mle_folders.get_path('mle_finder_folder')
 		super(MLEstimation, self).__init__(cluster_parameters, \
 			cluster_folders, completefile, job_name, \
 			job_numbers, module, parallel_processors, \
 			experiment_folder, output_extension, code_name, \
 			additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, initial_sub_time, \
-			initial_sub_mem, output_path, output_file_label)
+			initial_sub_mem, output_path, output_file_label, code_path)
 	def _create_code_run_input_lists(self):
 		'''
 		Creates list of keys and their values to be submitted to

@@ -92,13 +92,15 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 		initial_sub_mem = 1024
 		output_folder = mle_folders.get_path('CI_bound_path')
 		output_file_label = CI_bound_name
+		code_path = mle_folders.get_path('CI_finder_folder')
 		super(CIBoundEstimator, self).__init__(cluster_parameters, \
 				cluster_folders, completefile, job_name, \
 				job_numbers, module, parallel_processors, \
 				experiment_folder, output_extension, code_name, \
 				additional_beginning_lines_in_job_sub, \
 				additional_end_lines_in_job_sub, initial_sub_time, \
-				initial_sub_mem, output_folder, output_file_label)
+				initial_sub_mem, output_folder, output_file_label, \
+				code_path)
 	def _create_code_run_input_lists(self):
 		if (len(self.additional_code_run_keys) == \
 			len(self.additional_code_run_values)):

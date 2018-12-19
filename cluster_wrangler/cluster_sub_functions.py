@@ -401,7 +401,7 @@ class MacOSXManager(JobSubmissionManager):
 			code_run_file.write('screen_out_file=\'' + \
 				screen_out_filename + '\n')
 			# cd into code directory
-			code_run_file.write('cd \'' + self.cluster_parameters.code_path + '\'\n')
+			code_run_file.write('cd \'' + self.job_parameters.code_path + '\'\n')
 			# write appropriate code-running line
 			code_run_file.write(code_run_string  + \
 				' | tee "${output_file}"\n')
@@ -599,7 +599,7 @@ class SlurmManager(JobSubmissionManager):
 					self.job_parameters.additional_beginning_lines_in_job_sub:
 					sbatch_job_file.write(additional_sbatch_beginning_row + '\n')
 
-			sbatch_job_file.write('cd ' + self.cluster_parameters.code_path + '\n')
+			sbatch_job_file.write('cd ' + self.job_parameters.code_path + '\n')
 				# cd into code directory
 			sbatch_job_file.write('module purge\n')
 			sbatch_job_file.write('module load ' + \
