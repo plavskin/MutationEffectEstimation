@@ -111,12 +111,14 @@ class Parameters(object):
 	def __init__(self, parameters):
 		self.parameters = {}
 		for p in parameters:
-			self.parameters[p.name] = p
+			self.parameters[p.name] = p.value
 	def __getitem__(self, name):
 		if name in self.parameters:
-			return self.parameters[name].value
+			return self.parameters[name]
 		else:
 			raise ValueError('this parameter does not exist: ' + name)
+	def get_parameter_dict(self):
+		return(self.parameters)
 	def print_values(self):
 		for name in self.parameters:
 			print(self.parameters[name].concat_to_string())

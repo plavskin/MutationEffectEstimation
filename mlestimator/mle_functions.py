@@ -91,203 +91,189 @@ class FolderManager(object):
 		else:
 			self.path_dict['current_output_subfolder'] = self.path_dict['MLE_output_path']
 
-
 class MLEParameters(object):
-	############### ??? TO DO ??? ###############
-	# Check that each mode or parameter is in the list once?
-		# (currently only pays attention to the first time mode or parameter listed)
-	############### ??? TO DO ??? ###############
-	def __init__(self,parameter_list):
-		self.input_datafile_keys = parameter_list["input_datafile_keys"]
-		self.input_datafile_values = parameter_list["input_datafile_values"]
-		self.runtime_percentile = parameter_list["runtime_percentile"]
-		self.CI_pval_by_mode = parameter_list['CI_pval_by_mode']
-#		self.sim_repeats_by_mode = parameter_list["simulation_repeats_by_mode"]
-		self.profile_points_by_mode = parameter_list["profile_points_by_mode"]
-		self.mode_list = parameter_list["mode_list"]
-		self.parameters_by_mode = parameter_list["parameters_by_mode"]
-		self.min_parameter_vals_by_mode = \
-			parameter_list["min_parameter_vals_by_mode"]
-		self.max_parameter_vals_by_mode = \
-			parameter_list["max_parameter_vals_by_mode"]
-		self.starting_parameter_vals_by_mode = \
-		 	parameter_list["starting_parameter_vals_by_mode"]
-		self.profile_lower_limits_by_mode = \
-			parameter_list["profile_lower_limits_by_mode"]
-		self.profile_upper_limits_by_mode = \
-			parameter_list["profile_upper_limits_by_mode"]
-		self.scaling_arrays_by_mode = \
-			parameter_list["scaling_arrays_by_mode"]
-		self.x_tolerance_by_mode = \
-			parameter_list["x_tolerance_by_mode"]
-		self.fun_tolerance_by_mode = \
-			parameter_list["fun_tolerance_by_mode"]
-		self.gradient_specification_by_mode = \
-			parameter_list["gradient_specification_by_mode"]
-		self.LL_calculator_by_mode = \
-			parameter_list["LL_calculator_by_mode"]
-		self.pre_MLE_function_by_mode = \
-			parameter_list["pre_MLE_function_by_mode"]
-		self.post_MLE_function_by_mode = \
-			parameter_list["post_MLE_function_by_mode"]
-		self.top_level_parameters_by_mode = \
-			parameter_list["top_level_parameters_by_mode"]
-		self.ms_positions = parameter_list["multistart_positions"]
-		self.multistart_grid_parameters = parameter_list["multistart_grid_parameters"]
-		self.logspace_profile_list_by_mode = parameter_list["logspace_profile_list"]
-		self.parallel_processors = parameter_list["parallel_processors"]
-		self.mode_completeness_tracker = cluster_functions.CompletenessTracker(self.mode_list)
+	def __init__(self, parameter_input):
+		self.mode_list = parameter_input["mode"]
+		self.mode_completeness_tracker = \
+			cluster_functions.CompletenessTracker(self.mode_list)
 		self.all_modes_complete = False
-	def _retrieve_current_values(self,list_by_mode,mode_idx,current_mode,param_num):
-		# retrieves the appropriate list from a list of parameter lists
-			# by mode
-		output_list = list_by_mode[mode_idx]
-		# ensure length of outputs is same as length of parameter_list
-		output_list_length = len(output_list)
-		if output_list_length == 1:
-			output_list_trimmed = output_list*param_num
-		elif output_list_length > param_num:
-			print('Warning! More elements in list than parameters in mode ' + \
-				current_mode)
-			print(output_list)
-			print('Replacing all values with NAs')
-			output_list_trimmed = [np.NaN]*param_num
-		elif output_list_length < param_num:
-			print('Warning! Fewer elements in list than parameters in mode ' + \
-				current_mode)
-			print('Replacing all values with NAs')
-			output_list_trimmed = [np.NaN]*param_num
-		else:
-			output_list_trimmed = output_list
-		return(output_list_trimmed)
+		self.input_val_dict = \
+			copy.deepcopy(parameter_input.get_parameter_dict())
+		required_mle_key_list = ['input_datafile_keys', \
+			'input_datafile_values', 'mode', 'parameter_list', \
+			'top_level_parameters', 'permafixed_parameters', \
+			'starting_parameter_vals', 'min_parameter_vals', \
+			'max_parameter_vals', 'multistart_positions', \
+			'multistart_grid_parameters', 'logspace_profile_parameters', \
+			'scaling_array', 'x_tolerance', 'fun_tolerance', \
+			'LL_calculator', 'pre_MLE_function', 'post_MLE_function', \
+			'gradient_specification']
+		required_CI_key_list = ['profile_point_num_list', \
+			'profile_lower_limits', 'profile_upper_limits', 'CI_pval', \
+			'runtime_percentile']
+		self._check_input(required_mle_key_list)
+		self._check_input(required_CI_key_list)
+	def _check_input(self, keys_to_check_for):
+		'''
+		Checks that keys_to_check_for are keys in self.input_val_dict
+		If not, raises an error
+		'''
+		input_val_dict_keys = list(self.input_val_dict.keys())
+		keys_in_dict = \
+			set(keys_to_check_for).issubset(set(input_val_dict_keys))
+		if not keys_in_dict:
+			missing_keys = \
+				set(keys_to_check_for).difference(set(input_val_dict_keys))
+			raise AttributeError('The following keys were not specified: ' + \
+				str(missing_keys) + '; they are probably missing from setup file')
 	def _id_parameters_to_loop_over(self):
 		# identify which parameters need to be looped through in MLE
 			# i.e. fitted parameters that MLE needs to be performed on
 		# include 'unfixed' parameter, in which case no parameter is fixed
 		parameters_to_loop_over_bool = \
-			np.invert(self.current_permafixed_parameter_bool)* \
-			np.invert((self.current_profile_point_list < 1))
-		non_permafixed_parameters = [item for (item,bool_val) in \
-			zip(self.current_parameter_list,parameters_to_loop_over_bool) \
-			if bool_val]
-		self.current_parameters_to_loop_over = ['unfixed'] + non_permafixed_parameters
+			np.invert(self.current_option_dict['permafixed_parameter_bool'])* \
+			np.invert((self.current_option_dict['profile_point_num_list'] < 1))
+		non_permafixed_parameters = [item for (item, bool_val) in \
+			zip(self.current_option_dict['parameter_list'], \
+				parameters_to_loop_over_bool) if bool_val]
+		self.current_option_dict['parameters_to_loop_over'] = ['unfixed'] + non_permafixed_parameters
 		# include 1 profile point for 'unfixed' setting
 			# (i.e. only perform 'unfixed' MLE once, since no need to
 			# get likelihood profile)
 		self.point_numbers_to_loop_over = np.append([1], \
-			self.current_profile_point_list[ \
-			parameters_to_loop_over_bool])
-	def set_mode(self,mode_name,output_identifier):
+			self.current_option_dict['profile_point_num_list']\
+				[parameters_to_loop_over_bool])
+	def _select_sublist(self, input_dict, output_dict, index_to_select, \
+		expected_list_length):
+		'''
+		Adds to output_dict a list of keys taken from input_dict, where
+		each key's corresponding value is either:
+		 - 	the corresponding value, val, in input_dict, if it is not a
+		 	list (converting empty strings to None)
+		 - 	if val is a list and its length is equal to
+		 	expected_list_length,the index_to_select-th element from the
+		 	value in input_dict, val[index_to_select]
+		 - 	if val[index_to_select] is a list of ints and/or floats, it
+		 	is converted to a numpy array
+		Returns output_dict
+		'''
+		for key, val in input_dict.iteritems():
+			if isinstance(val, list):
+				if len(val) == expected_list_length:
+					subval = val[index_to_select]
+				else:
+					raise AttributeError(key + ' expected length is ' + \
+						str(expected_list_length) + ', but instead its ' + \
+						'length is ' + str(len(val)) + ', and its value is ' + \
+						str(val))
+			else:
+				if val == '':
+					subval = None
+				else:
+					subval = val
+			if isinstance(subval, basestring):
+				if subval == '':
+					subval = None
+			elif isinstance(subval, list):
+				if subval == ['']:
+					subval = []
+#				if len(subval) != expected_sublist_length:
+#					raise AttributeError(key + ' expected sublist length is ' + \
+#						str(expected_sublist_length) + ', but instead its ' + \
+#						'  length is ' + str(len(subval)) ', and its value is ' + \
+#						str(subval))
+				elif all(isinstance(x, int) or isinstance(x, float) \
+					for x in subval):
+					subval = np.array(subval)
+			output_dict[key] = copy.copy(subval)
+		return(output_dict)
+	def set_mode(self, mode_name, output_identifier):
 		# for all MLE_parameter attributes, retrieves the parameter or
 			# list of parameters corresponding to the current mode
-		self.current_mode = mode_name
+		self.current_mode_complete = False
+		# output_identifier is a string that will be included in filenames
+		current_option_dict = {'output_identifier': output_identifier, \
+			'current_mode': mode_name}		
 		mode_idx = self.mode_list.index(mode_name)
-		self.current_CI_pval = self.CI_pval_by_mode[mode_idx]
-		self.current_ms_positions = self.ms_positions[mode_idx]
-		self.current_ms_grid_parameters = self.multistart_grid_parameters[mode_idx]
-		self.current_logspace_profile_list = self.logspace_profile_list_by_mode[mode_idx]
-		self.current_parameter_list = self.parameters_by_mode[mode_idx]
-		self.current_x_tolerance = self.x_tolerance_by_mode[mode_idx]
-		self.current_fun_tolerance = self.fun_tolerance_by_mode[mode_idx]
-		self.current_LL_calculator = self.LL_calculator_by_mode[mode_idx]
-		self.current_pre_MLE_function = self.pre_MLE_function_by_mode[mode_idx]
-		self.current_post_MLE_function = self.post_MLE_function_by_mode[mode_idx]
-		self.current_gradient_specification = self.gradient_specification_by_mode[mode_idx]
-		self.current_top_level_parameters = self.top_level_parameters_by_mode[mode_idx]
-		if self.current_pre_MLE_function == '':
-			self.current_pre_MLE_function = None
-		if self.current_post_MLE_function == '':
-			self.current_post_MLE_function = None
-		if self.current_top_level_parameters == '':
-			self.current_top_level_parameters = self.current_parameter_list
-		# find the total number of parameters, including fixed ones
-		self.total_param_num = len(self.current_parameter_list)
-		# create lists, of length total_param_num, of settings for each
-			# parameter in current_parameter_list
-		# if input in file was incorrect length relative to number of
-			# parameters, corresponding list is just NaN
-		self.current_min_parameter_val_list = \
-			np.array(self._retrieve_current_values(self.min_parameter_vals_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_max_parameter_val_list = \
-			np.array(self._retrieve_current_values(self.max_parameter_vals_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_start_parameter_val_list = \
-			np.array(self._retrieve_current_values(self.starting_parameter_vals_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_profile_point_list = \
-			np.array(self._retrieve_current_values(self.profile_points_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_profile_lower_limit_list = \
-			np.array(self._retrieve_current_values(self.profile_lower_limits_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_profile_upper_limit_list = \
-			np.array(self._retrieve_current_values(self.profile_upper_limits_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
-		self.current_scaling_val_list = \
-			np.array(self._retrieve_current_values(self.scaling_arrays_by_mode,\
-				mode_idx,self.current_mode,self.total_param_num))
+		number_of_modes = len(self.input_val_dict['mode'])
+		self.current_option_dict = self._select_sublist(self.input_val_dict, \
+			current_option_dict, mode_idx, number_of_modes)
+		# check that each parameter for current mode is in parameter_list once
+		if len(self.current_option_dict['parameter_list']) > \
+			len(set(self.current_option_dict['parameter_list'])):
+			raise AttributeError('Parameter list for mode ' + mode_name + \
+				'contains non-unique parameters: ' + \
+				str(self.current_option_dict['parameter_list']))
 		# identify list of parameters that are permanently fixed
-		self.current_permafixed_parameter_bool = \
-			self.current_max_parameter_val_list == self.current_min_parameter_val_list
+		self.current_option_dict['permafixed_parameter_bool'] = \
+			[x in self.current_option_dict['permafixed_parameters'] \
+				for x in self.current_option_dict['parameter_list']]
 		# identify parameters MLE needs to be performed on
 		self._id_parameters_to_loop_over()
 		# set up completefile tracker for these parameters
 		self.parameter_completeness_tracker = \
-			cluster_functions.CompletenessTracker(self.current_parameters_to_loop_over)
-		self.current_mode_complete = False
-		# output_identifier is a string that will be included in filenames
-		self.output_identifier = output_identifier
+			cluster_functions.CompletenessTracker(\
+				self.current_option_dict['parameters_to_loop_over'])
+	def get_current_option_dict(self):
+		return(self.current_option_dict)
+	def get_option(self, key):
+		return(self.current_option_dict[key])
+	def get_input_option(self, key):
+		return(self.input_val_dict[key])
 	def get_fitted_parameter_list(self, include_unfixed):
 		# get list of parameters to loop over for current mode
-		parameters_to_return = copy.copy(self.current_parameters_to_loop_over)
+		parameters_to_return = \
+			copy.copy(self.current_option_dict['parameters_to_loop_over'])
 		if not include_unfixed:
 			parameters_to_return.remove('unfixed')
 		return(parameters_to_return)
 	def get_complete_parameter_list(self):
 		# get list of parameters in current mode
-		return(self.current_parameter_list)
+		return(self.current_option_dict['parameter_list'])
 	def set_parameter(self,parameter_name):
 		# set current parameter, number of likelihood profile points
 			# for it, and create a temporary list of fixed parameters
 			# that includes it
-		self.current_fixed_parameter = parameter_name
-		if self.current_fixed_parameter == 'unfixed':
-			self.current_profile_point_num = 1
+		self.current_option_dict['fixed_parameter'] = parameter_name
+		if parameter_name == 'unfixed':
+			self.current_option_dict['profile_point_num'] = 1
 			# list of fixed parameters is unchanged from default
-			self.current_tempfixed_parameter_bool = \
-				copy.copy(self.current_permafixed_parameter_bool)
-			# other properties need to be NaN
+			self.current_option_dict['tempfixed_parameter_bool'] = \
+				copy.copy(self.current_option_dict['permafixed_parameter_bool'])
 		else:
 			# find index of current_fixed_parameter in parameter list
-			self.current_fixed_parameter_idx = self.current_parameter_list.index(parameter_name)
+			current_fixed_parameter_idx = \
+				self.current_option_dict['parameter_list'].index(parameter_name)
 			# temporarily fix current parameter
-			self.current_tempfixed_parameter_bool = \
-				copy.copy(self.current_permafixed_parameter_bool)
-			self.current_tempfixed_parameter_bool[self.current_fixed_parameter_idx] = \
-				True
-			self.current_profile_point_num = \
-				self.current_profile_point_list[self.current_fixed_parameter_idx]
-		self.output_id_parameter = self.output_identifier + '_' + self.current_fixed_parameter
+			self.current_option_dict['tempfixed_parameter_bool'] = \
+				copy.copy(self.current_option_dict['permafixed_parameter_bool'])
+			self.current_option_dict['tempfixed_parameter_bool']\
+				[current_fixed_parameter_idx] = True
+			self.current_option_dict['profile_point_num'] = \
+				self.current_option_dict['profile_point_num_list']\
+					[current_fixed_parameter_idx]
+		self.current_option_dict['output_id_parameter'] = \
+			self.current_option_dict['output_identifier'] + '_' + parameter_name
 		# identify how many dimensions are being used in multistart
-		self.current_ms_grid_dimensions = sum([x != self.current_fixed_parameter \
-			for x in self.current_ms_grid_parameters])
-		self.current_parallel_processors = min(self.parallel_processors,
-			self.current_ms_positions**self.current_ms_grid_dimensions)
+		self.current_option_dict['ms_grid_dimensions'] = \
+			sum([x != parameter_name for x in \
+				self.current_option_dict['multistart_grid_parameters']])
+		self.current_option_dict['parallel_processors'] = \
+			min(self.input_val_dict['parallel_processors'],
+				self.current_option_dict['multistart_positions']**\
+					self.current_option_dict['ms_grid_dimensions'])
 	def update_parameter_completeness(self, completefile):
 		# checks whether jobs for current parameter are all complete
 		self.parameter_completeness_tracker.update_key_status( \
-			self.current_fixed_parameter,completefile)
+			self.current_option_dict['fixed_parameter'], completefile)
 	def check_completeness_within_mode(self):
 		# checks whether all parameters within mode are complete
 		# change mode completeness status accordingly
 		self.current_mode_complete = \
 			self.parameter_completeness_tracker.get_completeness()
 		self.mode_completeness_tracker.switch_key_completeness( \
-			self.current_mode, self.current_mode_complete)
+			self.current_option_dict['current_mode'], self.current_mode_complete)
 		return(self.current_mode_complete)
-#	def get_parameter_completeness(self):
-#		return(self.parameter_completeness_tracker.get_key_completeness(self.current_fixed_parameter))
 	def check_completeness_across_modes(self):
 		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
 		return(self.all_modes_complete)
@@ -304,16 +290,15 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		experiment_folder = mle_folders.get_path('experiment_path')
 		completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
-				'_'.join(['MLE',mle_parameters.output_id_parameter, \
+				'_'.join(['MLE',mle_parameters.get_option('output_id_parameter'), \
 					'completefile.txt']))
 		job_name = '-'.join([mle_folders.get_experiment_folder_name(), 'MLE', \
-			mle_parameters.output_id_parameter])
+			mle_parameters.get_option('output_id_parameter')])
 		job_numbers = [x + 1 for x in \
-			list(range(mle_parameters.current_profile_point_num))]
+			list(range(mle_parameters.get_option('profile_point_num')))]
 		module = 'matlab'
-		parallel_processors = mle_parameters.current_parallel_processors
+		parallel_processors = mle_parameters.get_option('parallel_processors')
 		output_extension = 'csv'
-#		code_name = '_'.join(['MLE',mle_parameters.current_mode])
 		code_name = 'MLE_finder'
 		additional_beginning_lines_in_job_sub = []
 		additional_end_lines_in_job_sub = []
@@ -325,19 +310,19 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			cluster_parameters.get_batch_counter_call()
 		output_path = mle_folders.get_path('current_output_subfolder')
 		output_file_label = generate_file_label('data', \
-			mle_parameters.output_identifier, \
-			mle_parameters.current_fixed_parameter)
+			mle_parameters.get_option('output_identifier'), \
+			mle_parameters.get_option('fixed_parameter'))
 		self.output_filename = generate_filename(output_path, \
-			self.within_batch_counter_call, mle_parameters.output_identifier, \
-			mle_parameters.current_fixed_parameter, 'data')
+			self.within_batch_counter_call, mle_parameters.get_option('output_identifier'), \
+			mle_parameters.get_option('fixed_parameter'), 'data')
 		# set up input_datafile_keys and input_datafile_paths
 			# attributes, which will be used by
 			# _create_code_run_input_lists
-		self.input_datafile_keys = mle_parameters.input_datafile_keys
+		self.input_datafile_keys = mle_parameters.get_option('input_datafile_keys')
 		self.input_datafile_paths = \
 			[os.path.join(input_data_folder, \
 				current_input_datafile) for current_input_datafile in \
-				mle_parameters.input_datafile_values]
+				mle_parameters.get_option('input_datafile_values')]
 		# run __init__ from parent class, which in turn runs
 			# _create_code_run_input_lists
 		super(MLEstimation, self).__init__(cluster_parameters, \
@@ -355,47 +340,18 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		if (len(self.input_datafile_keys) == len(self.input_datafile_paths)) \
 			and (len(self.additional_code_run_keys) == \
 			len(self.additional_code_run_values)):
-			self.key_list = ['external_counter','combined_fixed_parameter_array', \
-				'combined_min_array','combined_max_array','combined_length_array', \
-				'combined_position_array','combined_start_values_array', \
-				'parameter_list','output_file', \
-				'parallel_processors','ms_positions','combined_profile_ub_array', \
-				'combined_profile_lb_array','ms_grid_parameter_array', \
-				'combined_logspace_parameters', \
-				'output_id_parameter', 'combined_scaling_array', 'tolx_val', \
-				'tolfun_val', 'pause_at_end', 'LL_calculator', \
-				'pre_MLE_function', 'post_MLE_function', \
-				'top_level_parameters', 'gradient_specification'] + \
-				self.input_datafile_keys + \
-				self.additional_code_run_keys
+			mle_param_dict = self.mle_parameters.get_current_option_dict() 
+			self.key_list = ['external_counter', 'combined_position_array', \
+				'output_file', 'pause_at_end'] + list(mle_param_dict.keys()) + \
+				self.input_datafile_keys + self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
-				self.mle_parameters.current_tempfixed_parameter_bool, \
-				self.mle_parameters.current_min_parameter_val_list, \
-				self.mle_parameters.current_max_parameter_val_list, \
-				self.mle_parameters.current_profile_point_list, \
 				[self.within_batch_counter_call], \
 					# if combined_position_array has length=1, MLE programs
 						# interpret it as an array of the correct length
 						# with the same value repeated
-				self.mle_parameters.current_start_parameter_val_list, \
-				self.mle_parameters.current_parameter_list, \
 				self.output_filename, \
-				self.mle_parameters.current_parallel_processors, \
-				self.mle_parameters.current_ms_positions, \
-				self.mle_parameters.current_profile_upper_limit_list, \
-				self.mle_parameters.current_profile_lower_limit_list, \
-				self.mle_parameters.current_ms_grid_parameters, \
-				self.mle_parameters.current_logspace_profile_list,
-				self.mle_parameters.output_id_parameter, \
-				self.mle_parameters.current_scaling_val_list, \
-				self.mle_parameters.current_x_tolerance, \
-				self.mle_parameters.current_fun_tolerance, \
-				self.cluster_parameters.pause_at_end, \
-				self.mle_parameters.current_LL_calculator, \
-				self.mle_parameters.current_pre_MLE_function, \
-				self.mle_parameters.current_post_MLE_function, \
-				self.mle_parameters.current_top_level_parameters, \
-				self.mle_parameters.current_gradient_specification] + \
+				self.cluster_parameters.pause_at_end] + \
+				list(mle_param_dict.values()) + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:
 			raise RuntimeError('input_datafile_paths or ' + \
@@ -539,9 +495,9 @@ class LLHolder(object):
 	'''
 	def __init__(self, mle_parameters, datafile_path, LL_list_folder):
 		self.mle_parameters = mle_parameters
-		self.profile_points = mle_parameters.current_profile_point_num
-		self.output_identifier = mle_parameters.output_identifier
-		self.fixed_param = mle_parameters.current_fixed_parameter	
+		self.profile_points = mle_parameters.get_option('profile_point_num')
+		self.output_identifier = mle_parameters.get_option('output_identifier')
+		self.fixed_param = mle_parameters.get_option('fixed_parameter')	
 		self.datafile_path = datafile_path
 		self.warning_line = ''
 		self.LL_file = os.path.join(LL_list_folder, \
@@ -551,12 +507,12 @@ class LLHolder(object):
 			('_'.join(['pre_cleanup_LL_file', self.output_identifier, \
 				self.fixed_param]) + '.csv'))
 		self.LL_df = pd.DataFrame()
-		self.x_tolerance = mle_parameters.current_x_tolerance
-		self.parameter_max_vals = mle_parameters.current_max_parameter_val_list
-		self.parameter_min_vals = mle_parameters.current_min_parameter_val_list
-		self.scaling_array = mle_parameters.current_scaling_val_list
-		self.logspace_parameters = mle_parameters.current_logspace_profile_list
-		self.parameter_names = mle_parameters.current_parameter_list
+		self.x_tolerance = mle_parameters.get_option('x_tolerance')
+		self.parameter_max_vals = mle_parameters.get_option('max_parameter_vals')
+		self.parameter_min_vals = mle_parameters.get_option('min_parameter_vals')
+		self.scaling_array = mle_parameters.get_option('scaling_array')
+		self.logspace_parameters = mle_parameters.get_option('logspace_profile_parameters')
+		self.parameter_names = mle_parameters.get_option('parameter_list')
 	def _add_vals(self, ll_param_df):
 		# adds values to self.LL_df from current_param_datafile
 		# if current LL is max, updates max_LL, ML_params, and
@@ -728,8 +684,7 @@ class LLProfile(LLHolder):
 		self.CI = mle_CI_functions.TwoSidedCI(pval, \
 			self.LL_df_cleaned, deg_freedom, self.fixed_param_MLE_val, \
 			self.fixed_param, CI_type, mle_folders, \
-			cluster_parameters, cluster_folders, self.output_identifier, \
-			mle_parameters)
+			cluster_parameters, cluster_folders, self.output_identifier)
 		self.CI.find_CI()
 		self.CI_dict = self.CI.get_CI()
 		if self.CI_dict:

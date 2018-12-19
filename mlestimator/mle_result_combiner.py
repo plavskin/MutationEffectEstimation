@@ -11,10 +11,8 @@ import copy
 import os
 import warnings as war
 import mle_functions
-import mle_CI_functions
-import mle_sim_functions
 from cluster_wrangler import cluster_functions
-from mlestimator.mle_filenaming_functions import generate_file_label, generate_filename
+from mlestimator.mle_filenaming_functions import generate_filename
 
 class SingleParamResultSummary(object):
 	# stores MLE estimates and CIs for a single parameter
@@ -118,8 +116,8 @@ class CombinedResultSummary(object):
 			'sim_based': copy.deepcopy(sim_parameters)}
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.cluster_folders = copy.deepcopy(cluster_folders)
-		self.runtime_percentile = mle_parameters.runtime_percentile
-		self.pval = mle_parameters.current_CI_pval
+		self.runtime_percentile = mle_parameters.get_option('runtime_percentile')
+		self.pval = mle_parameters.get_option('CI_pval')
 		self._create_combined_output_file()
 		self.max_LL = None
 		self.warnings = CombinedResultWarning()
@@ -137,7 +135,7 @@ class CombinedResultSummary(object):
 			# unfixed params together)
 		self.unfixed_mle_file = \
 			generate_filename(self.datafile_path_dict['asymptotic'], \
-			'1', mle_parameters.output_identifier, 'unfixed', 'data')
+			'1', mle_parameters.get_option('output_identifier'), 'unfixed', 'data')
 	def _create_completefile_dict(self):
 		self.CI_completefile_dict = {}
 		for CI_type in self.CI_type_list:
@@ -145,7 +143,7 @@ class CombinedResultSummary(object):
 			current_completefile = \
 				os.path.join(self.cluster_folders.get_path('completefile_path'), \
 					'_'.join([(CI_type + '_CI'), \
-						current_parameter_holder.output_identifier, \
+						current_parameter_holder.get_option('output_identifier'), \
 						'completefile.txt']))
 			self.CI_completefile_dict[CI_type] = current_completefile
 	def _check_CI_completeness(self):
@@ -158,7 +156,7 @@ class CombinedResultSummary(object):
 		# creates the name of the combined output file for the results
 		experiment_path = self.mle_folders.get_path('experiment_path')
 		self.combined_results_output_file = os.path.join(experiment_path, \
-			('_'.join(['MLE_output', self.mle_parameters.output_identifier]) + \
+			('_'.join(['MLE_output', self.mle_parameters.get_option('output_identifier')]) + \
 				'.csv'))
 	def _set_unfixed_param_data(self):
 		# gets data from self.unfixed_mle_file and uses it to update
@@ -353,7 +351,7 @@ class CombinedResultSummary(object):
 						parameter_holder.get_fitted_parameter_list(False)
 				elif CI_type == 'sim_based':
 					parameters_to_loop_over = \
-						parameter_holder.current_sim_CI_parameters
+						parameter_holder.get_option('sim_CI_parameters')
 				CI_completeness_tracker = \
 					cluster_functions.CompletenessTracker(parameters_to_loop_over)
 				if parameters_to_loop_over:

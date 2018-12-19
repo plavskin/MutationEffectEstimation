@@ -389,7 +389,7 @@ class TwoSidedCI(object):
 	# compiles two-sided CI
 	def __init__(self, pval, LL_df, deg_freedom, fixed_param_MLE_val, \
 		fixed_param, CI_type, mle_folders, cluster_parameters, \
-		cluster_folders, output_identifier, mle_parameters):
+		cluster_folders, output_identifier):
 		self.CI_sides = ['lower','upper']
 		self.CI_object_dictionary = dict()
 		self.CI_dictionary = dict()

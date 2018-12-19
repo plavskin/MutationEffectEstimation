@@ -16,8 +16,9 @@ def loop_over_modes(mle_parameters, cluster_parameters, cluster_folders, \
 	Handles all of MLE and (if necessary) simulation across modes, followed by
 	confidence interval identification
 	'''
-	mode_completeness_tracker = CompletenessTracker(mle_parameters.mode_list)
-	for current_mode in mle_parameters.mode_list:
+	mode_list = mle_parameters.get_input_option('mode')
+	mode_completeness_tracker = CompletenessTracker(mode_list)
+	for current_mode in mode_list:
 		##### RUN MLE #####
 		output_id_string = '_'.join([output_id_string_start, current_mode])
 		mle_parameters.set_mode(current_mode, output_id_string)
@@ -62,7 +63,7 @@ def loop_over_model_comparisons(mle_folders, sim_parameters, cluster_folders, \
 	'''
 	Calculates p-vals for comparisons of models
 	'''
-	model_sets_to_compare = sim_parameters.model_comparison_sets
+	model_sets_to_compare = sim_parameters.get_model_comparison_sets()
 	model_comparison_tracker = CompletenessTracker(model_sets_to_compare)
 	sim_folders = copy.deepcopy(mle_folders)
 	sim_folders.set_current_output_subfolder('sim')

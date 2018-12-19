@@ -11,26 +11,25 @@ function MLE_finder(key_list, value_list)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get input values
     input_value_dict = containers.Map(key_list,value_list);
-
     external_counter = str2num(input_value_dict('external_counter'));
-    combined_fixed_parameter_array = input_value_dict('combined_fixed_parameter_array');
-    combined_min_array_unscaled = input_value_dict('combined_min_array');
-    combined_max_array_unscaled = input_value_dict('combined_max_array');
-    combined_length_array = input_value_dict('combined_length_array');
+    combined_fixed_parameter_array = input_value_dict('tempfixed_parameter_bool');
+    combined_min_array_unscaled = input_value_dict('min_parameter_vals');
+    combined_max_array_unscaled = input_value_dict('max_parameter_vals');
+    combined_length_array = input_value_dict('profile_point_num_list');
     combined_position_array = cellfun(@str2num,input_value_dict('combined_position_array'));
-    combined_start_values_array_unscaled = input_value_dict('combined_start_values_array');
-    combined_scaling_array = input_value_dict('combined_scaling_array');
+    combined_start_values_array_unscaled = input_value_dict('starting_parameter_vals');
+    combined_scaling_array = input_value_dict('scaling_array');
     parameter_list = input_value_dict('parameter_list');
     output_file = input_value_dict('output_file');
     parallel_processors = input_value_dict('parallel_processors');
-    ms_positions = input_value_dict('ms_positions');
-    combined_profile_ub_array_unscaled = input_value_dict('combined_profile_ub_array');
-    combined_profile_lb_array_unscaled = input_value_dict('combined_profile_lb_array');
-    ms_grid_parameter_array = input_value_dict('ms_grid_parameter_array');
-    combined_logspace_parameters = input_value_dict('combined_logspace_parameters');
+    ms_positions = input_value_dict('multistart_positions');
+    combined_profile_ub_array_unscaled = input_value_dict('profile_upper_limits');
+    combined_profile_lb_array_unscaled = input_value_dict('profile_lower_limits');
+    ms_grid_parameter_array = input_value_dict('multistart_grid_parameters');
+    combined_logspace_parameters = input_value_dict('logspace_profile_parameters');
     global_mle_parameters = input_value_dict('top_level_parameters');
-    tolx_val = input_value_dict('tolx_val');
-    tolfun_val = input_value_dict('tolfun_val');
+    tolx_val = input_value_dict('x_tolerance');
+    tolfun_val = input_value_dict('fun_tolerance');
     pause_at_end = input_value_dict('pause_at_end');
     pre_MLE_function_name = input_value_dict('pre_MLE_function');
     post_MLE_function_name = input_value_dict('post_MLE_function');
