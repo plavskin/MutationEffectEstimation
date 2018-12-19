@@ -17,7 +17,8 @@ function sim_digaussian_test(key_list, value_list)
     % Use a random seed that's the sum of the current time in seconds and
         % external_counter, so that mutliple jobs starting at the same time have
         % different seeds
-    rng_shuffle = rng('shuffle');
+    rng('shuffle')
+    rng_shuffle = rng;
     random_seed = rng_shuffle.Seed + external_counter;
         % note that if random_seed exceeds 2^32, it maxes out
     if random_seed > 2^32
