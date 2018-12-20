@@ -20,14 +20,14 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 
 #####################################################################
 # Need to:
-# 1. Simulate data (using correct sim_mode, correct sim_params; don't forget to random-seed or seed with sim #)
-# 2. MLE data (using independent mle_mode, correct starting_params, correct fixed_params)
-	# (potentially with multiple independent mle_modes, starting_params, fixed_params for same data - need to be able to differentiate in output)
+# 1. Simulate data (using correct sim_model, correct sim_params; don't forget to random-seed or seed with sim #)
+# 2. MLE data (using independent mle_model, correct starting_params, correct fixed_params)
+	# (potentially with multiple independent mle_models, starting_params, fixed_params for same data - need to be able to differentiate in output)
 # 3. Compile a list of likelihoods from a given simulation * mle combo
 # 4. Potentially compare likelihoods from different simulation * mle combos and create lrt lists
 # 5. Potentially compare either likelihood list or lrt list to benchmark likelihood/LRT value, and calculate proportion of list BELOW benchmark
 # 6. 	a. For sim CI calculations, the results of #5 (using lrt comparison to LR given 'true' parameters) becomes likelihood profile point
-#		b. For model mode comparisons, the results of #5
+#		b. For model model comparisons, the results of #5
 #			(coming from sims with SIMPLE model and estimation with simple model vs complex model!?!?) are compared to LR given real data,
 #			with the comparison p-val becoming the p-val of extra parameters
 
@@ -39,12 +39,12 @@ war.filterwarnings("ignore", message="numpy.dtype size changed")
 class SimParameters(mle_functions.MLEParameters):
 	'''
 	This class inherits from mle_functions.MLEParameters, but allows
-	modification of the mode and parameter variable assignments
+	modification of the model and parameter variable assignments
 	initially made for running hypothesis testing MLE:
-		1.	Selecting only one of the modes orignally specified to be
+		1.	Selecting only one of the models orignally specified to be
 			kept by the completeness tracker
-		2.	Changing the starting_param_vals for that mode, if necessary
-		3.	If a parameter in a simulation mle mode is meant to be
+		2.	Changing the starting_param_vals for that model, if necessary
+		3.	If a parameter in a simulation mle model is meant to be
 			fixed, it is forced to be treated as a fixed parameter by
 			setting the min and max values, as well as the lower and
 			upper profile limits for that parameter,to its starting
@@ -76,44 +76,44 @@ class SimParameters(mle_functions.MLEParameters):
 		parameters in the MLE are fixed by setting their min and max
 		values equal to their starting vals, run all MLEs as
 		parameter_to_select (defaults to 'unfixed', but should be
-		changed to the name of the fixed parameter for the sim mode if
+		changed to the name of the fixed parameter for the sim model if
 		respecify_for_hypothesis_testing has been run with a specified
 		fixed_param) and set point_numbers_to_loop_over to the number of
 		sim reps
 		'''
 		self.current_option_dict['parameters_to_loop_over'] = [self.parameter_to_select]
 		self.point_numbers_to_loop_over = self.current_option_dict['simulation_repeats']
-	def _select_mode_to_keep(self, mode_name):
+	def _select_model_to_keep(self, model_name):
 		'''
-		Resets mode_completeness_tracker to keep track of only mode_name
+		Resets model_completeness_tracker to keep track of only model_name
 		'''
-		# reset mode_completeness_tracker
-		self.mode_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker([mode_name])
-		self.all_modes_complete = False
-	def _change_starting_param_vals(self, mode_name, new_starting_param_vals):
-		mode_idx = self.mode_list.index(mode_name)
-		self.input_val_dict['starting_parameter_vals'][mode_idx] = \
+		# reset model_completeness_tracker
+		self.model_completeness_tracker = cluster_wrangler.cluster_functions.CompletenessTracker([model_name])
+		self.all_models_complete = False
+	def _change_starting_param_vals(self, model_name, new_starting_param_vals):
+		model_idx = self.model_list.index(model_name)
+		self.input_val_dict['starting_parameter_vals'][model_idx] = \
 			new_starting_param_vals
-	def _set_permafixed_parameter(self, mode_name, fixed_param):
+	def _set_permafixed_parameter(self, model_name, fixed_param):
 		'''
-		Sets fixed_param to 'fixed' (i.e. not fitted by the MLE) in mode
-		mode_name
-		Sets profile upper and lower bounds for fixed_param in mode_name
+		Sets fixed_param to 'fixed' (i.e. not fitted by the MLE) in model
+		model_name
+		Sets profile upper and lower bounds for fixed_param in model_name
 		equal to starting val, so that profile point 1 is correctly
 		interpreted by MLE function as using the starting parameter value
 		Sets 'parameter_to_select' to fixed_param; this will be the only
 		parameter looped over during mle with these SimParameters
 		'''
-		mode_idx = self.mode_list.index(mode_name)
-		self.input_val_dict['permafixed_parameters'][mode_idx] = \
-			self.input_val_dict['permafixed_parameters'][mode_idx] + [fixed_param]
+		model_idx = self.model_list.index(model_name)
+		self.input_val_dict['permafixed_parameters'][model_idx] = \
+			self.input_val_dict['permafixed_parameters'][model_idx] + [fixed_param]
 		fixed_param_idx = \
-			self.input_val_dict['parameter_list'][mode_idx].index(fixed_param)
+			self.input_val_dict['parameter_list'][model_idx].index(fixed_param)
 		fixed_param_starting_val = \
-			self.input_val_dict['starting_parameter_vals'][mode_idx][fixed_param_idx]
-		self.input_val_dict['profile_upper_limits'][mode_idx][fixed_param_idx] = \
+			self.input_val_dict['starting_parameter_vals'][model_idx][fixed_param_idx]
+		self.input_val_dict['profile_upper_limits'][model_idx][fixed_param_idx] = \
 			fixed_param_starting_val
-		self.input_val_dict['profile_lower_limits'][mode_idx][fixed_param_idx] = \
+		self.input_val_dict['profile_lower_limits'][model_idx][fixed_param_idx] = \
 			fixed_param_starting_val
 		self.parameter_to_select = fixed_param
 	def _create_new_datafile_name_list(self, sim_key, within_batch_counter_call, \
@@ -154,15 +154,15 @@ class SimParameters(mle_functions.MLEParameters):
 			np.repeat(new_profile_pt_num, parameter_list_length)
 	def get_model_comparison_sets(self):
 		return(self.model_comparison_sets)
-	def set_mode(self, mode_name, output_identifier):
+	def set_model(self, model_name, output_identifier):
 		'''
-		Inherits from set_mode in mle_functions.MLEParameters, but sets
+		Inherits from set_model in mle_functions.MLEParameters, but sets
 		self.current_option_dict['profile_point_num'] (which, in
 		mle_functions.MLEParameters, is set in set_parameter method), as
 		well as self.current_option_dict['profile_point_num_list'], to
 		the number of simulation repeats
 		'''
-		super(SimParameters, self).set_mode(mode_name, \
+		super(SimParameters, self).set_model(model_name, \
 				output_identifier)
 		sim_repeat_num = self.current_option_dict['simulation_repeats']
 		self._change_profile_point_num(sim_repeat_num)
@@ -175,7 +175,7 @@ class SimParameters(mle_functions.MLEParameters):
 		does not reset self.current_profile_point_num to 1 if
 		parameter_name is 'unfixed'; in fact, doesn't set
 		self.current_profile_point_num at all, this is set in
-		self.set_mode
+		self.set_model
 		'''
 		self.current_option_dict['fixed_parameter'] = parameter_name
 		if parameter_name == 'unfixed':
@@ -205,27 +205,27 @@ class SimParameters(mle_functions.MLEParameters):
 		Allows simulation_repeats and profile_point_num to
 		be altered to new_repeat_num, which must be an int
 		'''
-		mode_num = len(self.mode_list)
-		self.input_val_dict['simulation_repeats'] = [new_repeat_num] * mode_num
-		# if mode has already been set, also change simulation_repeats,
+		model_num = len(self.model_list)
+		self.input_val_dict['simulation_repeats'] = [new_repeat_num] * model_num
+		# if model has already been set, also change simulation_repeats,
 			# profile_point_num, and profile_point_num_list
 		if hasattr(self, 'current_option_dict'):
 			self.current_option_dict['simulation_repeats'] = new_repeat_num
 			self._change_profile_point_num(new_repeat_num)
-	def respecify_for_hypothesis_testing(self, mode_name, fixed_param, starting_vals):
-		self._select_mode_to_keep(mode_name)
-		self._change_starting_param_vals(mode_name, starting_vals)
+	def respecify_for_hypothesis_testing(self, model_name, fixed_param, starting_vals):
+		self._select_model_to_keep(model_name)
+		self._change_starting_param_vals(model_name, starting_vals)
 		if fixed_param != 'unfixed':
-			self._set_permafixed_parameter(mode_name, fixed_param)
+			self._set_permafixed_parameter(model_name, fixed_param)
 		
 class SimKeyHolder(object):
 	'''
 	Stores individual simulation keys as a pandas Series
 	'''
-	def __init__(self, mode, starting_param_vals):
+	def __init__(self, model, starting_param_vals):
 		self.params = \
-			pd.Series([mode, starting_param_vals],
-				index = ['mode', 'starting_param_vals'])
+			pd.Series([model, starting_param_vals],
+				index = ['model', 'starting_param_vals'])
 	def get_params(self):
 		return(self.params)
 
@@ -233,13 +233,13 @@ class HypothesisKeyHolder(object):
 	'''
 	Stores individual hypothesis keys as a pandas Series
 	'''
-	def __init__(self, mode, fixed_param, starting_param_vals, sim_key):
+	def __init__(self, model, fixed_param, starting_param_vals, sim_key):
 		### ??? ###
 		# Insert a test that fixed_param is one string element?
 		### ??? ###
 		self.params = \
-			pd.Series([mode, fixed_param, starting_param_vals, sim_key],
-				index = ['mode', 'fixed_param', 'starting_param_vals', 'sim_key'])
+			pd.Series([model, fixed_param, starting_param_vals, sim_key],
+				index = ['model', 'fixed_param', 'starting_param_vals', 'sim_key'])
 	def get_params(self):
 		return(self.params)
 
@@ -281,22 +281,22 @@ class KeyOrganizer(object):
 		matching_keys = []
 		# identify indices that are within x_tolerance of key_holder
 			# for any columns that contain parameter values (first
-			# filter by columns containing the correct mode to avoid
+			# filter by columns containing the correct model to avoid
 			# nonsensical parameter value comparisons)
-		current_mode = key_holder.get_params()['mode']
-		self.sim_parameters.set_mode(current_mode, '')
+		current_model = key_holder.get_params()['model']
+		self.sim_parameters.set_model(current_model, '')
 		if len(self.key_df.index) > 0:
-			key_df_current_mode = \
-				self.key_df.loc[self.key_df['mode'] == current_mode]
+			key_df_current_model = \
+				self.key_df.loc[self.key_df['model'] == current_model]
 		else:
-			key_df_current_mode = self.key_df
-		if len(key_df_current_mode.index) > 0:
+			key_df_current_model = self.key_df
+		if len(key_df_current_model.index) > 0:
 			bound_array = list(key_holder.get_params()[self.param_val_colname])
 			param_df = \
 				pd.DataFrame(data = \
-					np.vstack(key_df_current_mode[self.param_val_colname].values), \
+					np.vstack(key_df_current_model[self.param_val_colname].values), \
 					columns = self.sim_parameters.get_complete_parameter_list(), \
-					index = key_df_current_mode.index.values.tolist())
+					index = key_df_current_model.index.values.tolist())
 			bound_abutting_point_identifier = \
 				mle_functions.BoundAbuttingPointRemover(param_df, \
 					self.sim_parameters.get_option('x_tolerance'), bound_array, \
@@ -308,10 +308,10 @@ class KeyOrganizer(object):
 			bound_abutting_point_indices = []
 		if len(bound_abutting_point_indices) > 0:
 			columns_to_keep = \
-				[current_col for current_col in key_df_current_mode.columns if \
+				[current_col for current_col in key_df_current_model.columns if \
 					current_col != self.param_val_colname]
 			subset_of_key_df = \
-				key_df_current_mode.loc[bound_abutting_point_indices][columns_to_keep]
+				key_df_current_model.loc[bound_abutting_point_indices][columns_to_keep]
 			for i in subset_of_key_df.index.values.tolist():
 				new_dict = key_holder.get_params().to_dict()
 				old_dict = subset_of_key_df.loc[i].to_dict()
@@ -383,13 +383,13 @@ class HypothesisTestingInfo(object):
 		self.hypotheses = ['H1', 'H0']
 		self.hypothesis_info = \
 			pd.DataFrame(columns = \
-				['mode', 'fixed_param', 'starting_param_vals', 'sim_key', \
+				['model', 'fixed_param', 'starting_param_vals', 'sim_key', \
 					'hypothesis_key'],
 				index = self.hypotheses)
 	def set_hypothesis_parameters(self, Hnum, hypothesis_key_holder, \
 		hypothesis_key_organizer):
 		'''
-		Sets the mode, fixed_param (None if no parameter is fixed) and
+		Sets the model, fixed_param (None if no parameter is fixed) and
 		starting_param_vals (None if default should be used) that will
 		be used for hypothesis Hnum ('H1' or 'H0')
 		'''
@@ -430,17 +430,17 @@ class HypothesisTestingInfo(object):
 		Returns HypothesisKeyHolder object corresponding to values in
 		self.hypothesis_info.loc[Hnum]
 		'''
-		current_mode = self.get_mode(Hnum)
+		current_model = self.get_model(Hnum)
 		current_fixed_param = self.get_fixed_param(Hnum)
 		current_starting_param_vals = self.get_starting_param_vals(Hnum)
 		current_sim_key = self.sim_key
-		current_hypothesis_key = HypothesisKeyHolder(current_mode, \
+		current_hypothesis_key = HypothesisKeyHolder(current_model, \
 			current_fixed_param, current_starting_param_vals, current_sim_key)
 		return(current_hypothesis_key)
 	def get_sim_key(self):
 		return(self.sim_key)
-	def get_mode(self, Hnum):
-		return(self._get_hypothesis_info(Hnum, 'mode'))
+	def get_model(self, Hnum):
+		return(self._get_hypothesis_info(Hnum, 'model'))
 	def get_fixed_param(self, Hnum):
 		return(self._get_hypothesis_info(Hnum, 'fixed_param'))
 	def get_starting_param_vals(self, Hnum):
@@ -481,30 +481,30 @@ class SimPreparer(object):
 		Creates a dictionary with a SimParameters object corresponding
 		to each hypothesis in hypothesis_testing_info; respecifies
 		SimParameters object for hypothesis testing, and sets its sim,
-		mode, and fixed_param
+		model, and fixed_param
 		'''
 		# It's important to keep sim_parameters object as attribute of
 			# LRCalculator so that the objects can be modified to keep
-			# track of modes and parameters
+			# track of models and parameters
 		self.sim_param_dict = dict()
 		for current_Hnum in self.hypothesis_list:
 			# respecify SimParameter object for each hypothesis
 			current_sim_params = copy.deepcopy(self.sim_parameters)
-			current_mode = self.hypothesis_testing_info.get_mode(current_Hnum)
+			current_model = self.hypothesis_testing_info.get_model(current_Hnum)
 			current_fixed_param = \
 				self.hypothesis_testing_info.get_fixed_param(current_Hnum)
 			current_starting_param_vals = \
 				self.hypothesis_testing_info.get_starting_param_vals(current_Hnum)
-			current_sim_params.respecify_for_hypothesis_testing(current_mode, \
+			current_sim_params.respecify_for_hypothesis_testing(current_model, \
 				current_fixed_param, current_starting_param_vals)
-			# set sim, mode, fixed_param for current_sim_params
+			# set sim, model, fixed_param for current_sim_params
 			current_h_key = \
 				self.hypothesis_testing_info.get_hypothesis_key(current_Hnum)
 			current_output_id = '_'.join([self.output_id_sim, current_Hnum, \
 				str(current_h_key)])
 			current_sim_params.set_sim(self.sim_key, \
 				self.within_batch_counter_call)
-			current_sim_params.set_mode(current_mode, current_output_id)
+			current_sim_params.set_model(current_model, current_output_id)
 			current_sim_params.set_parameter(current_fixed_param)
 			self.sim_param_dict[current_Hnum] = current_sim_params
 
@@ -580,7 +580,7 @@ class LLRCalculator(SimPreparer):
 		'''
 		current_sim_parameters = self.sim_param_dict[Hnum]
 		self._run_MLE(current_sim_parameters)
-		mle_complete = current_sim_parameters.check_completeness_within_mode()
+		mle_complete = current_sim_parameters.check_completeness_within_model()
 		if mle_complete:
 			self._compile_LL_list(Hnum, current_sim_parameters)
 	def _calculate_LLR(self):
@@ -668,7 +668,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		job_numbers = [x + 1 for x in \
 			list(range(sim_parameters.get_option('profile_point_num')))]
 		module = sim_parameters.get_option('module')
-		code_path = sim_parameters.get_option('mode_code_location')
+		code_path = sim_parameters.get_option('model_code_location')
 		parallel_processors = 1
 		output_extension = 'csv'
 		code_name = sim_parameters.get_option('simulator')
@@ -788,13 +788,13 @@ class SimRunner(SimPreparer):
 	def _submit_and_track_sim_job(self):
 		''' Submit and track current set of jobs '''
 		self.simulator.run_job_submission()
-		# track completeness within current mode
+		# track completeness within current model
 		sim_completefile = self.simulator.get_completefile_path()
 		self.sim_param_dict['H0'].update_parameter_completeness(sim_completefile)
-		# if all parameters for this mode are complete, update mode completeness
-		# this also updates completeness across modes
+		# if all parameters for this model are complete, update model completeness
+		# this also updates completeness across models
 		self.sim_completeness = \
-			self.sim_param_dict['H0'].check_completeness_within_mode()
+			self.sim_param_dict['H0'].check_completeness_within_model()
 	def submit_sim(self):
 		'''
 		If sim_key is 'original', copies original datafiles to
@@ -836,7 +836,7 @@ class FixedPointCDFvalCalculator(object):
 	out to be 1 that is meant to account for simulation noise and allows
 	for reasonable downstream fitting of curves to cdf values
 	'''
-	def __init__(self, mode_dict, fixed_param_dict, \
+	def __init__(self, model_dict, fixed_param_dict, \
 		fixed_param_val_dict, sim_parameters, sim_folders, \
 		additional_code_run_keys, additional_code_run_values, \
 		output_id_prefix, output_file, cluster_folders, cluster_parameters):
@@ -858,7 +858,7 @@ class FixedPointCDFvalCalculator(object):
 			'simulated': simulated_data_completeness_tracker}
 		self.llr_calculator_dict = dict()
 		self.hypothesis_testing_info_dict = dict()
-		self.mode_dict = mode_dict
+		self.model_dict = model_dict
 		self.fixed_param_dict = fixed_param_dict
 		self.fixed_param_val_dict = fixed_param_val_dict
 		self.additional_code_run_keys = additional_code_run_keys
@@ -872,7 +872,7 @@ class FixedPointCDFvalCalculator(object):
 		self.sim_param_dict['original'] = copy.deepcopy(sim_parameters)
 		self.sim_param_dict['original'].change_profile_pt_number(1)
 	def _get_starting_params(self, Hnum, current_sim_parameters):
-		current_sim_parameters.set_mode(self.mode_dict[Hnum], self.output_id_prefix)
+		current_sim_parameters.set_model(self.model_dict[Hnum], self.output_id_prefix)
 		current_sim_parameters.set_parameter(self.fixed_param_dict[Hnum])
 		parameter_names = current_sim_parameters.get_complete_parameter_list()
 		starting_vals = \
@@ -899,7 +899,7 @@ class FixedPointCDFvalCalculator(object):
 	def _generate_hypothesis_key_holder(self, Hnum, sim_key, \
 		starting_param_vals):
 		''' Generates HypothesisKeyHolder for Hnum with sim_key '''
-		current_key_holder = HypothesisKeyHolder(self.mode_dict[Hnum], \
+		current_key_holder = HypothesisKeyHolder(self.model_dict[Hnum], \
 			self.fixed_param_dict[Hnum], starting_param_vals, sim_key)
 		return(current_key_holder)
 	def _set_up_original_data(self):
@@ -915,7 +915,7 @@ class FixedPointCDFvalCalculator(object):
 			H0_starting_param_vals)
 		# create sim_key_holder and get sim_key from
 			# sim_key_organizer
-		sim_key_holder = SimKeyHolder(self.mode_dict['H1'], H1_starting_param_vals)
+		sim_key_holder = SimKeyHolder(self.model_dict['H1'], H1_starting_param_vals)
 		self.sim_key_organizer.set_key(sim_key_holder, sim_key)
 		# set up hypothesis testing info for original data
 		self._set_up_hypothesis_testing_info('original', H1_key_holder, \
@@ -925,9 +925,9 @@ class FixedPointCDFvalCalculator(object):
 		Returns MLE parameters from MLE on original data for
 		current_Hnum
 		'''
-		# set mode and fixed parameter in sim_parameters, get list
+		# set model and fixed parameter in sim_parameters, get list
 			# of parameter names
-		self.sim_param_dict['original'].set_mode(self.mode_dict[Hnum], \
+		self.sim_param_dict['original'].set_model(self.model_dict[Hnum], \
 			self.output_id_prefix)
 		self.sim_param_dict['original'].set_parameter(self.fixed_param_dict[Hnum])
 		parameter_names = self.sim_param_dict['original'].get_complete_parameter_list()
@@ -945,7 +945,7 @@ class FixedPointCDFvalCalculator(object):
 			# vals
 		H0_starting_param_vals = self._get_original_MLE_param_vals('H0')
 		# create sim_key_holder and get sim_key from sim_key_organizer
-		sim_key_holder = SimKeyHolder(self.mode_dict['H0'], \
+		sim_key_holder = SimKeyHolder(self.model_dict['H0'], \
 			H0_starting_param_vals)
 		sim_key = self.sim_key_organizer.get_key(sim_key_holder)
 		# create hypothesis_key_holder
@@ -1100,7 +1100,7 @@ class FixedPointCDFvalCalculator(object):
 class OneSidedSimProfiler(object):
 	'''
 	Calculates three sim-based cumulative density values on one side of
-	MLE of a fixed parameter with a given mode
+	MLE of a fixed parameter with a given model
 	To determine which point to calculate cumulative density vals at:
 		1. 	Calculate cdf val at asymptotic CI value
 		2. 	Taking cdf val from (1) as a cdf val on a normal curve,
@@ -1116,11 +1116,11 @@ class OneSidedSimProfiler(object):
 				cdf val from (2) as a cdf val on a normal curve, and
 				calculate the cdf val at that point
 	'''
-	def __init__(self, fixed_param_mle, asymptotic_CI_val, mode, fixed_param, \
+	def __init__(self, fixed_param_mle, asymptotic_CI_val, model, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
 		additional_code_run_values, output_id_prefix, cdf_bound, profile_pt_list, \
 		cluster_folders, cluster_parameters, profile_path):
-		self.mode_dict = {'H1': mode, 'H0': mode}
+		self.model_dict = {'H1': model, 'H0': model}
 		self.fixed_param_dict = {'H1': 'unfixed', 'H0': fixed_param}
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
@@ -1144,9 +1144,9 @@ class OneSidedSimProfiler(object):
 				index = self.profile_pt_list)
 		self.side_completeness = False
 		self.fixed_param_logspace_convert = \
-			self._get_logspace_bool(mode, fixed_param, self.sim_parameters)
+			self._get_logspace_bool(model, fixed_param, self.sim_parameters)
 		self.fixed_param_sim_number = \
-			self._get_sim_number(mode, self.sim_parameters)
+			self._get_sim_number(model, self.sim_parameters)
 #	def _convert_profile_pt_num(self, profile_pt):
 #		'''
 #		Converts profile_pt to an index that will be unique across both
@@ -1163,23 +1163,23 @@ class OneSidedSimProfiler(object):
 #				'less than asymptotic_CI_val for sim-based CI estimation ' + \
 #				'on ' + self.output_id_prefix + '; cannot detect profile side')
 #		return(profile_pt_converted)
-	def _get_logspace_bool(self, mode, fixed_param, sim_parameters):
+	def _get_logspace_bool(self, model, fixed_param, sim_parameters):
 		'''
 		Determines whether or not fixed_param is estimated in log space
 		(vs linear space)
 		'''
 		temp_sim_parameters = copy.deepcopy(sim_parameters)
-		temp_sim_parameters.set_mode(mode, self.output_id_prefix)
+		temp_sim_parameters.set_model(model, self.output_id_prefix)
 		current_logspace_parameters = \
 			temp_sim_parameters.get_option('logspace_profile_parameters')
 		param_in_logspace = fixed_param in current_logspace_parameters
 		return(param_in_logspace)
-	def _get_sim_number(self, mode, sim_parameters):
+	def _get_sim_number(self, model, sim_parameters):
 		'''
-		Gets number of sims to be performed for current mode
+		Gets number of sims to be performed for current model
 		'''
 		temp_sim_parameters = copy.deepcopy(sim_parameters)
-		temp_sim_parameters.set_mode(mode, self.output_id_prefix)
+		temp_sim_parameters.set_model(model, self.output_id_prefix)
 		return(temp_sim_parameters.get_option('profile_point_num'))
 	def _fixed_param_val_finder(self, current_fixed_param_val_unscaled, \
 		current_cdf_val, target_cdf_val, logspace_convert, sim_number):
@@ -1327,7 +1327,7 @@ class OneSidedSimProfiler(object):
 			self.output_id_prefix, self.fixed_param_dict['H0'], 'data')
 		current_fixed_param_val_dict = \
 			self.fixed_point_df.loc[profile_pt]['fixed_param_val_dict']
-		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.mode_dict, \
+		fixed_point_pval_calc = FixedPointCDFvalCalculator(self.model_dict, \
 			self.fixed_param_dict, current_fixed_param_val_dict, \
 			self.sim_parameters, self.sim_folders, \
 			self.additional_code_run_keys, self.additional_code_run_values, \
@@ -1379,11 +1379,11 @@ class TwoSidedProfiler(object):
 	Runs OneSidedSimProfiler on both upper and lower sides of mle value
 	of fixed parameter
 	'''
-	def __init__(self, fixed_param_mle, asymptotic_CI_dict, mode, fixed_param, \
+	def __init__(self, fixed_param_mle, asymptotic_CI_dict, model, fixed_param, \
 		sim_parameters, sim_folders, additional_code_run_keys, \
 		additional_code_run_values, output_id_prefix, cdf_bound, cluster_folders, \
 		cluster_parameters):
-		self.mode = mode
+		self.model = model
 		self.fixed_param = fixed_param
 		self.sim_parameters = sim_parameters
 		self.sim_folders = sim_folders
@@ -1434,7 +1434,7 @@ class TwoSidedProfiler(object):
 			asymptotic_CI_val = self.asymptotic_CI_dict[current_profile_side]
 			current_side_sim_profiler = \
 				OneSidedSimProfiler(self.fixed_param_mle, asymptotic_CI_val, \
-					self.mode, self.fixed_param, self.sim_parameters, \
+					self.model, self.fixed_param, self.sim_parameters, \
 					self.sim_folders, self.additional_code_run_keys, \
 					self.additional_code_run_values, self.output_id_prefix, \
 					self.cdf_bound, current_profile_pt_list, \
@@ -1451,7 +1451,7 @@ class TwoSidedProfiler(object):
 class ModelComparer(object):
 	'''
 	Runs comparisons of hypotheses with all unfixed parameters between
-	modes
+	models
 	'''
 	def __init__(self, model_list, sim_parameters, output_id_prefix, \
 		sim_folders, additional_code_run_keys, additional_code_run_values, \
@@ -1489,7 +1489,7 @@ class ModelComparer(object):
 		param_nums_by_model = {}
 		for current_model in model_list:
 			# check which parameters are in each model
-			self.sim_parameters.set_mode(current_model, self.output_id_prefix)
+			self.sim_parameters.set_model(current_model, self.output_id_prefix)
 			params_by_model[current_model] = \
 				self.sim_parameters.get_option('parameter_list')
 			param_nums_by_model[current_model] = \
@@ -1667,12 +1667,12 @@ def _write_fixed_pt_output(fixed_param, fixed_param_val, current_cdf_val, \
 		output_df.to_csv(path_or_buf = current_output_file, \
 			index = False)
 
-def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
+def generate_sim_based_profile_pts(model, sim_parameters, sim_folders, \
 	additional_code_run_keys, additional_code_run_values, output_id_prefix, \
 	combined_results, cluster_folders, cluster_parameters):
 		sim_MLEs_completefile = \
 			os.path.join(sim_folders.get_path('completefile_folder'), \
-				'_'.join(['mode', sim_parameters.get_option('current_mode'), \
+				'_'.join(['model', sim_parameters.get_option('current_model'), \
 					'sim_MLEs_complete']))
 		if not os.path.isfile(sim_MLEs_completefile):
 			cdf_bound = 1 - sim_parameters.get_option('CI_pval')/2
@@ -1688,7 +1688,7 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 					asymptotic_CI_dict = \
 						combined_results.get_CI_dict(fixed_param, 'asymptotic')
 					current_param_profiler = TwoSidedProfiler(fixed_param_mle, \
-						asymptotic_CI_dict, mode, fixed_param, sim_parameters, \
+						asymptotic_CI_dict, model, fixed_param, sim_parameters, \
 						sim_folders, additional_code_run_keys, \
 						additional_code_run_values, output_id_prefix, cdf_bound, \
 						cluster_folders, cluster_parameters)
@@ -1709,10 +1709,10 @@ def generate_sim_based_profile_pts(mode, sim_parameters, sim_folders, \
 				open(sim_MLEs_completefile,'a').close()
 		return(sim_MLEs_completefile)
 
-def generate_sim_based_mode_pval():
+def generate_sim_based_model_pval():
 	'''
 	Determines what the pval is of the original data's LL among
-	simulations of data using a given mode
+	simulations of data using a given model
 	'''
 	pass
 

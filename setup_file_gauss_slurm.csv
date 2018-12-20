@@ -3,7 +3,7 @@ variable name,value,type,explanation
 pathnames_and_user_info,,,
 username,username_here,str,username on cluster
 composite_data_folder,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
-code_folder,~/Documents/MutationEffectEstimation,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including model-specific code such as likelihood calculator)
+code_folder,~/Documents/MutationEffectEstimation,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
 temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
 ,,,
@@ -20,14 +20,14 @@ max_jobs_per_batch,10000,int,maximum number of jobs that can be submitted in a s
 general_mle_variables,,,
 input_datafile_keys,phenotype_file,str_list,list of variable names for input files that MLE program will look for
 input_datafile_values,phenotype_file.csv,str_list,list of files corresponding to each variable name listed in datafile_keys
-mode,gaussian_test,str_list,list of 'modes' in which MLE fitting happens separated by vertical bars ('|'); matlab code for performing MLE for a given mode should be called 'MLE_<mode_name>.m' and matlab code for simulating data for a given mode should be called 'sim_<mode_name>.m'
-parameter_list,mu;sigma,nested_str_list,list of parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list
-top_level_parameters,,nested_str_list,in the case of a model whose LL is estimated hierarchically (i.e. LL_calculator only fits a subset of the parameter list while internal functions fit the rest) this is a list of parameters in each mode of 'mode list' that is estimated at the topmost level of the model; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list. If same as parameters_by_mode (ie LL calculation is not hierarchical) can leave blank
-permafixed_parameters,,nested_str_list,parameters in each mode that should be permanently fixed to their starting values
-starting_parameter_vals,0;1,nested_float_list,list of mstarting values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
-min_parameter_vals,-10;.0001,nested_float_list,list of lower bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
-max_parameter_vals,10;100,nested_float_list,list of upper bound values for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
-multistart_positions,1,int_list,number of positions per dimension at which to start multistart (if 0 run fglobalsearch) separated by vertical bars ('|') for each mode
+model,gaussian_test,str_list,list of 'models' in which MLE fitting happens separated by vertical bars ('|')
+parameter_list,mu;sigma,nested_str_list,list of parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list
+top_level_parameters,,nested_str_list,in the case of a model whose LL is estimated hierarchically (i.e. LL_calculator only fits a subset of the parameter list while internal functions fit the rest) this is a list of parameters in each model of 'model list' that is estimated at the topmost level of the model; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list. If same as parameters_by_model (ie LL calculation is not hierarchical) can leave blank
+permafixed_parameters,,nested_str_list,parameters in each model that should be permanently fixed to their starting values
+starting_parameter_vals,0;1,nested_float_list,list of mstarting values for each of the parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list and parameters in same order as in parameters by model
+min_parameter_vals,-10;.0001,nested_float_list,list of lower bound values for each of the parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list and parameters in same order as in parameters by model
+max_parameter_vals,10;100,nested_float_list,list of upper bound values for each of the parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list and parameters in same order as in parameters by model
+multistart_positions,1,int_list,number of positions per dimension at which to start multistart (if 0 run fglobalsearch) separated by vertical bars ('|') for each model
 multistart_grid_parameters,mu;sigma,nested_str_list,list of parameters across which multistart selects grid points
 logspace_profile_parameters,sigma,nested_str_list,parameters whose profiles (and MLE runs!) should be done in log rather than in linear space
 scaling_array,0.16;0.25,nested_float_list,values that scale the approximate CI of each parameter to a consistent value (e.g. 1); for parameters estimated in logspace the scaling occurs after converting the parameter to logspace; so the distance between the natural log of the CI bounds should be scaled to the consistent value
@@ -35,24 +35,24 @@ x_tolerance,0.001,float_list,tolerance on ML-identified values in scaled and if 
 fun_tolerance,0.01,float_list,tolerance on ML-identified LL or gradient
 ,,,
 code_to_run,,,
-LL_calculator,LL_calculator_gaussian_test,str_list,list of function/module names that calculate negative log likelihood (and possibly gradient of -LL) for every mode separated by '|'
-simulator,sim_gaussian_test,str_list,list of function/module names that simulate data for every mode separated by '|'
-pre_MLE_function,pre_MLE_gaussian_test,str_list,list of function/module names that perform pre-MLE-fitting functions for every mode separated by '|'; if none leave blank
-post_MLE_function,,str_list,list of function/module names that perform post-MLE-fitting functions for every mode separated by '|'; if none leave blank
-gradient_specification,TRUE,bool_list,list of bools specifying whether or not LL_calculator returns a negative LL gradient for a given mode
-mode_code_location,~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim|~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim,str_list,absolute path to code that performs LL calculation simulation and any other necessary functions for every mode; modes separated by '|'
+LL_calculator,LL_calculator_gaussian_test,str_list,list of function/module names that calculate negative log likelihood (and possibly gradient of -LL) for every model separated by '|'
+simulator,sim_gaussian_test,str_list,list of function/module names that simulate data for every model separated by '|'
+pre_MLE_function,pre_MLE_gaussian_test,str_list,list of function/module names that perform pre-MLE-fitting functions for every model separated by '|'; if none leave blank
+post_MLE_function,,str_list,list of function/module names that perform post-MLE-fitting functions for every model separated by '|'; if none leave blank
+gradient_specification,TRUE,bool_list,list of bools specifying whether or not LL_calculator returns a negative LL gradient for a given model
+model_code_location,~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim|~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim,str_list,absolute path to code that performs LL calculation simulation and any other necessary functions for every model; models separated by '|'
 module,matlab,str,language in which LL calculation etc code is written (currently available: 'matlab'; later will include support for 'python')
 ,,,
 log_likelihood_profile_and_CI_variables,,,
 profile_point_num_list,10;10,nested_int_list,number of points to estimate fixed parameter MLE at for LL profile
-profile_lower_limits,-5;.001,nested_float_list,list of min values used in the LL for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
-profile_upper_limits,5;10,nested_float_list,list of max values used in the LL for each of the parameters in each mode of 'mode list'; parameters separated by semicolons and modes are separated by vertical bars; modes appear in same order as in mode list and parameters in same order as in parameters by mode
-CI_pval,0.05,float_list,p-val of CIs identified in each mode; modes are separated by vertical bars; modes appear in same order as in mode list
+profile_lower_limits,-5;.001,nested_float_list,list of min values used in the LL for each of the parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list and parameters in same order as in parameters by model
+profile_upper_limits,5;10,nested_float_list,list of max values used in the LL for each of the parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list and parameters in same order as in parameters by model
+CI_pval,0.05,float_list,p-val of CIs identified in each model; models are separated by vertical bars; models appear in same order as in model list
 runtime_percentile,95,float,percentile of runtimes to report from within each parameter's profile point run
-sim_CI_parameters,mu;sigma,nested_str_list,list of parameters within each mode which will get a simulation-based CI
-simulation_repeats,1000,int_list,number times data is simulated to calculate likelihood ratio distributions for hypothesis testing in each mode
-sim_mem,1750,float,memory (in Mb) needed to run a single simulation (not relevant on macosx mode)
-sim_time,15,float,time (in mins) alotted for running single simulation (not relevant on macosx mode)
+sim_CI_parameters,mu;sigma,nested_str_list,list of parameters within each model which will get a simulation-based CI
+simulation_repeats,1000,int_list,number times data is simulated to calculate likelihood ratio distributions for hypothesis testing in each model
+sim_mem,1750,float,memory (in Mb) needed to run a single simulation (not relevant on macosx model)
+sim_time,15,float,time (in mins) alotted for running single simulation (not relevant on macosx model)
 model_comparisons,,str,lists of sets of models to be compared; sets should be separated from each other by semicolons and models within a set should be separated from each other by colons. Parameter_names in one member of each set of models being compared must be a subset of the parameter names of the other member. Order of models in the set doesn't matter.
 ,,,
 mutation_effect_estimation_specific_variables,,,

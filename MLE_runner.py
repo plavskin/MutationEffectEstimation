@@ -191,14 +191,14 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 			output_id_string_start = rep
 
 			# run MLE and LL profile creation, as well as CI
-				# identification, for the current mode
-			mode_loop_completeness = mle_run_functions.loop_over_modes(mle_parameters, \
+				# identification, for the current model
+			model_loop_completeness = mle_run_functions.loop_over_models(mle_parameters, \
 				cluster_parameters, cluster_folders, mle_folders, \
 				experiment_path, additional_code_run_keys, \
 				additional_code_run_values, output_id_string_start, \
 				sim_parameters)
 			# run model comparisons
-			if mode_loop_completeness:
+			if model_loop_completeness:
 				model_comparison_completeness = \
 					mle_run_functions.loop_over_model_comparisons(mle_folders, \
 						sim_parameters, cluster_folders, cluster_parameters, \
@@ -206,7 +206,7 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 						additional_code_run_values)
 			# update current rep completeness
 			current_rep_completeness = \
-				mode_loop_completeness and model_comparison_completeness
+				model_loop_completeness and model_comparison_completeness
 			rep_completeness_tracker.switch_key_completeness(rep, \
 				current_rep_completeness)
 

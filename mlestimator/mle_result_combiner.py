@@ -90,7 +90,7 @@ class CombinedResultWarning(object):
 class CombinedResultSummary(object):
 	# stores, and writes, summary of MLE results
 	# Only to be run after initial MLE across profile points complete!
-	# Loops through parameters within a mode, checks max_LL in each
+	# Loops through parameters within a model, checks max_LL in each
 	# Once all LL_profiles are complete, if max_LL in at least one
 		# LL_profile is not unfixed_LL, throws warning, recalculates
 		# LL_profiles with new max_LL
@@ -99,10 +99,10 @@ class CombinedResultSummary(object):
 	#	- identify position at which sims need to happen
 	#		- run sims
 	#			- get CIs from sims
-	# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
+	# keep track of asymptotic and sim CIs using completeness tracker across parameters within model
 	# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
 	#	create summary file
-	# keep track of summary files for each mode; once those are complete, stop running current folder
+	# keep track of summary files for each model; once those are complete, stop running current folder
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
 		cluster_folders, sim_parameters):
 		self.datafile_path_dict = \
@@ -268,21 +268,21 @@ class CombinedResultSummary(object):
 	def _create_combined_df(self):
 		# creates combined_results_df and adds line for runtime and general warnings
 		# include a line containing the mean self.runtime_quantile-th
-			# time within the mode, as well as the self.pval-based CI
+			# time within the model, as well as the self.pval-based CI
 			# on this time, and the general warning line that applies
-			# the current mode
+			# the current model
 		time_string = '_'.join(['avg', (str(self.runtime_percentile) + 'th'), \
 			'percentile', 'runtime', 'across', 'profile', 'points', 'in', 'hrs'])
 		# get runtime mean and CIs
 		mean_runtime_quant = np.mean(self.runtime_quant_list)
 		runtime_CI = self._get_runtime_CI()
-		# get warning line for current mode
-		mode_warning_line = self.warnings.get_warning_line()
+		# get warning line for current model
+		model_warning_line = self.warnings.get_warning_line()
 		# combine data into dictionary that can be added to df
 		current_results_line = SingleParamResultSummary()
 		current_results_line.set_max_LL(self.max_LL)
 		current_results_line.set_param_MLE(mean_runtime_quant)
-		current_results_line.set_warnings,(mode_warning_line)
+		current_results_line.set_warnings,(model_warning_line)
 		current_results_line.set_CI('asymptotic', runtime_CI)
 		current_results_dict = current_results_line.get_contents()
 		# make a line to write to combined_results_df
@@ -297,7 +297,7 @@ class CombinedResultSummary(object):
 				self.combined_results_df.append(mle_df, sort = False)
 	def _initialize_asymptotic_results(self):
 		# check whether initial mle has been completed
-		mle_complete = self.mle_parameters.check_completeness_within_mode()
+		mle_complete = self.mle_parameters.check_completeness_within_model()
 		if mle_complete:
 			self._set_unfixed_param_data()
 			# check whether initialization has been run
@@ -310,13 +310,13 @@ class CombinedResultSummary(object):
 			else:
 #				self._check_and_update_ML(self.unfixed_ll_param_df,'unfixed')
 				# create initial LL profiles and check whether one of
-					# them contains a LL higher than the 'unfixed' mode
+					# them contains a LL higher than the 'unfixed' model
 				self._create_initial_LL_profiles()
 				# create self,combined_results_df, using parameter
 					# names as index names; calculate runtime
 					# parameters and write line to
 					# self.combined_results_df, including general
-					# warnings for the current mode
+					# warnings for the current model
 				self._create_combined_df()
 				# update LL profiles if an ML point was identified
 					# that's not unfixed_ll_parameters
@@ -440,9 +440,9 @@ class CombinedResultSummary(object):
 
 
 
-			# keep track of asymptotic and sim CIs using completeness tracker across parameters within mode
+			# keep track of asymptotic and sim CIs using completeness tracker across parameters within model
 		# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
 		#	create summary file
-		# keep track of summary files for each mode; once those are complete, stop running current folder
+		# keep track of summary files for each model; once those are complete, stop running current folder
 		##
 

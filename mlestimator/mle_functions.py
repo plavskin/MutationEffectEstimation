@@ -98,14 +98,14 @@ class FolderManager(object):
 
 class MLEParameters(object):
 	def __init__(self, parameter_input):
-		self.mode_list = parameter_input["mode"]
-		self.mode_completeness_tracker = \
-			cluster_functions.CompletenessTracker(self.mode_list)
-		self.all_modes_complete = False
+		self.model_list = parameter_input["model"]
+		self.model_completeness_tracker = \
+			cluster_functions.CompletenessTracker(self.model_list)
+		self.all_models_complete = False
 		self.input_val_dict = \
 			copy.deepcopy(parameter_input.get_parameter_dict())
 		required_mle_key_list = ['input_datafile_keys', \
-			'input_datafile_values', 'mode', 'parameter_list', \
+			'input_datafile_values', 'model', 'parameter_list', \
 			'top_level_parameters', 'permafixed_parameters', \
 			'starting_parameter_vals', 'min_parameter_vals', \
 			'max_parameter_vals', 'multistart_positions', \
@@ -192,21 +192,21 @@ class MLEParameters(object):
 					subval = np.array(subval)
 			output_dict[key] = copy.copy(subval)
 		return(output_dict)
-	def set_mode(self, mode_name, output_identifier):
+	def set_model(self, model_name, output_identifier):
 		# for all MLE_parameter attributes, retrieves the parameter or
-			# list of parameters corresponding to the current mode
-		self.current_mode_complete = False
+			# list of parameters corresponding to the current model
+		self.current_model_complete = False
 		# output_identifier is a string that will be included in filenames
 		current_option_dict = {'output_identifier': output_identifier, \
-			'current_mode': mode_name}		
-		mode_idx = self.mode_list.index(mode_name)
-		number_of_modes = len(self.input_val_dict['mode'])
+			'current_model': model_name}		
+		model_idx = self.model_list.index(model_name)
+		number_of_models = len(self.input_val_dict['model'])
 		self.current_option_dict = self._select_sublist(self.input_val_dict, \
-			current_option_dict, mode_idx, number_of_modes)
-		# check that each parameter for current mode is in parameter_list once
+			current_option_dict, model_idx, number_of_models)
+		# check that each parameter for current model is in parameter_list once
 		if len(self.current_option_dict['parameter_list']) > \
 			len(set(self.current_option_dict['parameter_list'])):
-			raise AttributeError('Parameter list for mode ' + mode_name + \
+			raise AttributeError('Parameter list for model ' + model_name + \
 				'contains non-unique parameters: ' + \
 				str(self.current_option_dict['parameter_list']))
 		# identify list of parameters that are permanently fixed
@@ -226,14 +226,14 @@ class MLEParameters(object):
 	def get_input_option(self, key):
 		return(self.input_val_dict[key])
 	def get_fitted_parameter_list(self, include_unfixed):
-		# get list of parameters to loop over for current mode
+		# get list of parameters to loop over for current model
 		parameters_to_return = \
 			copy.copy(self.current_option_dict['parameters_to_loop_over'])
 		if not include_unfixed:
 			parameters_to_return.remove('unfixed')
 		return(parameters_to_return)
 	def get_complete_parameter_list(self):
-		# get list of parameters in current mode
+		# get list of parameters in current model
 		return(self.current_option_dict['parameter_list'])
 	def set_parameter(self,parameter_name):
 		# set current parameter, number of likelihood profile points
@@ -271,17 +271,17 @@ class MLEParameters(object):
 		# checks whether jobs for current parameter are all complete
 		self.parameter_completeness_tracker.update_key_status( \
 			self.current_option_dict['fixed_parameter'], completefile)
-	def check_completeness_within_mode(self):
-		# checks whether all parameters within mode are complete
-		# change mode completeness status accordingly
-		self.current_mode_complete = \
+	def check_completeness_within_model(self):
+		# checks whether all parameters within model are complete
+		# change model completeness status accordingly
+		self.current_model_complete = \
 			self.parameter_completeness_tracker.get_completeness()
-		self.mode_completeness_tracker.switch_key_completeness( \
-			self.current_option_dict['current_mode'], self.current_mode_complete)
-		return(self.current_mode_complete)
-	def check_completeness_across_modes(self):
-		self.all_modes_complete = self.mode_completeness_tracker.get_completeness()
-		return(self.all_modes_complete)
+		self.model_completeness_tracker.switch_key_completeness( \
+			self.current_option_dict['current_model'], self.current_model_complete)
+		return(self.current_model_complete)
+	def check_completeness_across_models(self):
+		self.all_models_complete = self.model_completeness_tracker.get_completeness()
+		return(self.all_models_complete)
 
 class MLEstimation(cluster_functions.CodeSubmitter):
 	'''
@@ -724,14 +724,14 @@ class LLProfile(LLHolder):
 def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 	additional_code_run_keys, additional_code_run_values, \
 	include_unfixed_parameter, input_data_folder):
-	# Handles all of MLE for a particular mode, including confidence
+	# Handles all of MLE for a particular model, including confidence
 		# interval identification
-	# Loops through parameters for particular mode, finding ML
+	# Loops through parameters for particular model, finding ML
 		# parameters at every fixed parameter value
 	# Compiles results together to find asymptotic CI values (based on
 		# chi-sq distribution of 2*log(LR))
 	# Runs through simulations to find simulation-based CI values
-	# mle_parameters must have the mode already set
+	# mle_parameters must have the model already set
 	parameters_to_loop_over = \
 		mle_parameters.get_fitted_parameter_list(include_unfixed_parameter)
 	for current_fixed_parameter in parameters_to_loop_over:
@@ -743,12 +743,12 @@ def run_MLE(mle_parameters, cluster_parameters, cluster_folders, mle_folders, \
 			additional_code_run_values, input_data_folder)
 		# submit and track current set of jobs
 		ml_estimator.run_job_submission()
-		# track completeness within current mode
+		# track completeness within current model
 		mle_completefile = ml_estimator.get_completefile_path()
 		mle_parameters.update_parameter_completeness(mle_completefile)
-		# if all parameters for this mode are complete, update mode completeness
-		# this also updates completeness across modes
-		mle_parameters.check_completeness_within_mode()
+		# if all parameters for this model are complete, update model completeness
+		# this also updates completeness across models
+		mle_parameters.check_completeness_within_model()
 
 
 

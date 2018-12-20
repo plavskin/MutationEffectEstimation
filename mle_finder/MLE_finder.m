@@ -34,8 +34,8 @@ function MLE_finder(key_list, value_list)
     pre_MLE_function_name = input_value_dict('pre_MLE_function');
     post_MLE_function_name = input_value_dict('post_MLE_function');
     gradient_specification = input_value_dict('gradient_specification');
-    mode_code_location = input_value_dict('mode_code_location');
-    addpath(genpath(mode_code_location));
+    model_code_location = input_value_dict('model_code_location');
+    addpath(genpath(model_code_location));
     % process parameter name arrays into bool arrays
     combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
