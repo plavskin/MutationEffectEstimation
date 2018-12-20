@@ -32,7 +32,8 @@ class FolderManager(object):
 		self.path_dict['LL_list_path'] = \
 			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
 		self.path_dict['CI_bound_path'] = \
-			os.path.join(self.path_dict['experiment_path'],'CI_bounds')
+			os.path.join(cluster_parameters.temp_storage_path, \
+				experiment_folder_name, 'CI_bounds')
 		self.setup_complete_file = \
 			os.path.join(self.path_dict['completefile_folder'], \
 			'mle_folder_setup_complete.txt')
