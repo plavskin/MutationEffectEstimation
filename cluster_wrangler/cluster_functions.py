@@ -198,23 +198,23 @@ class ClusterParameters(object):
 		required_key_list = ['pipeline_path', 'composite_data_path', \
 			'max_mem', 'max_time', 'username', 'user_email', 'starting_mem', \
 			'starting_time', 'temp_storage_folder', 'max_char_num', \
-			'max_jobs_per_batch', 'cluster_architecture']
+			'max_jobs_per_batch', 'workload_manager']
 		super(ClusterParameters, self).__init__(parameter_list, \
 			required_key_list)
-		if self.input_val_dict['cluster_architecture'].lower() == 'macosx':
+		if self.input_val_dict['workload_manager'].lower() == 'macosx':
 			self.input_val_dict['pause_at_end'] = False
 		else:
 			self.input_val_dict['pause_at_end'] = True
-		self._set_cluster_architecture_properties()
+		self._set_workload_manager_properties()
 		self.input_val_dict['current_mem'] = self.input_val_dict['starting_mem']
 		self.input_val_dict['current_time'] = \
 			self.input_val_dict['starting_time']
-	def _set_cluster_architecture_properties(self):
-		""" sets properties related to the cluster architecture """
-		if self.input_val_dict['cluster_architecture'].lower() == 'slurm':
+	def _set_workload_manager_properties(self):
+		""" sets properties related to the workload manager """
+		if self.input_val_dict['workload_manager'].lower() == 'slurm':
 			self.job_submission_manager = \
 				cluster_sub_functions.SlurmManager(copy.deepcopy(self))
-		elif self.input_val_dict['cluster_architecture'].lower() == 'macosx':
+		elif self.input_val_dict['workload_manager'].lower() == 'macosx':
 			self.job_submission_manager = \
 				cluster_sub_functions.MacOSXManager(copy.deepcopy(self))
 		# if cluster determines max_jobs_per_batch that is smaller than
@@ -812,13 +812,13 @@ class MatlabInputProcessor(object):
 	def set_code_run_argument_string(self, code_input_arguments):
 		""" Gets a list of arguments and creates a submission string from them """
 		self.code_run_arguments = '\"\",\"\"'.join(code_input_arguments)
-	def set_full_code_run_string(self, cluster_architecture):
-		if cluster_architecture.lower() == 'slurm':
+	def set_full_code_run_string(self, workload_manager):
+		if workload_manager.lower() == 'slurm':
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
 				'\"\");exit\"'
-		elif cluster_architecture.lower() == 'macosx':
+		elif workload_manager.lower() == 'macosx':
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'try ' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \

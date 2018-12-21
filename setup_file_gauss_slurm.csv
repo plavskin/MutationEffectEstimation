@@ -8,7 +8,7 @@ temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute 
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
 ,,,
 job_submission_variables,,,
-cluster_architecture,slurm,str,kind of job scheduler the HPC cluster uses/kind of operating system computer uses (currently only 'slurm' and 'macosx' supported)
+workload_manager,macosx,str,kind of job scheduler the computer or HPC cluster uses (currently only 'slurm' and 'macosx' supported)
 max_char_num,4096,int,maximum number of characters in a list of job arrays to be submitted on cluster (not relevant on macosx mode)
 parallel_processors,3,int,parallel processors to use; do NOT set to >1 for processing on MacOSX
 starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant on macosx mode)

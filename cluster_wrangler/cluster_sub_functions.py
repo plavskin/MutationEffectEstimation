@@ -339,7 +339,7 @@ class MacOSXManager(JobSubmissionManager):
 		self.max_sub_batches_in_one_run = float('Inf')
 		self.sh_filename_suffix = '.sh'
 			# job_name needs to be part of this filename in order for job tracking to work
-		# specify size of an empty errorfile on this cluster architecture
+		# specify size of an empty errorfile on this workload manager
 		self.empty_errorfile_size = 0
 		self.within_batch_counter = 'ARRAY_TASK_ID'
 	def _write_to_output_file(self, str_list, output_path):
@@ -496,7 +496,7 @@ class SlurmManager(JobSubmissionManager):
 				cluster_parameters.get_input_option['max_jobs_per_batch'])
 		# at the request of hpc staff, don't use all available queue space
 		self.max_job_proportion = 0.95
-		# specify size of an empty errorfile on this cluster architecture
+		# specify size of an empty errorfile on this workload manager
 		self.empty_errorfile_size = 0
 		# SLURM-based cluster doesn't appear to slow down as a penalty for
 			# submitting jobs one-by-one so don't reset
