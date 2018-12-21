@@ -162,8 +162,10 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 #			current_gridpower = parameter_list["starting_gridpower"]+(rep_float-1)
 
 			# set memory and time for current run
-			cluster_parameters.set_current_time(rep_float*cluster_parameters.starting_time)
-			cluster_parameters.set_current_mem(rep_float*cluster_parameters.starting_mem)
+			cluster_parameters.set_current_time(rep_float * \
+				cluster_parameters.get_input_option['starting_time'])
+			cluster_parameters.set_current_mem(rep_float * \
+				cluster_parameters.get_input_option['starting_mem'])
 
 			# set subfolder to be in current rep
 			mle_folders.set_current_output_subfolder('rep_' + rep)

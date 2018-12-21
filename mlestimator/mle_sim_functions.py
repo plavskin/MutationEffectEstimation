@@ -723,7 +723,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			self.value_list = [self.within_batch_counter_call, \
 				self.sim_parameters.get_option('starting_parameter_vals'), \
 				self.sim_parameters.get_option('parameter_list'), \
-				self.cluster_parameters.pause_at_end] + \
+				self.cluster_parameters.get_input_option['pause_at_end']] + \
 				self.original_input_datafile_paths + self.input_datafile_paths \
 				+ self.additional_code_run_values
 		else:

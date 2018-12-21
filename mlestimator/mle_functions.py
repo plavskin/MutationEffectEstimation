@@ -17,22 +17,24 @@ class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
 		experiment_folder_name):
 		self.path_dict = {}
+		temp_storage_path = \
+			cluster_parameters.get_input_option['temp_storage_path']
 		self.experiment_folder_name = experiment_folder_name
 		self.path_dict['experiment_path'] = \
-			os.path.join(cluster_parameters.composite_data_path, \
+			os.path.join(\
+				cluster_parameters.get_input_option['composite_data_path'], \
 				experiment_folder_name)
-	#	self.path_dict['sim_output_path'] = \
-	#		os.path.join(cluster_parameters.temp_storage_path, \
-	#			experiment_folder_name, 'simulated_phenotypes')
 		self.path_dict['MLE_output_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
+			os.path.join(\
+				temp_storage_path, \
 				experiment_folder_name,'MLE_output')
 		self.path_dict['completefile_folder'] = \
 			cluster_folders.get_path('completefile_path')
 		self.path_dict['LL_list_path'] = \
 			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
 		self.path_dict['CI_bound_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
+			os.path.join(\
+				temp_storage_path, \
 				experiment_folder_name, 'CI_bounds')
 		self.setup_complete_file = \
 			os.path.join(self.path_dict['completefile_folder'], \
@@ -42,7 +44,8 @@ class FolderManager(object):
 	#		os.path.join(cluster_parameters.temp_storage_path, \
 	#			'MLE_sim_outputs')
 		self.path_dict['sim_output_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
+			os.path.join(\
+				temp_storage_path, \
 				experiment_folder_name, 'simulated_phenotypes')
 		self.path_dict['sim_profile_fixed_pt_folder'] = \
 			os.path.join(self.path_dict['LL_list_path'], \
@@ -51,17 +54,21 @@ class FolderManager(object):
 #			os.path.join(self.path_dict['LL_list_path'], \
 #				'sim_output_list_folder')
 		self.path_dict['sim_output_list_folder'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
+			os.path.join(temp_storage_path, \
 				experiment_folder_name, 'sim_output_list_folder')
 		self.path_dict['key_organizer_home_folder'] = \
 			os.path.join(self.path_dict['experiment_path'],'key_organizers')
 		self.path_dict['key_organizer_folder'] = \
-			os.path.join(cluster_parameters.temp_storage_path, \
+			os.path.join(temp_storage_path, \
 				experiment_folder_name, 'key_organizers')
 		self.path_dict['mle_finder_folder'] = \
-			os.path.join(cluster_parameters.pipeline_path, 'mle_finder')
+			os.path.join(\
+				cluster_parameters.get_input_option['pipeline_path'], \
+				'mle_finder')
 		self.path_dict['CI_finder_folder'] = \
-			os.path.join(cluster_parameters.pipeline_path, 'CI_finder')
+			os.path.join(\
+				cluster_parameters.get_input_option['pipeline_path'], \
+				'CI_finder')
 		# create folders in path_dict
 		self._set_up_folders()
 		# set up organizer files for sim
@@ -96,14 +103,12 @@ class FolderManager(object):
 		else:
 			self.path_dict['current_output_subfolder'] = self.path_dict['MLE_output_path']
 
-class MLEParameters(object):
+class MLEParameters(cluster_functions.InputParameterHolder):
 	def __init__(self, parameter_input):
 		self.model_list = parameter_input["model"]
 		self.model_completeness_tracker = \
 			cluster_functions.CompletenessTracker(self.model_list)
 		self.all_models_complete = False
-		self.input_val_dict = \
-			copy.deepcopy(parameter_input.get_parameter_dict())
 		required_mle_key_list = ['input_datafile_keys', \
 			'input_datafile_values', 'model', 'parameter_list', \
 			'top_level_parameters', 'permafixed_parameters', \
@@ -116,21 +121,10 @@ class MLEParameters(object):
 		required_CI_key_list = ['profile_point_num_list', \
 			'profile_lower_limits', 'profile_upper_limits', 'CI_pval', \
 			'runtime_percentile']
-		self._check_input(required_mle_key_list)
-		self._check_input(required_CI_key_list)
-	def _check_input(self, keys_to_check_for):
-		'''
-		Checks that keys_to_check_for are keys in self.input_val_dict
-		If not, raises an error
-		'''
-		input_val_dict_keys = list(self.input_val_dict.keys())
-		keys_in_dict = \
-			set(keys_to_check_for).issubset(set(input_val_dict_keys))
-		if not keys_in_dict:
-			missing_keys = \
-				set(keys_to_check_for).difference(set(input_val_dict_keys))
-			raise AttributeError('The following keys were not specified: ' + \
-				str(missing_keys) + '; they are probably missing from setup file')
+		complete_required_key_list = \
+			required_mle_key_list + required_CI_key_list
+		super(MLEParameters, self).__init__(parameter_list, \
+			complete_required_key_list)
 	def _id_parameters_to_loop_over(self):
 		# identify which parameters need to be looped through in MLE
 			# i.e. fitted parameters that MLE needs to be performed on
@@ -148,50 +142,6 @@ class MLEParameters(object):
 		self.point_numbers_to_loop_over = np.append([1], \
 			self.current_option_dict['profile_point_num_list']\
 				[parameters_to_loop_over_bool])
-	def _select_sublist(self, input_dict, output_dict, index_to_select, \
-		expected_list_length):
-		'''
-		Adds to output_dict a list of keys taken from input_dict, where
-		each key's corresponding value is either:
-		 - 	the corresponding value, val, in input_dict, if it is not a
-		 	list (converting empty strings to None)
-		 - 	if val is a list and its length is equal to
-		 	expected_list_length,the index_to_select-th element from the
-		 	value in input_dict, val[index_to_select]
-		 - 	if val[index_to_select] is a list of ints and/or floats, it
-		 	is converted to a numpy array
-		Returns output_dict
-		'''
-		for key, val in input_dict.iteritems():
-			if isinstance(val, list):
-				if len(val) == expected_list_length:
-					subval = val[index_to_select]
-				else:
-					raise AttributeError(key + ' expected length is ' + \
-						str(expected_list_length) + ', but instead its ' + \
-						'length is ' + str(len(val)) + ', and its value is ' + \
-						str(val))
-			else:
-				if val == '':
-					subval = None
-				else:
-					subval = val
-			if isinstance(subval, basestring):
-				if subval == '':
-					subval = None
-			elif isinstance(subval, list):
-				if subval == ['']:
-					subval = []
-#				if len(subval) != expected_sublist_length:
-#					raise AttributeError(key + ' expected sublist length is ' + \
-#						str(expected_sublist_length) + ', but instead its ' + \
-#						'  length is ' + str(len(subval)) ', and its value is ' + \
-#						str(subval))
-				elif all(isinstance(x, int) or isinstance(x, float) \
-					for x in subval):
-					subval = np.array(subval)
-			output_dict[key] = copy.copy(subval)
-		return(output_dict)
 	def set_model(self, model_name, output_identifier):
 		# for all MLE_parameter attributes, retrieves the parameter or
 			# list of parameters corresponding to the current model
@@ -307,8 +257,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		code_name = 'MLE_finder'
 		additional_beginning_lines_in_job_sub = []
 		additional_end_lines_in_job_sub = []
-		initial_sub_time = cluster_parameters.current_time
-		initial_sub_mem = cluster_parameters.current_mem
+		initial_sub_time = cluster_parameters.get_input_option['current_time']
+		initial_sub_mem = cluster_parameters.get_input_option['current_mem']
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.within_batch_counter_call = \
@@ -356,7 +306,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 						# interpret it as an array of the correct length
 						# with the same value repeated
 				self.output_filename, \
-				self.cluster_parameters.pause_at_end] + \
+				self.cluster_parameters.get_input_option['pause_at_end']] + \
 				list(mle_param_dict.values()) + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:

@@ -123,43 +123,108 @@ class Parameters(object):
 		for name in self.parameters:
 			print(self.parameters[name].concat_to_string())
 
+class InputParameterHolder(object):
+	def __init__(self, parameter_input, required_key_list):
+		self.input_val_dict = \
+			copy.deepcopy(parameter_input.get_parameter_dict())
+		self._check_input(required_key_list)
+	def _check_input(self, keys_to_check_for):
+		'''
+		Checks that keys_to_check_for are keys in self.input_val_dict
+		If not, raises an error
+		'''
+		input_val_dict_keys = list(self.input_val_dict.keys())
+		keys_in_dict = \
+			set(keys_to_check_for).issubset(set(input_val_dict_keys))
+		if not keys_in_dict:
+			missing_keys = \
+				set(keys_to_check_for).difference(set(input_val_dict_keys))
+			raise AttributeError('The following keys were not specified: ' + \
+				str(missing_keys) + '; they are probably missing from setup file')
+	def _select_sublist(self, input_dict, output_dict, index_to_select, \
+		expected_list_length):
+		'''
+		A method to create a dictionary using same keys as input_dict,
+		but selecting a single index from the lists therein
+		Adds to output_dict a list of keys taken from input_dict, where
+		each key's corresponding value is either:
+		 - 	the corresponding value, val, in input_dict, if it is not a
+		 	list (converting empty strings to None)
+		 - 	if val is a list and its length is equal to
+		 	expected_list_length,the index_to_select-th element from the
+		 	value in input_dict, val[index_to_select]
+		 - 	if val[index_to_select] is a list of ints and/or floats, it
+		 	is converted to a numpy array
+		Returns output_dict
+		'''
+		for key, val in input_dict.iteritems():
+			if isinstance(val, list):
+				if len(val) == expected_list_length:
+					subval = val[index_to_select]
+				else:
+					raise AttributeError(key + ' expected length is ' + \
+						str(expected_list_length) + ', but instead its ' + \
+						'length is ' + str(len(val)) + ', and its value is ' + \
+						str(val))
+			else:
+				if val == '':
+					subval = None
+				else:
+					subval = val
+			if isinstance(subval, basestring):
+				if subval == '':
+					subval = None
+			elif isinstance(subval, list):
+				if subval == ['']:
+					subval = []
+#				if len(subval) != expected_sublist_length:
+#					raise AttributeError(key + ' expected sublist length is ' + \
+#						str(expected_sublist_length) + ', but instead its ' + \
+#						'  length is ' + str(len(subval)) ', and its value is ' + \
+#						str(subval))
+				elif all(isinstance(x, int) or isinstance(x, float) \
+					for x in subval):
+					subval = np.array(subval)
+			output_dict[key] = copy.copy(subval)
+		return(output_dict)
+	def get_input_option(self, key):
+		return(self.input_val_dict[key])
+	def get_input_dict(self, key):
+		return(self.input_val_dict[key])
+
 class ClusterParameters(object):
 	""" holds parameters general to the system """
-	def __init__(self,parameter_list):
-		self.pipeline_path = parameter_list["code_folder"]
-#		self.home_path = parameter_list["home_folder"]
-		self.composite_data_path = parameter_list["composite_data_folder"]
-		self.max_mem = parameter_list["max_mem"]
-		self.max_time = parameter_list["max_time"]
-		self.username = parameter_list["username"]
-		self.user_email = parameter_list["user_email"]
-		self.starting_mem = parameter_list["starting_mem"]
-		self.starting_time = parameter_list["starting_time"]
-		self.temp_storage_path = parameter_list["temp_storage_folder"]
-		self.max_char_num = parameter_list["max_char_num"]
-		self.max_jobs_per_batch = parameter_list["max_jobs_per_batch"]
-		self.cluster_architecture = parameter_list["cluster_architecture"].lower()
-		if self.cluster_architecture == 'macosx':
-			self.pause_at_end = False
+	def __init__(self, parameter_list):
+		required_key_list = ['pipeline_path', 'composite_data_path', \
+			'max_mem', 'max_time', 'username', 'user_email', 'starting_mem', \
+			'starting_time', 'temp_storage_folder', 'max_char_num', \
+			'max_jobs_per_batch', 'cluster_architecture']
+		super(ClusterParameters, self).__init__(parameter_list, \
+			required_key_list)
+		if self.input_val_dict['cluster_architecture'].lower() == 'macosx':
+			self.input_val_dict['pause_at_end'] = False
 		else:
-			self.pause_at_end = True
+			self.input_val_dict['pause_at_end'] = True
 		self._set_cluster_architecture_properties()
-		self.current_mem = self.starting_mem
-		self.current_time = self.starting_time
+		self.input_val_dict['current_mem'] = self.input_val_dict['starting_mem']
+		self.input_val_dict['current_time'] = \
+			self.input_val_dict['starting_time']
 	def _set_cluster_architecture_properties(self):
 		""" sets properties related to the cluster architecture """
-		if self.cluster_architecture == 'slurm':
+		if self.input_val_dict['cluster_architecture'].lower() == 'slurm':
 			self.job_submission_manager = \
 				cluster_sub_functions.SlurmManager(copy.deepcopy(self))
-		elif self.cluster_architecture == 'macosx':
+		elif self.input_val_dict['cluster_architecture'].lower() == 'macosx':
 			self.job_submission_manager = \
 				cluster_sub_functions.MacOSXManager(copy.deepcopy(self))
-		# if cluster determines max_jobs_per_batch that is smaller than self.max_jobs_per_batch, update this value
+		# if cluster determines max_jobs_per_batch that is smaller than
+			# self.input_val_dict['max_jobs_per_batch'], update this value
 		forced_max_jobs_per_batch = \
 			self.job_submission_manager.get_max_jobs_per_batch()
 		if forced_max_jobs_per_batch:
-			self.max_jobs_per_batch = \
-				int(round(min(forced_max_jobs_per_batch, self.max_jobs_per_batch)))
+			self.input_val_dict['max_jobs_per_batch'] = \
+				int(round(min(forced_max_jobs_per_batch, \
+					self.input_val_dict['max_jobs_per_batch'])))
 	def get_job_sub_manager(self):
 		return(copy.deepcopy(self.job_submission_manager))
 	def get_batch_counter_call(self):
@@ -169,22 +234,17 @@ class ClusterParameters(object):
 			'${' + within_batch_counter + '}'
 		return(within_batch_counter_call)
 	def set_current_time(self, new_time):
-		self.current_time = new_time
+		self.input_val_dict['current_time'] = new_time
 	def set_current_mem(self, new_mem):
-		self.current_mem = new_mem
+		self.input_val_dict['current_mem'] = new_mem
 
 class FolderManager(object):
 	""" Creates and holds paths used by cluster_wrangler """
 	def __init__(self, cluster_parameters, experiment_folder_name):
 		self.path_dict = {}
-#		self.path_dict['experiment_path'] = \
-#			os.path.join(cluster_parameters.composite_data_path,experiment_folder_name)
 		self.path_dict['tempfolder_experiment_path'] = \
-			os.path.join(cluster_parameters.temp_storage_path, experiment_folder_name)
-#		self.path_dict['trackfile_path'] = \
-#			os.path.join(self.path_dict['experiment_path'],'trackfiles')
-#		self.path_dict['completefile_path'] = \
-#			os.path.join(self.path_dict['experiment_path'],'completefiles')
+			os.path.join(cluster_parameters.get_input_option['temp_storage_path'], \
+				experiment_folder_name)
 		self.path_dict['trackfile_path'] = \
 			os.path.join(self.path_dict['tempfolder_experiment_path'], \
 				'trackfiles')
@@ -456,9 +516,11 @@ class JobListManager(object):
 						# abort job forever
 					time_multiplier = 1
 					mem_multiplier = 1.5
-					self._aborted_job_processor(self.cluster_parameters.max_mem*self.job_parameters.parallel_processors, \
-						self.cluster_parameters.max_time, time_multiplier, \
-						mem_multiplier, current_missing_job)
+					self._aborted_job_processor(\
+						self.cluster_parameters.get_input_option['max_mem'] * \
+							self.job_parameters.parallel_processors, \
+						self.cluster_parameters.get_input_option['max_time'], \
+						time_multiplier, mem_multiplier, current_missing_job)
 				elif error_status_dict['time_limit_check']:
 					# updated time should be 2x times previous time
 						# allotment
@@ -466,9 +528,11 @@ class JobListManager(object):
 						# abort job forever
 					time_multiplier = 2
 					mem_multiplier = 1
-					self._aborted_job_processor(self.cluster_parameters.max_mem*self.job_parameters.parallel_processors, \
-						self.cluster_parameters.max_time, time_multiplier, \
-						mem_multiplier, current_missing_job)
+					self._aborted_job_processor(\
+						self.cluster_parameters.get_input_option['max_mem'] * \
+							self.job_parameters.parallel_processors, \
+						self.cluster_parameters.get_input_option['max_time'], \
+						time_multiplier, mem_multiplier, current_missing_job)
 				elif error_status_dict['unidentified_error_check']:
 					self.batch_status_change([current_missing_job], \
 						JobStatus.ERROR)
@@ -749,12 +813,12 @@ class MatlabInputProcessor(object):
 		""" Gets a list of arguments and creates a submission string from them """
 		self.code_run_arguments = '\"\",\"\"'.join(code_input_arguments)
 	def set_full_code_run_string(self, cluster_architecture):
-		if cluster_architecture == 'slurm':
+		if cluster_architecture.lower() == 'slurm':
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
 				'\"\");exit\"'
-		elif cluster_architecture == 'macosx':
+		elif cluster_architecture.lower() == 'macosx':
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'try ' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \

@@ -120,7 +120,7 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 				self.CI_bound_output_file, \
 				self.CI_bound_fit_file, \
 				self.profile_side, \
-				self.cluster_parameters.pause_at_end] + \
+				self.cluster_parameters.get_input_option['pause_at_end']] + \
 				self.additional_code_run_values
 
 class OneSidedCIBound(object):

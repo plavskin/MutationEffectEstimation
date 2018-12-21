@@ -240,8 +240,9 @@ class JobSubmissionManager(object):
 	def __init__(self, cluster_parameters):
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
 		self.submission_manager = \
-			BatchSubmissionManager(cluster_parameters.max_char_num, \
-				cluster_parameters.max_jobs_per_batch)
+			BatchSubmissionManager(\
+				cluster_parameters.get_input_option['max_char_num'], \
+				cluster_parameters.get_input_option['max_jobs_per_batch'])
 		self.continue_line_character = '\\'
 	def _split_string_across_lines(self, str_to_split, char_num):
 		'''
@@ -327,8 +328,9 @@ class MacOSXManager(JobSubmissionManager):
 	def __init__(self, cluster_parameters):
 		super(MacOSXManager, self).__init__(cluster_parameters)
 		self.submission_manager = \
-			BatchSubmissionManagerMacOSX(cluster_parameters.max_char_num, \
-				cluster_parameters.max_jobs_per_batch)
+			BatchSubmissionManagerMacOSX(\
+				cluster_parameters.get_input_option['max_char_num'], \
+				cluster_parameters.get_input_option['max_jobs_per_batch'])
 		# Don't use every processor on computer! (duh)
 		self.free_processors = 1
 		# On a personal computer, no slowing down as a penalty for
@@ -351,7 +353,7 @@ class MacOSXManager(JobSubmissionManager):
 			for current_line in str_list:
 				current_split_line = \
 					self._split_string_across_lines(current_line, \
-						(self.cluster_parameters.max_char_num-1))
+						(self.cluster_parameters.get_input_option['max_char_num'] - 1))
 				output_file.write(current_split_line + '\n')
 	def set_job_parameters(self,job_parameters):
 		self.job_parameters = copy.deepcopy(job_parameters)
@@ -489,8 +491,9 @@ class SlurmManager(JobSubmissionManager):
 	def __init__(self, cluster_parameters):
 		super(SlurmManager, self).__init__(cluster_parameters)
 		self.submission_manager = \
-			BatchSubmissionManagerSlurm(cluster_parameters.max_char_num, \
-				cluster_parameters.max_jobs_per_batch)
+			BatchSubmissionManagerSlurm(\
+				cluster_parameters.get_input_option['max_char_num'], \
+				cluster_parameters.get_input_option['max_jobs_per_batch'])
 		# at the request of hpc staff, don't use all available queue space
 		self.max_job_proportion = 0.95
 		# specify size of an empty errorfile on this cluster architecture
@@ -524,11 +527,13 @@ class SlurmManager(JobSubmissionManager):
 		max_array_size = int(max_array_size_response_split[1].rstrip())
 		# Get max number of jobs user can have in queue or running
 		max_submit_response_string = subprocess.check_output(
-			('sacctmgr list assoc format=user,maxsubmit where user='+self.cluster_parameters.username),
+			('sacctmgr list assoc format=user,maxsubmit where user=' + \
+				self.cluster_parameters.get_input_option['username']),
 			shell=True)
-		max_submit = int(re.findall((self.cluster_parameters.username+'\s+(\d+)'),max_submit_response_string)[0])
+		max_submit = int(re.findall((self.cluster_parameters.get_input_option['username'] + \
+			'\s+(\d+)'),max_submit_response_string)[0])
 		# find the max number of jobs you can run at one time
-		max_allowed_jobs = int(round(min(max_array_size,max_submit)*self.max_job_proportion))
+		max_allowed_jobs = int(round(min(max_array_size,max_submit) * self.max_job_proportion))
 		return(max_allowed_jobs)
 	def free_job_calculator(self):
 		"""
@@ -538,7 +543,8 @@ class SlurmManager(JobSubmissionManager):
 		max_allowed_jobs = self.get_max_jobs_per_batch()
 		# how many jobs are currently in default_queue for this user?
 		jobs_in_queue = int(subprocess.check_output(
-			('squeue -u '+self.cluster_parameters.username+' -r | egrep " PD | R | CG  " | wc -l'),
+			('squeue -u '+self.cluster_parameters.get_input_option['username'] + \
+				' -r | egrep " PD | R | CG  " | wc -l'),
 			shell=True))
 		# find max amount of jobs that can be added to queue without
 			# making it overflow
@@ -550,7 +556,8 @@ class SlurmManager(JobSubmissionManager):
 		Return list of jobs currently being processed
 		"""
 		try:
-			jobs_running_list = subprocess.check_output('squeue -u ' + self.cluster_parameters.username + ' -r -n '
+			jobs_running_list = subprocess.check_output('squeue -u ' + \
+				self.cluster_parameters.get_input_option['username'] + ' -r -n '
 				+ self.job_parameters.name + ' | egrep " PD | CG | R " ',shell=True)
 		except subprocess.CalledProcessError:
 			jobs_running_list = ''
@@ -624,7 +631,7 @@ class SlurmManager(JobSubmissionManager):
 		sbatch_portion_contents.append('#SBATCH --mail-type=FAIL')
 			# only sends email if job array fails
 		sbatch_portion_contents.append('#SBATCH --mail-user=' + \
-			self.cluster_parameters.user_email)
+			self.cluster_parameters.get_input_option['user_email'])
 			# email that gets notification about aborted job
 		# add any rows that need to be written for each particular file
 		if self.job_parameters.additional_beginning_lines_in_job_sub:
@@ -653,7 +660,7 @@ class SlurmManager(JobSubmissionManager):
 		for current_line in bash_portion_contents:
 			current_line_split = \
 				self._split_string_across_lines(current_line, \
-					(self.cluster_parameters.max_char_num-1))
+					(self.cluster_parameters.get_input_option['max_char_num'] - 1))
 			bash_portion_contents_split.append(current_line_split)
 		sbatch_job_file_contents = sbatch_portion_contents + \
 			bash_portion_contents_split

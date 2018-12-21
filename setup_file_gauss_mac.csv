@@ -2,8 +2,8 @@ variable name,value,type,explanation
 ,,,
 pathnames_and_user_info,,,
 username,username_here,str,username on cluster
-composite_data_folder,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
-code_folder,~/Documents/MutationEffectEstimation/,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
+composite_data_path,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
+pipeline_path,~/Documents/MutationEffectEstimation/,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
 temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
 ,,,
