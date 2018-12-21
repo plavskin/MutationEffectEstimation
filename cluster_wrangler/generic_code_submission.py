@@ -64,7 +64,7 @@ class GenericCodeSubmitter(cluster_functions.CodeSubmitter):
 		initial_sub_mem = cluster_parameters.get_input_option('current_mem')
 		self.within_batch_counter_call = \
 			cluster_parameters.get_batch_counter_call()
-		self.output_file = os.path.join(output_path, output_file_prefix + '-' + \
+		self.output_file = os.path.join(output_path, output_file_prefix + '_' + \
 			self.within_batch_counter_call + '.' + output_extension)
 		code_path = code_sub_parameters.get_option('code_path')
 		# run __init__ from parent class, which in turn runs

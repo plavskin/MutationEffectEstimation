@@ -423,12 +423,12 @@ class JobListManager(object):
 		Identifies which jobs from a list have been successfully completed
 		"""
 		try:
-			completed_files = subprocess.check_output('ls -lrt '
+			completed_files = subprocess.check_output('ls -lrt ' \
 				+ '"' + self.job_parameters.output_folder + '"',shell=True)
 		except subprocess.CalledProcessError:
 			completed_files = ''
-		completed_job_list = re.findall(' ' + self.job_parameters.output_file_label + '_(\d+?)\.'
-			+ self.job_parameters.output_extension,completed_files,re.DOTALL)
+		completed_job_list = re.findall(' ' + self.job_parameters.output_file_label + \
+			'_(\d+?)\.' + self.job_parameters.output_extension,completed_files,re.DOTALL)
 		completed_job_int_list = [int(x) for x in completed_job_list]
 		jobs_just_completed = list(set(completed_job_int_list) & set(jobs_just_finished))
 		return(jobs_just_completed)
