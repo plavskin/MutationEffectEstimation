@@ -212,7 +212,7 @@ class BatchSubmissionManagerSlurm(BatchSubmissionManager):
 				self._job_list_parser(current_job_list)
 		self._update_batches_remaining(1)
 
-class BatchSubmissionManagerMacOSX(BatchSubmissionManager):
+class BatchSubmissionManagerUnix(BatchSubmissionManager):
 	"""
 	Holds parameters for current job submission session, and manages
 	which jobs from current batch are submitted, for the SLURM
@@ -221,12 +221,12 @@ class BatchSubmissionManagerMacOSX(BatchSubmissionManager):
 	than max_char_num and batches_remaining
 	"""
 	def __init__(self, max_char_num, max_jobs_per_batch):
-		super(BatchSubmissionManagerMacOSX, \
+		super(BatchSubmissionManagerUnix, \
 			self).__init__(max_char_num, max_jobs_per_batch)
 	def _job_list_string_converter(self, job_list):
 		"""
 		Converts a list of job numbers into a job submission string for
-		MacOSX (a bash array)
+		Unix (a bash array)
 		"""
 		job_list_as_str = [str(x) for x in job_list]
 		current_job_string = ' '.join(job_list_as_str) + ' '
@@ -320,15 +320,15 @@ class JobSubmissionManager(object):
 				error_status_dict['memory_limit_check'], error_status_dict['cluster_error_check']])
 		return(error_status_dict)
 
-class MacOSXManager(JobSubmissionManager):
+class UnixManager(JobSubmissionManager):
 	"""
 	Handles getting information from and passing information to a
-	MacOSX computer
+	computer running a unix-based OS
 	"""
 	def __init__(self, cluster_parameters):
-		super(MacOSXManager, self).__init__(cluster_parameters)
+		super(UnixManager, self).__init__(cluster_parameters)
 		self.submission_manager = \
-			BatchSubmissionManagerMacOSX(\
+			BatchSubmissionManagerUnix(\
 				cluster_parameters.get_input_option['max_char_num'], \
 				cluster_parameters.get_input_option['max_jobs_per_batch'])
 		# Don't use every processor on computer! (duh)
@@ -372,7 +372,7 @@ class MacOSXManager(JobSubmissionManager):
 		except subprocess.CalledProcessError:
 			number_cpus = \
 				int(subprocess.check_output('getconf NPROCESSORS_ONLN',shell=True))
-			# one of the above should work on MacOSX and linux machines
+			# one of the above should work on machines running a unix-based OS
 		# how many jobs are currently running on computer?
 		# calculate this by assuming only jobs from module (e.g.
 			# matlab) are relevant, i.e. count those
@@ -421,7 +421,7 @@ class MacOSXManager(JobSubmissionManager):
 		screen_out_filename = self._generate_filename_for_sub_job('screen-out')
 		# get string that will submit actual code to run (e.g. MLE code)
 		code_run_input = self.job_parameters.code_run_input
-		code_run_input.set_full_code_run_string('macosx')
+		code_run_input.set_full_code_run_string('unix')
 		code_run_string = code_run_input.get_code_run_string() + \
 			' | tee "${output_file}"'
 		# write code run file

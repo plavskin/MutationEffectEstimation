@@ -5,16 +5,16 @@ username,username_here,str,username on cluster
 composite_data_path,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
 pipeline_path,~/Documents/MutationEffectEstimation/,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
 temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
-user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on macosx mode)
+user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on unix mode)
 ,,,
 job_submission_variables,,,
-workload_manager,macosx,str,kind of job scheduler the computer or HPC cluster uses (currently only 'slurm' and 'macosx' supported)
-max_char_num,4096,int,maximum number of characters in a list of job arrays to be submitted on cluster (not relevant on macosx mode)
-parallel_processors,1,int,parallel processors to use; do NOT set to >1 for processing on MacOSX
-starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant on macosx mode)
-starting_time,1200,float,time (in mins) alotted for running single MLE (not relevant on macosx mode)
-max_mem,10000,float,max memory (in Mb) a job is allowed to request (not relevant on macosx mode)
-max_time,2400,float,max time (in minutes) a job is allowed to request (not relevant on macosx mode)
+workload_manager,unix,str,the kind of workload manager/job scheduler in the case of a HPC; or the system on which the OS is based on a computer (currently only 'slurm' for HPCs and 'unix' for computers are supported)
+max_char_num,4096,int,maximum number of characters in a list of job arrays to be submitted on cluster (not relevant on unix mode)
+parallel_processors,1,int,parallel processors to use; do NOT set to >1 for processing on unix
+starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant on unix mode)
+starting_time,1200,float,time (in mins) alotted for running single MLE (not relevant on unix mode)
+max_mem,10000,float,max memory (in Mb) a job is allowed to request (not relevant on unix mode)
+max_time,2400,float,max time (in minutes) a job is allowed to request (not relevant on unix mode)
 max_jobs_per_batch,10000,int,maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)
 ,,,
 general_mle_variables,,,
@@ -51,8 +51,8 @@ CI_pval,0.05,float_list,p-val of CIs identified in each model; models are separa
 runtime_percentile,95,float,percentile of runtimes to report from within each parameter's profile point run
 sim_CI_parameters,mu;sigma,nested_str_list,list of parameters within each model which will get a simulation-based CI
 simulation_repeats,1000,int_list,number times data is simulated to calculate likelihood ratio distributions for hypothesis testing in each model
-sim_mem,1750,float,memory (in Mb) needed to run a single simulation (not relevant on macosx model)
-sim_time,15,float,time (in mins) alotted for running single simulation (not relevant on macosx model)
+sim_mem,1750,float,memory (in Mb) needed to run a single simulation (not relevant on unix mode)
+sim_time,15,float,time (in mins) alotted for running single simulation (not relevant on unix mode)
 model_comparisons,,str,lists of sets of models to be compared; sets should be separated from each other by semicolons and models within a set should be separated from each other by colons. Parameter_names in one member of each set of models being compared must be a subset of the parameter names of the other member. Order of models in the set doesn't matter.
 ,,,
 mutation_effect_estimation_specific_variables,,,

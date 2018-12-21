@@ -201,7 +201,7 @@ class ClusterParameters(object):
 			'max_jobs_per_batch', 'workload_manager']
 		super(ClusterParameters, self).__init__(parameter_list, \
 			required_key_list)
-		if self.input_val_dict['workload_manager'].lower() == 'macosx':
+		if self.input_val_dict['workload_manager'].lower() == 'unix':
 			self.input_val_dict['pause_at_end'] = False
 		else:
 			self.input_val_dict['pause_at_end'] = True
@@ -214,9 +214,9 @@ class ClusterParameters(object):
 		if self.input_val_dict['workload_manager'].lower() == 'slurm':
 			self.job_submission_manager = \
 				cluster_sub_functions.SlurmManager(copy.deepcopy(self))
-		elif self.input_val_dict['workload_manager'].lower() == 'macosx':
+		elif self.input_val_dict['workload_manager'].lower() == 'unix':
 			self.job_submission_manager = \
-				cluster_sub_functions.MacOSXManager(copy.deepcopy(self))
+				cluster_sub_functions.UnixManager(copy.deepcopy(self))
 		# if cluster determines max_jobs_per_batch that is smaller than
 			# self.input_val_dict['max_jobs_per_batch'], update this value
 		forced_max_jobs_per_batch = \
@@ -818,7 +818,7 @@ class MatlabInputProcessor(object):
 				'matlab -nodisplay -nosplash -nodesktop -r \'' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
 				'\"\");exit\"'
-		elif workload_manager.lower() == 'macosx':
+		elif workload_manager.lower() == 'unix':
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'try ' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
