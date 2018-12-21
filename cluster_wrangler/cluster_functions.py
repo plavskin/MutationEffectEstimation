@@ -242,8 +242,7 @@ class JobParameters(object):
 
 class CompletenessTracker(object):
 	"""
-	Keeps a running tally of keys (which can be parameters, modes, etc)
-	and checks their completeness
+	Keeps a running tally of keys and checks their completeness
 	"""
 	def __init__(self,key_list):
 		if len(key_list) == 0:

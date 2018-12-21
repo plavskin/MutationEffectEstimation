@@ -242,6 +242,25 @@ class JobSubmissionManager(object):
 		self.submission_manager = \
 			BatchSubmissionManager(cluster_parameters.max_char_num, \
 				cluster_parameters.max_jobs_per_batch)
+		self.continue_line_character = '\\'
+	def _split_string_across_lines(self, str_to_split, char_num):
+		'''
+		Splits str_to_split by inserting self.continue_line_character,
+		followed by a newline, every char_num characters
+		'''
+		str_list = \
+			re.findall(('.{1,' + str(char_num) + \
+				'}'), str_to_split)
+		joining_char = self.continue_line_character + '\n'
+		string_output = joining_char.join(str_list)
+		return(string_output)
+	def _write_to_output_file(self, str_list, output_path):
+		'''
+		Writes every element in str_list to a new line in output_path
+		'''
+		with open(output_path,'w') as output_file:
+			for current_line in str_list:
+				output_file.write(current_line + '\n')
 	def get_within_batch_counter(self):
 		return(self.within_batch_counter)
 	def set_job_parameters(self,job_parameters):
@@ -321,6 +340,19 @@ class MacOSXManager(JobSubmissionManager):
 		# specify size of an empty errorfile on this cluster architecture
 		self.empty_errorfile_size = 0
 		self.within_batch_counter = 'ARRAY_TASK_ID'
+	def _write_to_output_file(self, str_list, output_path):
+		'''
+		Writes every element in str_list to a new line in output_path,
+		splitting strings that go over
+		self.cluster_parameters.max_char_num across multiple lines
+		by self.continue_line_character
+		'''
+		with open(output_path,'w') as output_file:
+			for current_line in str_list:
+				current_split_line = \
+					self._split_string_across_lines(current_line, \
+						(self.cluster_parameters.max_char_num-1))
+				output_file.write(current_split_line + '\n')
 	def set_job_parameters(self,job_parameters):
 		self.job_parameters = copy.deepcopy(job_parameters)
 		self.sh_filename_prefix = \
@@ -371,7 +403,7 @@ class MacOSXManager(JobSubmissionManager):
 	def _generate_filename_for_sub_job(self, prenumber_prefix):
 		current_filename = \
 			self.sh_filename_prefix + '.'+ str(prenumber_prefix) + \
-			'1-\'${' + self.within_batch_counter + '}'
+			'1-\"${' + self.within_batch_counter + '}'
 		return(current_filename)
 	def _create_submission_job(self, job_number_string, *unused):
 		""" Writes files to submit to cluster queue """
@@ -388,65 +420,62 @@ class MacOSXManager(JobSubmissionManager):
 		# get string that will submit actual code to run (e.g. MLE code)
 		code_run_input = self.job_parameters.code_run_input
 		code_run_input.set_full_code_run_string('macosx')
-		code_run_string = code_run_input.get_code_run_string()
+		code_run_string = code_run_input.get_code_run_string() + \
+			' | tee "${output_file}"'
 		# write code run file
-		with open(self.code_run_filename,'w') \
-			as code_run_file:
-			code_run_file.write('#!/bin/bash\n')
-			code_run_file.write(self.within_batch_counter + '=${1}\n')
-			code_run_file.write('output_file=\'' + \
-				output_filename + '\n')
-			code_run_file.write('error_file=\'' + \
-				error_filename + '\n')
-			code_run_file.write('screen_out_file=\'' + \
-				screen_out_filename + '\n')
-			# cd into code directory
-			code_run_file.write('cd \'' + self.job_parameters.code_path + '\'\n')
-			# write appropriate code-running line
-			code_run_file.write(code_run_string  + \
-				' | tee "${output_file}"\n')
-			code_run_file.write('sed -n -e "/[Ee][Rr][Rr][Oo][Rr]/,\$w ${error_file}" "${output_file}"\n')
-			code_run_file.write('rm "${screen_out_file}"\n\n\n')
-		# write submission file
-		with open(self.sh_filename,'w') \
-			as batch_job_file:
-			batch_job_file.write('#!/bin/bash\n')
-			batch_job_file.write('ARRAY_TASK_LIST=(' + job_number_string + ')\n')
-			batch_job_file.write('for ' + self.within_batch_counter + \
-				' in ${ARRAY_TASK_LIST[@]}\n')
-			batch_job_file.write('do\n')
-			batch_job_file.write('screen_rc_file=\'' + \
-				screen_rc_filename + '\n')
-			batch_job_file.write('code_run_file=\'' + \
-				self.code_run_filename + '\'\n')
-			batch_job_file.write('screen_out_file=\'' + \
-				screen_out_filename + '\n')
-			batch_job_file.write('cat << EOF >${screen_rc_file}\n')
-			batch_job_file.write('logfile "${screen_out_file}"\n')
-			batch_job_file.write('EOF\n')
-			# add any rows that need to be written for each particular file
-			if self.job_parameters.additional_beginning_lines_in_job_sub:
-				for additional_sbatch_beginning_row in \
-					self.job_parameters.additional_beginning_lines_in_job_sub:
-					batch_job_file.write(additional_sbatch_beginning_row + '\n')
-			# run code via detached screen, move any error message in output_file into error file
-			batch_job_file.write('screen -d -m -c "${screen_rc_file}" -L sh ' + \
-				'"${code_run_file}" ${' + self.within_batch_counter + '}\n')
-			batch_job_file.write('rm "${screen_rc_file}"\n')
-			batch_job_file.write('done\n')
-			# add any rows that need to be written at the end of each
-				# particular file
-			if self.job_parameters.additional_end_lines_in_job_sub:
-				for additional_sbatch_end_row in \
-					self.job_parameters.additional_end_lines_in_job_sub:
-					batch_job_file.write(additional_sbatch_end_row + '\n')
-			batch_job_file.write('\n\n')
-				# need additional returns at end of shell scripts
+		code_run_file_contents = []
+		code_run_file_contents.append('#!/bin/bash')
+		code_run_file_contents.append(self.within_batch_counter + '=${1}')
+		code_run_file_contents.append('output_file=\"' + output_filename)
+		code_run_file_contents.append('error_file=\"' + error_filename)
+		code_run_file_contents.append('screen_out_file=\"' + screen_out_filename)
+		# cd into code directory
+		code_run_file_contents.append('cd \"' + \
+			self.job_parameters.code_path + '\"')
+		# write appropriate code-running line
+		code_run_file_contents.append(code_run_string)
+		code_run_file_contents.append('sed -n -e "/[Ee][Rr][Rr][Oo][Rr]/,\$w' +\
+			' ${error_file}" "${output_file}"')
+		code_run_file_contents.append('rm "${screen_out_file}"\n\n')
+		self._write_to_output_file(code_run_file_contents, self.code_run_filename)
+		# write sh file submitted by pipeline
+		sh_file_contents = []
+		sh_file_contents.append('#!/bin/bash')
+		sh_file_contents.append('ARRAY_TASK_LIST=(' + job_number_string + ')')
+		sh_file_contents.append('for ' + self.within_batch_counter + \
+				' in ${ARRAY_TASK_LIST[@]}')
+		sh_file_contents.append('do')
+		sh_file_contents.append('screen_rc_file=\"' + screen_rc_filename)
+		sh_file_contents.append('code_run_file=\"' + \
+				self.code_run_filename + '\"')
+		sh_file_contents.append('screen_out_file=\"' + screen_out_filename)
+		sh_file_contents.append('cat << EOF >${screen_rc_file}\n')
+		sh_file_contents.append('logfile "${screen_out_file}"\n')
+		sh_file_contents.append('EOF\n')
+		# add any rows that need to be written for each particular file
+		if self.job_parameters.additional_beginning_lines_in_job_sub:
+			for additional_sbatch_beginning_row in \
+				self.job_parameters.additional_beginning_lines_in_job_sub:
+				sh_file_contents.append(additional_sbatch_beginning_row)
+		# run code via detached screen, move any error message in output_file into error file
+		sh_file_contents.append('screen -d -m -c "${screen_rc_file}" -L sh ' + \
+				'"${code_run_file}" ${' + self.within_batch_counter + '}')
+		sh_file_contents.append('rm "${screen_rc_file}"\n')
+		sh_file_contents.append('done\n')
+		# add any rows that need to be written at the end of each
+			# particular file
+		if self.job_parameters.additional_end_lines_in_job_sub:
+			for additional_sbatch_end_row in \
+				self.job_parameters.additional_end_lines_in_job_sub:
+				sh_file_contents.append(additional_sbatch_end_row + '\n')
+		# need additional returns at end of shell scripts
+		sh_file_contents.append('\n\n')
+		self._write_to_output_file(sh_file_contents, self.sh_filename)
 	def _submit_job(self):
 		""" Submits sh job """
 		# cd into sh directory
 		os.chdir(self.job_parameters.cluster_job_submission_folder)
-		subprocess.call('sh \'' + self.sh_filename + '\'', shell=True)
+		subprocess.call('sh \"' + self.sh_filename + '\"', shell=True)
 		# pause 6 seconds to allow submitted processes to start, so
 			# that they will be detected when looking for any running
 			# jobs
@@ -566,58 +595,70 @@ class SlurmManager(JobSubmissionManager):
 		single_job_time_string = self._convert_time_format(job_time)
 		single_job_mem_string = self._convert_mem_format(job_mem)
 		# write submission file
-		with open(self.sbatch_filename,'w') \
-			as sbatch_job_file:
-			sbatch_job_file.write('#!/bin/bash\n')
-			sbatch_job_file.write('#SBATCH --job-name=' + \
-				self.job_parameters.name + '\n')
-				# name of current job
-			sbatch_job_file.write('#SBATCH --output=' + \
-				self.job_parameters.name + '.o%A-%a\n')
-			sbatch_job_file.write('#SBATCH --error=' + \
-				self.job_parameters.name + '.e%A-%a\n')
-			sbatch_job_file.write('#SBATCH --time=' + \
-				single_job_time_string + '\n')
-				# amount of time allowed per job
-			sbatch_job_file.write('#SBATCH --mem=' + \
-				single_job_mem_string + '\n')
-				# memory allocated to each job
-			sbatch_job_file.write('#SBATCH --nodes=1\n')
-			sbatch_job_file.write('#SBATCH --cpus-per-task=' + \
-				str(self.job_parameters.parallel_processors) + '\n')
-				# nodes and processors used per job
-			sbatch_job_file.write('#SBATCH --array=' + job_list_string + '\n')
-				# list of job IDs to be submitted
-			sbatch_job_file.write('#SBATCH --mail-type=FAIL\n')
-				# only sends email if job array fails
-			sbatch_job_file.write('#SBATCH --mail-user=' + \
-				self.cluster_parameters.user_email + '\n')
-				# email that gets notification about aborted job
-			# add any rows that need to be written for each particular file
-			if self.job_parameters.additional_beginning_lines_in_job_sub:
-				for additional_sbatch_beginning_row in \
-					self.job_parameters.additional_beginning_lines_in_job_sub:
-					sbatch_job_file.write(additional_sbatch_beginning_row + '\n')
-
-			sbatch_job_file.write('cd ' + self.job_parameters.code_path + '\n')
-				# cd into code directory
-			sbatch_job_file.write('module purge\n')
-			sbatch_job_file.write('module load ' + \
-				self.module_path + '\n')
-				# load module
-			# write appropriate code-running line
-			code_run_input = self.job_parameters.code_run_input
-			code_run_input.set_full_code_run_string('slurm')
-			code_run_string = code_run_input.get_code_run_string()
-			sbatch_job_file.write(code_run_string + '\n')
-			# add any rows that need to be written at the end of each
-				# particular file
-			if self.job_parameters.additional_end_lines_in_job_sub:
-				for additional_sbatch_end_row in \
-					self.job_parameters.additional_end_lines_in_job_sub:
-					sbatch_job_file.write(additional_sbatch_end_row + '\n')
-			sbatch_job_file.write('\n\n')
-				# need additional returns at end of shell scripts
+		# add to submission file in two portions: header and SBATCH
+			# code, which is written directly, and bash code below,
+			# which is split across lines according to
+			# self.cluster_parameters.max_char_number
+		sbatch_portion_contents = []
+		bash_portion_contents = []
+		sbatch_portion_contents.append('#!/bin/bash')
+		sbatch_portion_contents.append('#SBATCH --job-name=' + \
+			self.job_parameters.name)
+			# name of current job
+		sbatch_portion_contents.append('#SBATCH --output=' + \
+			self.job_parameters.name + '.o%A-%a')
+		sbatch_portion_contents.append('#SBATCH --error=' + \
+			self.job_parameters.name + '.e%A-%a')
+		sbatch_portion_contents.append('#SBATCH --time=' + \
+			single_job_time_string)
+			# amount of time allowed per job
+		sbatch_portion_contents.append('#SBATCH --mem=' + \
+			single_job_mem_string)
+			# memory allocated to each job
+		sbatch_portion_contents.append('#SBATCH --nodes=1')
+		sbatch_portion_contents.append('#SBATCH --cpus-per-task=' + \
+			str(self.job_parameters.parallel_processors))
+			# nodes and processors used per job
+		sbatch_portion_contents.append('#SBATCH --array=' + job_list_string)
+			# list of job IDs to be submitted
+		sbatch_portion_contents.append('#SBATCH --mail-type=FAIL')
+			# only sends email if job array fails
+		sbatch_portion_contents.append('#SBATCH --mail-user=' + \
+			self.cluster_parameters.user_email)
+			# email that gets notification about aborted job
+		# add any rows that need to be written for each particular file
+		if self.job_parameters.additional_beginning_lines_in_job_sub:
+			for additional_sbatch_beginning_row in \
+				self.job_parameters.additional_beginning_lines_in_job_sub:
+				bash_portion_contents.append(additional_sbatch_beginning_row)
+		bash_portion_contents.append('cd ' + self.job_parameters.code_path)
+			# cd into code directory
+		bash_portion_contents.append('module purge')
+		bash_portion_contents.append('module load ' + self.module_path)
+			# load module
+		# write appropriate code-running line
+		code_run_input = self.job_parameters.code_run_input
+		code_run_input.set_full_code_run_string('slurm')
+		code_run_string = code_run_input.get_code_run_string()
+		bash_portion_contents.append(code_run_string)
+		# add any rows that need to be written at the end of each
+			# particular file
+		if self.job_parameters.additional_end_lines_in_job_sub:
+			for additional_sbatch_end_row in \
+				self.job_parameters.additional_end_lines_in_job_sub:
+				bash_portion_contents.append(additional_sbatch_end_row)
+		bash_portion_contents.append('\n\n')
+			# need additional returns at end of shell scripts
+		bash_portion_contents_split = []
+		for current_line in bash_portion_contents:
+			current_line_split = \
+				self._split_string_across_lines(current_line, \
+					(self.cluster_parameters.max_char_num-1))
+			bash_portion_contents_split.append(current_line_split)
+		sbatch_job_file_contents = sbatch_portion_contents + \
+			bash_portion_contents_split
+		self._write_to_output_file(sbatch_job_file_contents, \
+			self.sbatch_filename)
 	def _submit_job(self):
 		""" Submits sbatch job """
 		# cd into sbatch directory
