@@ -80,14 +80,14 @@ setup_file = Check_Input()
 initial_parameter_list = cluster_functions.parse_setup_file(setup_file)
 
 # path of file that determines whether MLE_runner already running
-currently_running_checkfile = os.path.join(initial_parameter_list['composite_data_folder'],\
+currently_running_checkfile = os.path.join(initial_parameter_list['composite_data_path'],\
 	'MLE_running.txt')
 
 # Loop through all directories in composite_data_dir
-for experiment_folder_name in os.walk(initial_parameter_list['composite_data_folder']).next()[1]:
+for experiment_folder_name in os.walk(initial_parameter_list['composite_data_path']).next()[1]:
 
 	experiment_path = \
-		os.path.join(initial_parameter_list['composite_data_folder'], \
+		os.path.join(initial_parameter_list['composite_data_path'], \
 			experiment_folder_name)
 	complete_checkfile = \
 		os.path.join(experiment_path,'processing_complete.txt')
@@ -163,9 +163,9 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_fol
 
 			# set memory and time for current run
 			cluster_parameters.set_current_time(rep_float * \
-				cluster_parameters.get_input_option['starting_time'])
+				cluster_parameters.get_input_option('starting_time'))
 			cluster_parameters.set_current_mem(rep_float * \
-				cluster_parameters.get_input_option['starting_mem'])
+				cluster_parameters.get_input_option('starting_mem'))
 
 			# set subfolder to be in current rep
 			mle_folders.set_current_output_subfolder('rep_' + rep)

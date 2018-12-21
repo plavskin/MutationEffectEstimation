@@ -658,7 +658,6 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.sim_parameters = copy.deepcopy(sim_parameters)
-		experiment_folder = sim_folders.get_path('experiment_path')
 		completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['sim',str(sim_parameters.sim_key), \
@@ -693,7 +692,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 		super(Simulator, self).__init__(cluster_parameters, \
 			cluster_folders, completefile, job_name, \
 			job_numbers, module, parallel_processors, \
-			experiment_folder, output_extension, code_name, \
+			output_extension, code_name, \
 			additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, initial_sub_time, \
 			initial_sub_mem, sim_output_path, output_file_label, code_path)
@@ -723,7 +722,7 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			self.value_list = [self.within_batch_counter_call, \
 				self.sim_parameters.get_option('starting_parameter_vals'), \
 				self.sim_parameters.get_option('parameter_list'), \
-				self.cluster_parameters.get_input_option['pause_at_end']] + \
+				self.cluster_parameters.get_input_option('pause_at_end')] + \
 				self.original_input_datafile_paths + self.input_datafile_paths \
 				+ self.additional_code_run_values
 		else:

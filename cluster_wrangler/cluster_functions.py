@@ -189,16 +189,16 @@ class InputParameterHolder(object):
 		return(output_dict)
 	def get_input_option(self, key):
 		return(self.input_val_dict[key])
-	def get_input_dict(self, key):
-		return(self.input_val_dict[key])
+	def get_input_dict(self):
+		return(self.input_val_dict)
 
-class ClusterParameters(object):
+class ClusterParameters(InputParameterHolder):
 	""" holds parameters general to the system """
 	def __init__(self, parameter_list):
 		required_key_list = ['pipeline_path', 'composite_data_path', \
 			'max_mem', 'max_time', 'username', 'user_email', 'starting_mem', \
 			'starting_time', 'temp_storage_folder', 'max_char_num', \
-			'max_jobs_per_batch', 'workload_manager']
+			'max_jobs_per_batch', 'workload_manager', 'parallel_processors']
 		super(ClusterParameters, self).__init__(parameter_list, \
 			required_key_list)
 		if self.input_val_dict['workload_manager'].lower() == 'unix':
@@ -242,8 +242,14 @@ class FolderManager(object):
 	""" Creates and holds paths used by cluster_wrangler """
 	def __init__(self, cluster_parameters, experiment_folder_name):
 		self.path_dict = {}
+		self.path_dict['temp_storage_folder'] = \
+			cluster_parameters.get_input_option('temp_storage_folder')
+		self.path_dict['composite_data_path'] = \
+			cluster_parameters.get_input_option('composite_data_path')
+		self.path_dict['pipeline_path'] = \
+			cluster_parameters.get_input_option('pipeline_path')
 		self.path_dict['tempfolder_experiment_path'] = \
-			os.path.join(cluster_parameters.get_input_option['temp_storage_path'], \
+			os.path.join(cluster_parameters.get_input_option('temp_storage_folder'), \
 				experiment_folder_name)
 		self.path_dict['trackfile_path'] = \
 			os.path.join(self.path_dict['tempfolder_experiment_path'], \
@@ -269,7 +275,7 @@ class FolderManager(object):
 class JobParameters(object):
 	""" Holds parameters of the job currently being run """
 	def __init__(self, name, output_folder, output_extension, output_file_label, \
-		cluster_job_submission_folder, experiment_folder, module, code_run_input, \
+		cluster_job_submission_folder, module, code_run_input, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 		parallel_processors, code_path):
 		self.name = name
@@ -277,7 +283,6 @@ class JobParameters(object):
 		self.output_extension = output_extension
 		self.output_file_label = output_file_label
 		self.cluster_job_submission_folder = cluster_job_submission_folder
-		self.experiment_folder = experiment_folder
 		self.module = module
 		self.code_path = code_path
 		self.code_run_input = code_run_input
@@ -517,9 +522,9 @@ class JobListManager(object):
 					time_multiplier = 1
 					mem_multiplier = 1.5
 					self._aborted_job_processor(\
-						self.cluster_parameters.get_input_option['max_mem'] * \
+						self.cluster_parameters.get_input_option('max_mem') * \
 							self.job_parameters.parallel_processors, \
-						self.cluster_parameters.get_input_option['max_time'], \
+						self.cluster_parameters.get_input_option('max_time'), \
 						time_multiplier, mem_multiplier, current_missing_job)
 				elif error_status_dict['time_limit_check']:
 					# updated time should be 2x times previous time
@@ -529,9 +534,9 @@ class JobListManager(object):
 					time_multiplier = 2
 					mem_multiplier = 1
 					self._aborted_job_processor(\
-						self.cluster_parameters.get_input_option['max_mem'] * \
+						self.cluster_parameters.get_input_option('max_mem') * \
 							self.job_parameters.parallel_processors, \
-						self.cluster_parameters.get_input_option['max_time'], \
+						self.cluster_parameters.get_input_option('max_time'), \
 						time_multiplier, mem_multiplier, current_missing_job)
 				elif error_status_dict['unidentified_error_check']:
 					self.batch_status_change([current_missing_job], \
@@ -911,7 +916,7 @@ class CodeSubmitter(object):
 	some external_function, and submits those jobs
 	'''
 	def __init__(self, cluster_parameters, cluster_folders, completefile, job_name, \
-		job_numbers, module, parallel_processors, experiment_folder, output_extension, code_name, \
+		job_numbers, module, parallel_processors, output_extension, code_name, \
 		additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 		initial_sub_time, initial_sub_mem, output_path, output_file_label, code_path):
 		self.cluster_parameters = copy.deepcopy(cluster_parameters)
@@ -932,7 +937,6 @@ class CodeSubmitter(object):
 		self.initial_sub_mem = initial_sub_mem
 		self.output_path = output_path
 		self.output_file_label = output_file_label
-		self.experiment_folder = experiment_folder
 		self.code_path = code_path
 		self._create_code_run_input()
 	def get_completefile_path(self):
@@ -960,7 +964,7 @@ class CodeSubmitter(object):
 		# set up and run batch jobs
 		job_flow_handler(self.job_name, self.job_numbers, self.initial_sub_time, \
 			self.initial_sub_mem, self.cluster_parameters, self.output_path, self.output_extension, \
-			self.output_file_label, cluster_job_submission_folder, self.experiment_folder, \
+			self.output_file_label, cluster_job_submission_folder, \
 			self.module, self.code_run_input, self.additional_beginning_lines_in_job_sub, \
 			self.additional_end_lines_in_job_sub, self.parallel_processors, self.completefile,
 			trackfile_folder, self.code_path)
@@ -1001,7 +1005,7 @@ def _create_job_list(job_name, job_numbers, initial_time, initial_mem, \
 
 def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	cluster_parameters, output_folder, output_extension, output_file_label, \
-	cluster_job_submission_folder, experiment_folder, module, code_run_input, \
+	cluster_job_submission_folder, module, code_run_input, \
 	additional_beginning_lines_in_job_sub, additional_end_lines_in_job_sub, \
 	parallel_processors, completefile_path, trackfile_folder, code_path):
 	"""
@@ -1014,7 +1018,7 @@ def job_flow_handler(job_name, job_numbers, initial_time, initial_mem, \
 	if not jobs_complete:
 		########### ADD COMPLETENESS UPDATE BELOW
 		job_parameters = JobParameters(job_name, output_folder, \
-			output_extension, output_file_label, cluster_job_submission_folder, experiment_folder, \
+			output_extension, output_file_label, cluster_job_submission_folder, \
 			module, code_run_input, additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, parallel_processors, code_path)
 		current_trackfile = TrackfileManager(job_parameters, \

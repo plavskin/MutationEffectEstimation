@@ -17,16 +17,16 @@ class FolderManager(object):
 	def __init__(self, cluster_parameters, cluster_folders, \
 		experiment_folder_name):
 		self.path_dict = {}
-		temp_storage_path = \
-			cluster_parameters.get_input_option['temp_storage_path']
+		temp_storage_folder = \
+			cluster_parameters.get_input_option('temp_storage_folder')
 		self.experiment_folder_name = experiment_folder_name
 		self.path_dict['experiment_path'] = \
 			os.path.join(\
-				cluster_parameters.get_input_option['composite_data_path'], \
+				cluster_parameters.get_input_option('composite_data_path'), \
 				experiment_folder_name)
 		self.path_dict['MLE_output_path'] = \
 			os.path.join(\
-				temp_storage_path, \
+				temp_storage_folder, \
 				experiment_folder_name,'MLE_output')
 		self.path_dict['completefile_folder'] = \
 			cluster_folders.get_path('completefile_path')
@@ -34,18 +34,18 @@ class FolderManager(object):
 			os.path.join(self.path_dict['experiment_path'],'LL_profiles')
 		self.path_dict['CI_bound_path'] = \
 			os.path.join(\
-				temp_storage_path, \
+				temp_storage_folder, \
 				experiment_folder_name, 'CI_bounds')
 		self.setup_complete_file = \
 			os.path.join(self.path_dict['completefile_folder'], \
 			'mle_folder_setup_complete.txt')
 	#	self.epilogue_path = os.path.join(cluster_parameters.home_path,cluster_parameters.username,'mut_effect_epilogue_files',experiment_folder_name)
 	#	self.path_dict['MLE_combined_sim_path'] = \
-	#		os.path.join(cluster_parameters.temp_storage_path, \
+	#		os.path.join(cluster_parameters.temp_storage_folder, \
 	#			'MLE_sim_outputs')
 		self.path_dict['sim_output_path'] = \
 			os.path.join(\
-				temp_storage_path, \
+				temp_storage_folder, \
 				experiment_folder_name, 'simulated_phenotypes')
 		self.path_dict['sim_profile_fixed_pt_folder'] = \
 			os.path.join(self.path_dict['LL_list_path'], \
@@ -54,20 +54,20 @@ class FolderManager(object):
 #			os.path.join(self.path_dict['LL_list_path'], \
 #				'sim_output_list_folder')
 		self.path_dict['sim_output_list_folder'] = \
-			os.path.join(temp_storage_path, \
+			os.path.join(temp_storage_folder, \
 				experiment_folder_name, 'sim_output_list_folder')
 		self.path_dict['key_organizer_home_folder'] = \
 			os.path.join(self.path_dict['experiment_path'],'key_organizers')
 		self.path_dict['key_organizer_folder'] = \
-			os.path.join(temp_storage_path, \
+			os.path.join(temp_storage_folder, \
 				experiment_folder_name, 'key_organizers')
 		self.path_dict['mle_finder_folder'] = \
 			os.path.join(\
-				cluster_parameters.get_input_option['pipeline_path'], \
+				cluster_parameters.get_input_option('pipeline_path'), \
 				'mle_finder')
 		self.path_dict['CI_finder_folder'] = \
 			os.path.join(\
-				cluster_parameters.get_input_option['pipeline_path'], \
+				cluster_parameters.get_input_option('pipeline_path'), \
 				'CI_finder')
 		# create folders in path_dict
 		self._set_up_folders()
@@ -78,6 +78,8 @@ class FolderManager(object):
 		self.sim_key_organizer_file = \
 			os.path.join(self.path_dict['key_organizer_folder'], \
 				'sim_key_organizer.csv')
+		self.path_dict['current_output_subfolder'] = \
+			self.path_dict['MLE_output_path']
 	def _set_up_folders(self):
 		if not os.path.isfile(self.setup_complete_file):
 			for current_folder_key, current_path in self.path_dict.iteritems():
@@ -94,14 +96,11 @@ class FolderManager(object):
 		return(self.path_dict[folder_name])
 	def set_current_output_subfolder(self,current_subfolder):
 		# set (and if necessary, create) a subfolder to write temp output to
-		if current_subfolder:
-			self.path_dict['current_output_subfolder'] = \
-				os.path.join(self.path_dict['MLE_output_path'], \
-					current_subfolder)
-			if not os.path.isdir(self.path_dict['current_output_subfolder']):
-				os.makedirs(self.path_dict['current_output_subfolder'])
-		else:
-			self.path_dict['current_output_subfolder'] = self.path_dict['MLE_output_path']
+		self.path_dict['current_output_subfolder'] = \
+			os.path.join(self.path_dict['MLE_output_path'], \
+				current_subfolder)
+		if not os.path.isdir(self.path_dict['current_output_subfolder']):
+			os.makedirs(self.path_dict['current_output_subfolder'])
 
 class MLEParameters(cluster_functions.InputParameterHolder):
 	def __init__(self, parameter_input):
@@ -123,7 +122,7 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 			'runtime_percentile']
 		complete_required_key_list = \
 			required_mle_key_list + required_CI_key_list
-		super(MLEParameters, self).__init__(parameter_list, \
+		super(MLEParameters, self).__init__(parameter_input, \
 			complete_required_key_list)
 	def _id_parameters_to_loop_over(self):
 		# identify which parameters need to be looped through in MLE
@@ -236,13 +235,12 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 class MLEstimation(cluster_functions.CodeSubmitter):
 	'''
 	Submits info to cluster_wrangler.cluster_functions.job_flow_handler
-	to run matlab code that performs Maximum Likelihood Estimation
+	to run code that performs Maximum Likelihood Estimation
 	'''
 	def __init__(self, mle_parameters, cluster_parameters, cluster_folders, \
 		mle_folders, additional_code_run_keys, additional_code_run_values, \
 		input_data_folder):
 		self.mle_parameters = copy.deepcopy(mle_parameters)
-		experiment_folder = mle_folders.get_path('experiment_path')
 		completefile = \
 			os.path.join(cluster_folders.get_path('completefile_path'), \
 				'_'.join(['MLE',mle_parameters.get_option('output_id_parameter'), \
@@ -257,8 +255,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		code_name = 'MLE_finder'
 		additional_beginning_lines_in_job_sub = []
 		additional_end_lines_in_job_sub = []
-		initial_sub_time = cluster_parameters.get_input_option['current_time']
-		initial_sub_mem = cluster_parameters.get_input_option['current_mem']
+		initial_sub_time = cluster_parameters.get_input_option('current_time')
+		initial_sub_mem = cluster_parameters.get_input_option('current_mem')
 		self.additional_code_run_keys = additional_code_run_keys
 		self.additional_code_run_values = additional_code_run_values
 		self.within_batch_counter_call = \
@@ -284,7 +282,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 		super(MLEstimation, self).__init__(cluster_parameters, \
 			cluster_folders, completefile, job_name, \
 			job_numbers, module, parallel_processors, \
-			experiment_folder, output_extension, code_name, \
+			output_extension, code_name, \
 			additional_beginning_lines_in_job_sub, \
 			additional_end_lines_in_job_sub, initial_sub_time, \
 			initial_sub_mem, output_path, output_file_label, code_path)
@@ -306,7 +304,7 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 						# interpret it as an array of the correct length
 						# with the same value repeated
 				self.output_filename, \
-				self.cluster_parameters.get_input_option['pause_at_end']] + \
+				self.cluster_parameters.get_input_option('pause_at_end')] + \
 				list(mle_param_dict.values()) + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:

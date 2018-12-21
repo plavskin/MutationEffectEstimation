@@ -46,7 +46,7 @@ class CIWarning(object):
 				CI_side + ' CI for ' + CI_type)
 		if self.non_monotonic:
 			warning_list.append('non-monotonic LL profile on ' + CI_side + \
-				' side of ML parameter value, CI bound may be completely wrong.')
+				' side of ML parameter value for ' + CI_type + ' CI, CI bound may be completely wrong.')
 		if self.points_to_create_CI == 0:
 			warning_list.append('It seems '  + CI_side + ' CI for ' + \
 				CI_type + ' CI was not set.')
@@ -86,7 +86,6 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 				CI_bound_name])
 		job_numbers = [1]
 		parallel_processors = 1
-		experiment_folder = mle_folders.get_path('experiment_path')
 		output_extension = 'csv'
 		initial_sub_time = 5
 		initial_sub_mem = 1024
@@ -96,7 +95,7 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 		super(CIBoundEstimator, self).__init__(cluster_parameters, \
 				cluster_folders, completefile, job_name, \
 				job_numbers, module, parallel_processors, \
-				experiment_folder, output_extension, code_name, \
+				output_extension, code_name, \
 				additional_beginning_lines_in_job_sub, \
 				additional_end_lines_in_job_sub, initial_sub_time, \
 				initial_sub_mem, output_folder, output_file_label, \
@@ -120,7 +119,7 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 				self.CI_bound_output_file, \
 				self.CI_bound_fit_file, \
 				self.profile_side, \
-				self.cluster_parameters.get_input_option['pause_at_end']] + \
+				self.cluster_parameters.get_input_option('pause_at_end')] + \
 				self.additional_code_run_values
 
 class OneSidedCIBound(object):
