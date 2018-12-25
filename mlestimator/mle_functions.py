@@ -159,9 +159,21 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 				'contains non-unique parameters: ' + \
 				str(self.current_option_dict['parameter_list']))
 		# identify list of parameters that are permanently fixed
-		self.current_option_dict['permafixed_parameter_bool'] = \
+		permafixed_parameter_bool = \
 			[x in self.current_option_dict['permafixed_parameters'] \
 				for x in self.current_option_dict['parameter_list']]
+		self.current_option_dict['permafixed_parameter_bool'] = \
+			permafixed_parameter_bool
+		# for permafixed parameters, set lower and upper profile pt limits to starting_val
+			# profile_point_num needs to be reset too, but that can happen when specifying
+		self.current_option_dict['profile_lower_limits']\
+			[permafixed_parameter_bool] = \
+			self.current_option_dict['starting_parameter_vals']\
+				[permafixed_parameter_bool]
+		self.current_option_dict['profile_upper_limits']\
+			[permafixed_parameter_bool] = \
+			self.current_option_dict['starting_parameter_vals']\
+				[permafixed_parameter_bool]
 		# identify parameters MLE needs to be performed on
 		self._id_parameters_to_loop_over()
 		# set up completefile tracker for these parameters
@@ -189,23 +201,32 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 			# for it, and create a temporary list of fixed parameters
 			# that includes it
 		self.current_option_dict['fixed_parameter'] = parameter_name
+		permafixed_parameter_bool = \
+			copy.copy(self.current_option_dict['permafixed_parameter_bool'])
 		if parameter_name == 'unfixed':
-			self.current_option_dict['profile_point_num'] = 1
+			current_profile_point_num = 1
 			# list of fixed parameters is unchanged from default
 			self.current_option_dict['tempfixed_parameter_bool'] = \
-				copy.copy(self.current_option_dict['permafixed_parameter_bool'])
+				permafixed_parameter_bool
 		else:
 			# find index of current_fixed_parameter in parameter list
 			current_fixed_parameter_idx = \
 				self.current_option_dict['parameter_list'].index(parameter_name)
 			# temporarily fix current parameter
 			self.current_option_dict['tempfixed_parameter_bool'] = \
-				copy.copy(self.current_option_dict['permafixed_parameter_bool'])
+				permafixed_parameter_bool
 			self.current_option_dict['tempfixed_parameter_bool']\
 				[current_fixed_parameter_idx] = True
-			self.current_option_dict['profile_point_num'] = \
+			current_profile_point_num = \
 				self.current_option_dict['profile_point_num_list']\
 					[current_fixed_parameter_idx]
+		# set 'profile_point_num' option to number determined above
+		self.current_option_dict['profile_point_num'] = current_profile_point_num
+		# for permafixed parameters, also reset their profile point to
+			# the number determined above
+		self.current_option_dict['profile_point_num_list']\
+			[permafixed_parameter_bool] = \
+				current_profile_point_num
 		self.current_option_dict['output_id_parameter'] = \
 			self.current_option_dict['output_identifier'] + '_' + parameter_name
 		# identify how many dimensions are being used in multistart
