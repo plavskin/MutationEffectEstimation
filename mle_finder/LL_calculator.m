@@ -25,14 +25,13 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     gradient_specification = input_value_dict('gradient_specification');
 
     % Calculate likelihood of observing test_data given current global parameters
-    tic;
     
     if gradient_specification
         [combined_LL, unscaled_global_gradient_vector, unscaled_global_gradient_key] = ...
             current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict);
         % reorder unscaled_global_gradient_vector to match order of parameters in parameter_list
         parameter_list = input_value_dict('parameter_list');
-        [~, parameter_order] = ismember(unscaled_global_gradient_key, parameter_list);
+        [~, parameter_order] = ismember(parameter_list, unscaled_global_gradient_key);
         unscaled_global_gradient_vector_ordered = unscaled_global_gradient_vector(parameter_order);
         % convert gradient vector to negative and rescale
         neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector_ordered;
@@ -45,8 +44,8 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
         global_gradient_vector_partial(global_gradient_vector_partial<-max_neg_LL_val) = -max_neg_LL_val;
     else
         [combined_LL] = ...
-            current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict)
-        global_gradient_vector_partial = []
+            current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict);
+        global_gradient_vector_partial = [];
     end
 
     % convert LL to negative LL
@@ -56,7 +55,5 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
         neg_combined_LL = max_neg_LL_val;
     end
     
-    runtime = toc;
-
 end
     
