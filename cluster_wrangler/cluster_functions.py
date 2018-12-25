@@ -217,6 +217,10 @@ class ClusterParameters(InputParameterHolder):
 		elif self.input_val_dict['workload_manager'].lower() == 'unix':
 			self.job_submission_manager = \
 				cluster_sub_functions.UnixManager(copy.deepcopy(self))
+		else:
+			raise ValueError('Unrecognized workload manager: ' + \
+				self.input_val_dict['workload_manager'] + \
+				'; only currently available workload managers are \'slurm\' and \'unix\'')
 		# if cluster determines max_jobs_per_batch that is smaller than
 			# self.input_val_dict['max_jobs_per_batch'], update this value
 		forced_max_jobs_per_batch = \
