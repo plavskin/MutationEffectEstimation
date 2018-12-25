@@ -9,6 +9,7 @@ import cluster_functions
 import os
 import sys
 import getopt
+from shutil import copyfile
 
 usage = '''
 
