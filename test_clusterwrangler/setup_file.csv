@@ -1,0 +1,27 @@
+variable name,value,type,explanation
+,,,
+pathnames_and_user_info,,,
+username,username_here,str,username on cluster
+composite_data_path,/Users/plavskin/Documents/yeast stuff/Mutational Effect Modeling/new_pipeline_sandbox/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
+pipeline_path,/Users/plavskin/Documents/yeast stuff/Mutational Effect Modeling/plavskin_code/pipeline_v2,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
+temp_storage_folder,/Users/plavskin/Documents/yeast stuff/Mutational Effect Modeling/new_pipeline_sandbox/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
+user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on unix mode)
+,,,
+job_submission_variables,,,
+workload_manager,unix,str,the kind of workload manager/job scheduler in the case of a HPC; or the system on which the OS is based on a computer (currently only 'slurm' for HPCs and 'unix' for computers are supported)
+max_char_num,4096,int,maximum number of characters in a list of job arrays to be submitted on cluster (not relevant on unix mode)
+parallel_processors,1,int,parallel processors to use; do NOT set to >1 for processing on unix
+starting_mem,1750,float,memory (in Mb) needed to run a single MLE (not relevant on unix mode)
+starting_time,1200,float,time (in mins) alotted for running single MLE (not relevant on unix mode)
+max_mem,10000,float,max memory (in Mb) a job is allowed to request (not relevant on unix mode)
+max_time,2400,float,max time (in minutes) a job is allowed to request (not relevant on unix mode)
+max_jobs_per_batch,1000,int,maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)
+,,,
+general_code_variables,,,
+code_path,/Users/plavskin/Documents/yeast stuff/Mutational Effect Modeling/plavskin_code/pipeline_v2/test_clusterwrangler,str,absolute path to code that will be run
+code_to_run,Cluster_Test,str_list,name of codes to be run; if running multiple codes separate with '|'
+job_number,5,int_list,number of independent strings of code to be run for each code_to_run; if running multiple codes separate with '|'
+output_file_prefix,test_output,str_list,the prefix of the output file created by each run of the codefor each code_to_run; if running multiple codes separate with '|'; the full filename will be [output_file_prefix]-[current job_number].[output_file_extension]
+output_file_extension,csv,str_list,the filetype of the output file created by each run of the code for each code_to_run; if running multiple codes separate with '|'; the full filename will be [output_file_prefix]-[current job_number].[output_file_extension]
+module,matlab,str,language in which LL calculation etc code is written (currently available: 'matlab'; later will include support for 'python')
+code_options,4;5;6;7;8,nested_float_list,arbitrary parameters passed to each code_to_run; if running multiple codes separate with '|'
