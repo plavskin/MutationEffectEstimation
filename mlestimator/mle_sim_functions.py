@@ -716,15 +716,18 @@ class Simulator(cluster_wrangler.cluster_functions.CodeSubmitter):
 			(len(self.input_datafile_keys) == len(self.input_datafile_paths)) \
 				and (len(self.additional_code_run_keys) == \
 				len(self.additional_code_run_values)):
-			self.key_list = ['external_counter','combined_start_values_array', \
-				'parameter_list', 'pause_at_end'] + self.original_input_datafile_keys + \
-				self.input_datafile_keys + self.additional_code_run_keys
+			sim_param_dict = self.sim_parameters.get_current_option_dict() 
+			self.key_list = ['external_counter','pause_at_end'] + \
+				list(sim_param_dict.keys()) + \
+				self.original_input_datafile_keys + \
+				self.input_datafile_keys + \
+				self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
-				self.sim_parameters.get_option('starting_parameter_vals'), \
-				self.sim_parameters.get_option('parameter_list'), \
 				self.cluster_parameters.get_input_option('pause_at_end')] + \
-				self.original_input_datafile_paths + self.input_datafile_paths \
-				+ self.additional_code_run_values
+				list(sim_param_dict.values()) + \
+				self.original_input_datafile_paths + \
+				self.input_datafile_paths + \
+				self.additional_code_run_values
 		else:
 			raise RuntimeError('original_input_datafile_paths, ' + \
 				'input_datafile_paths, or additional_code_run_values is not' + \
