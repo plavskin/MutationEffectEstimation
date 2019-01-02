@@ -12,21 +12,11 @@ function MLE_finder(key_list, value_list)
     % get input values
     input_value_dict = containers.Map(key_list,value_list);
     external_counter = str2num(input_value_dict('external_counter'));
-    combined_fixed_parameter_array = input_value_dict('tempfixed_parameter_bool');
-    combined_min_array_unscaled = input_value_dict('min_parameter_vals');
-    combined_max_array_unscaled = input_value_dict('max_parameter_vals');
-    combined_length_array = input_value_dict('profile_point_num_list');
-    combined_position_array = cellfun(@str2num,input_value_dict('combined_position_array'));
-    combined_start_values_array_unscaled = input_value_dict('starting_parameter_vals');
-    combined_scaling_array = input_value_dict('scaling_array');
     parameter_list = input_value_dict('parameter_list');
     output_file = input_value_dict('output_file');
     parallel_processors = input_value_dict('parallel_processors');
     ms_positions = input_value_dict('multistart_positions');
-    combined_profile_ub_array_unscaled = input_value_dict('profile_upper_limits');
-    combined_profile_lb_array_unscaled = input_value_dict('profile_lower_limits');
     ms_grid_parameter_array = input_value_dict('multistart_grid_parameters');
-    combined_logspace_parameters = input_value_dict('logspace_profile_parameters');
     global_mle_parameters = input_value_dict('top_level_parameters');
     tolx_val = input_value_dict('x_tolerance');
     tolfun_val = input_value_dict('fun_tolerance');
@@ -36,70 +26,22 @@ function MLE_finder(key_list, value_list)
     gradient_specification = input_value_dict('gradient_specification');
     model_code_location = input_value_dict('model_code_location');
     addpath(genpath(model_code_location));
-    % process parameter name arrays into bool arrays
-    combined_logspace_array = parameter_identifier(parameter_list,combined_logspace_parameters);
-    indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
-    global_param_bool_list = parameter_identifier(parameter_list, global_mle_parameters);
-    global_param_number = sum(global_param_bool_list);
-    if global_param_number == 0
-        global_mle_parameter_names = parameter_list;
-        global_param_bool_list = true(size(global_param_bool_list));
-        global_param_number = sum(global_param_bool_list);
-    else
-        global_mle_parameter_names = intersect(parameter_list, global_mle_parameters);
-    end
-    % rescale parameters and convert to logspace as needed
-    combined_min_array = value_rescaler(combined_min_array_unscaled,combined_logspace_array,combined_scaling_array);
-    combined_max_array = value_rescaler(combined_max_array_unscaled,combined_logspace_array,combined_scaling_array);
-    combined_start_values_array = value_rescaler(combined_start_values_array_unscaled,combined_logspace_array,combined_scaling_array);
-    combined_profile_ub_array = value_rescaler(combined_profile_ub_array_unscaled,combined_logspace_array,combined_scaling_array);
-    combined_profile_lb_array = value_rescaler(combined_profile_lb_array_unscaled,combined_logspace_array,combined_scaling_array);
+
+    % add max_neg_LL_val to input_value_dict
+    input_value_dict('max_neg_LL_val') = max_neg_LL_val;
     
+    % process parameter name arrays into bool arrays
+    indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if length(combined_position_array)==1
-        combined_position_array = repmat(combined_position_array(1),size(parameter_list));
-    end
+    [global_param_number, global_mle_parameter_names, ...
+        global_logspace_array, global_scaling_array, global_fixed_parameter_values, ...
+        global_fixed_parameter_indices, global_lower_bounds_fitted, ...
+        global_upper_bounds_fitted, global_start_vals_fitted] = ...
+        parameter_array_subsetter(global_mle_parameters, input_value_dict);
 
-    global_fixed_parameter_array = ...
-        combined_fixed_parameter_array(global_param_bool_list);
-    global_min_array = ...
-        combined_min_array(global_param_bool_list);
-    global_max_array = ...
-        combined_max_array(global_param_bool_list);
-    global_length_array = ...
-        combined_length_array(global_param_bool_list);
-    global_position_array = ...
-        combined_position_array(global_param_bool_list);
-    global_start_values = ...
-        combined_start_values_array(global_param_bool_list);
-
-    global_profile_lb_array = ...
-        combined_profile_lb_array(global_param_bool_list);
-    global_profile_ub_array = ...
-        combined_profile_ub_array(global_param_bool_list);
-
-    global_logspace_array = ...
-        combined_logspace_array(global_param_bool_list);
-    global_scaling_array = ...
-        combined_scaling_array(global_param_bool_list);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Set up a list of fixed effect values for 'global' parameters
-
-    % Create an array indicating which fixed parameters need to be
-        % created on a log scale, rather than a linear scale
-    global_fixed_parameter_values = ...
-        fixed_parameter_processor(global_fixed_parameter_array,global_profile_lb_array,...
-            global_profile_ub_array,global_length_array,global_position_array);
-
-    global_fixed_parameter_indices = logical(global_fixed_parameter_array);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Set up lower and upper bounds for parameters
-
-    global_lower_bounds_fitted = global_min_array(~global_fixed_parameter_indices);
-    global_upper_bounds_fitted = global_max_array(~global_fixed_parameter_indices);
-    global_start_vals_fitted = global_start_values(~global_fixed_parameter_indices);
-
+    input_value_dict('global_mle_parameter_names') = global_mle_parameter_names;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % run pre_MLE_function, if it's supplied
     if ~isnan(pre_MLE_function_name)
@@ -139,7 +81,7 @@ function MLE_finder(key_list, value_list)
 
         min_problem_fixed_params = createOptimProblem('fmincon','objective',...
             @(v) LL_calculator(v,...
-                global_fixed_parameter_indices,global_fixed_parameter_values,...
+                global_mle_parameter_names, global_fixed_parameter_indices,global_fixed_parameter_values,...
                 global_logspace_array,global_scaling_array, max_neg_LL_val, input_value_dict, pre_MLE_output_dict),...
             'x0',global_start_vals_fitted,'lb',global_lower_bounds_fitted,'ub',global_upper_bounds_fitted,...
             'options',fmincon_opts);
@@ -206,7 +148,7 @@ function MLE_finder(key_list, value_list)
 
     if ~isnan(post_MLE_function_name)
         post_MLE_function = str2func(post_MLE_function_name);
-        post_MLE_function(key_list, value_list, T);
+        post_MLE_function(input_value_dict, pre_MLE_output_dict, T);
     end
 
     % close current parallel pool
