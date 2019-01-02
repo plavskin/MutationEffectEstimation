@@ -1,5 +1,5 @@
 function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_vals_partial,...
-    global_fixed_parameter_indices,global_fixed_parameter_values,...
+    global_mle_parameter_names, global_fixed_parameter_indices,global_fixed_parameter_values,...
     global_logspace_array, global_scaling_array, max_neg_LL_val, input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
@@ -29,9 +29,8 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     if gradient_specification
         [combined_LL, unscaled_global_gradient_vector, unscaled_global_gradient_key] = ...
             current_LL_calculator(param_vals, input_value_dict, pre_MLE_output_dict);
-        % reorder unscaled_global_gradient_vector to match order of parameters in parameter_list
-        parameter_list = input_value_dict('parameter_list');
-        [~, parameter_order] = ismember(parameter_list, unscaled_global_gradient_key);
+        % reorder unscaled_global_gradient_vector to match order of parameters in global_mle_parameter_names
+        [~, parameter_order] = ismember(global_mle_parameter_names, unscaled_global_gradient_key);
         unscaled_global_gradient_vector_ordered = unscaled_global_gradient_vector(parameter_order);
         % convert gradient vector to negative and rescale
         neg_unscaled_global_gradient_vector = -unscaled_global_gradient_vector_ordered;
