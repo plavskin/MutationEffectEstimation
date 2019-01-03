@@ -64,9 +64,13 @@ class SimParameters(mle_functions.MLEParameters):
 			# to downstream code without setting the sim first
 		del self.input_val_dict['input_datafile_values']
 		# make model comparison list
-		model_comparisons = parameter_list["model_comparisons"].split(';')
-		self.model_comparison_sets = \
-			[x.split(':') for x in model_comparisons]
+		model_comparison_string = parameter_list["model_comparisons"]
+		if model_comparison_string == '':
+			self.model_comparison_sets = []
+		else:
+			model_comparisons = model_comparison_string.split(';')
+			self.model_comparison_sets = \
+				[x.split(':') for x in model_comparisons]
 		# set default parameter_to_select for looping over parameters
 		self.parameter_to_select = 'unfixed'
 	def _id_parameters_to_loop_over(self):
@@ -1067,6 +1071,8 @@ class FixedPointCDFvalCalculator(object):
 				# NaN, there's no point running sims
 			self.original_deviance_array = \
 				self.llr_calculator_dict['original'].get_deviances()
+#			print(self.llr_calculator_dict['original'].get_LLR_filepath())
+#			print(self.llr_calculator_dict['original'].LL_list_dict)
 			if (len(self.original_deviance_array) == 0) or \
 				np.all(pd.isnull(self.original_deviance_array)):
 				self.cdf_val = np.nan
