@@ -718,7 +718,7 @@ class SubmissionStringProcessor(object):
 		return(self.code_sub_input_processor)
 	def _submission_string_generator(self, key_list, value_list, module, \
 		code_name):
-		if module == 'matlab':
+		if 'matlab' in module:
 			code_sub_input_processor = \
 				MatlabInputProcessor(code_name)
 		else:
