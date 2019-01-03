@@ -317,7 +317,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			len(self.additional_code_run_values)):
 			mle_param_dict = self.mle_parameters.get_current_option_dict() 
 			self.key_list = ['external_counter', 'combined_position_array', \
-				'output_file', 'pause_at_end'] + list(mle_param_dict.keys()) + \
+				'output_file', 'pause_at_end', 'output_path', \
+				'output_file_label'] + list(mle_param_dict.keys()) + \
 				self.input_datafile_keys + self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
 				[self.within_batch_counter_call], \
@@ -325,7 +326,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 						# interpret it as an array of the correct length
 						# with the same value repeated
 				self.output_filename, \
-				self.cluster_parameters.get_input_option('pause_at_end')] + \
+				self.cluster_parameters.get_input_option('pause_at_end'), \
+				self.output_path, self.output_file_label] + \
 				list(mle_param_dict.values()) + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:
