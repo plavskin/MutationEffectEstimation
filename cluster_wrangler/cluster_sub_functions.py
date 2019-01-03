@@ -641,16 +641,16 @@ class SlurmManager(JobSubmissionManager):
 		sbatch_portion_contents.append('#SBATCH --mail-user=' + \
 			self.cluster_parameters.get_input_option('user_email'))
 			# email that gets notification about aborted job
-		# add any rows that need to be written for each particular file
-		if self.job_parameters.additional_beginning_lines_in_job_sub:
-			for additional_sbatch_beginning_row in \
-				self.job_parameters.additional_beginning_lines_in_job_sub:
-				bash_portion_contents.append(additional_sbatch_beginning_row)
 		bash_portion_contents.append('cd ' + self.job_parameters.code_path)
 			# cd into code directory
 		bash_portion_contents.append('module purge')
 		bash_portion_contents.append('module load ' + self.module_path)
 			# load module
+		# add any rows that need to be written for each particular file
+		if self.job_parameters.additional_beginning_lines_in_job_sub:
+			for additional_sbatch_beginning_row in \
+				self.job_parameters.additional_beginning_lines_in_job_sub:
+				bash_portion_contents.append(additional_sbatch_beginning_row)
 		# write appropriate code-running line
 		code_run_input = self.job_parameters.code_run_input
 		code_run_input.set_full_code_run_string('slurm')
