@@ -17,7 +17,11 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
     param_vals(~global_fixed_parameter_indices) = param_vals_partial;
     param_vals = reverse_value_scaler(param_vals,global_logspace_array,global_scaling_array);
     
-
+    % pass a list of fitted parameters to LL calculation code in case they
+        % are used to determine which gradients to calculate
+    fitted_parameters = ...
+        global_mle_parameter_names(~global_fixed_parameter_indices);
+    pre_MLE_output_dict('fitted_parameters') = fitted_parameters;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get name of function to calculate LL and convert it to function handle
     LL_calculator_name = input_value_dict('LL_calculator');
