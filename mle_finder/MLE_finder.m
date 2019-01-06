@@ -41,7 +41,7 @@ function MLE_finder(key_list, value_list)
         global_upper_bounds_fitted, global_start_vals_fitted] = ...
         parameter_array_subsetter(global_mle_parameters, input_value_dict);
 
-    input_value_dict('global_mle_parameter_names') = global_mle_parameter_names;
+    input_value_dict('mle_parameter_names') = global_mle_parameter_names;
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % run pre_MLE_function, if it's supplied
     if ~isnan(pre_MLE_function_name)
