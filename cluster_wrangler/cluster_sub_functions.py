@@ -590,8 +590,8 @@ class SlurmManager(JobSubmissionManager):
 			raise ValueError('module ' + self.job_parameters.module + \
 				' could not be found. Here is a list of available modules: ' + \
 				str(relevant_module_list))
-			latest_module_path = latest_module_path_list[0]
-			self.module_path = latest_module_path
+		latest_module_path = latest_module_path_list[0]
+		self.module_path = latest_module_path
 	def _convert_time_format(self, time_in_mins):
 		""" Converts time_in_mins from minutes to hh:mm:ss """	
 		hours = int(math.floor(float(time_in_mins)/60))
