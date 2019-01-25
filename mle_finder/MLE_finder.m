@@ -25,6 +25,17 @@ function MLE_finder(key_list, value_list)
     post_MLE_function_name = input_value_dict('post_MLE_function');
     gradient_specification = input_value_dict('gradient_specification');
     model_code_location = input_value_dict('model_code_location');
+    % check if nonlinear constraint function is specified
+    if isKey(input_value_dict, 'nonlinear_constraint_function')
+        if (input_value_dict('nonlinear_constraint_function') == "")
+            use_nonlinear_constraint = false;
+        else
+            use_nonlinear_constraint = true;
+        end
+    else
+        use_nonlinear_constraint = false;
+    end
+    % add path for current model code
     addpath(genpath(model_code_location));
 
     % add max_neg_LL_val to input_value_dict
@@ -85,6 +96,17 @@ function MLE_finder(key_list, value_list)
                 global_logspace_array,global_scaling_array, max_neg_LL_val, input_value_dict, pre_MLE_output_dict),...
             'x0',global_start_vals_fitted,'lb',global_lower_bounds_fitted,'ub',global_upper_bounds_fitted,...
             'options',fmincon_opts);
+
+        if use_nonlinear_constraint
+            min_problem_fixed_params.nonlcon = @(v) MLE_constrainer(v,...
+                global_mle_parameter_names, global_fixed_parameter_indices, ...
+                global_fixed_parameter_values, global_logspace_array, ...
+                global_scaling_array, max_neg_LL_val, input_value_dict, ...
+                pre_MLE_output_dict);
+            if gradient_specification
+                min_problem_fixed_params.options.SpecifyConstraintGradient = true;
+            end
+        end
 
         if ms_positions == 0
             % use globalsearch algorithm
