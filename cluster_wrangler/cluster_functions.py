@@ -831,9 +831,8 @@ class MatlabInputProcessor(object):
 			self.code_run_string = \
 				'matlab -nodisplay -nosplash -nodesktop -r \'try ' + \
 				self.code_name + '(\'\"' + self.code_run_arguments + \
-				"\"\"); catch error_contents; fprintf('There was an error:\\n');" + \
-				" fprintf(1,'The identifier was:\\n%s\\n',error_contents.identifier);" + \
-				" fprintf(1,'The error message was:\\n%s\\n',error_contents.message); end; exit\""
+				"\"\"); catch error_contents; fprintf(1,'There was an error:\\n');" + \
+				" fprintf(1,'%s\\n',getReport(error_contents)); end; exit\""
 	def get_code_run_string(self):
 		return(self.code_run_string)
 	def convert_mixed_list(self, current_list):
