@@ -13,7 +13,7 @@ function MLE_finder(key_list, value_list)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % To avoid overflow issues, set a max value that log likelihood can
         % be equal to throughout the MLE
-    max_neg_LL_val = 10^50;
+    max_neg_LL_val = 10^300;
 
     % add max_neg_LL_val to input_value_dict
     input_value_dict('max_neg_LL_val') = max_neg_LL_val;

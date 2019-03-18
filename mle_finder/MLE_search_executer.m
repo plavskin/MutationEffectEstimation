@@ -6,10 +6,6 @@ function [vout_current_corrected, fval_current, exitflag_current, ...
         % returns the results of this search
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % To avoid overflow issues, set a max value that log likelihood can
-        % be equal to throughout the MLE
-    max_neg_LL_val = 10^50;
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % get input values
     parameter_list = input_value_dict('parameter_list');
     parallel_processors = input_value_dict('parallel_processors');
@@ -21,6 +17,7 @@ function [vout_current_corrected, fval_current, exitflag_current, ...
     pre_MLE_function_name = input_value_dict('pre_MLE_function');
     gradient_specification = input_value_dict('gradient_specification');
     model_code_location = input_value_dict('model_code_location');
+    max_neg_LL_val = input_value_dict('max_neg_LL_val');
     % check if nonlinear constraint function is specified
     if isKey(input_value_dict, 'nonlinear_constraint_function')
         if isnan(input_value_dict('nonlinear_constraint_function'))
@@ -33,9 +30,6 @@ function [vout_current_corrected, fval_current, exitflag_current, ...
     end
     % add path for current model code
     addpath(genpath(model_code_location));
-
-    % add max_neg_LL_val to input_value_dict
-    input_value_dict('max_neg_LL_val') = max_neg_LL_val;
     
     % process parameter name arrays into bool arrays
     indices_to_multistart = parameter_identifier(parameter_list,ms_grid_parameter_array);
