@@ -18,8 +18,8 @@ max_time,2400,float,max time (in minutes) a job is allowed to request (not relev
 max_jobs_per_batch,10000,int,maximum number of jobs that can be submitted in a single batch job (if set to very high number will default to the maximum number the system allows)
 ,,,
 general_mle_variables,,,
-input_datafile_keys,phenotype_file,str_list,list of variable names for input files that MLE program will look for
-input_datafile_values,phenotype_file.csv,str_list,list of files corresponding to each variable name listed in datafile_keys
+input_datafile_keys,phenotype_file,nested_str_list,list of variable names for input files that MLE program will look for
+input_datafile_values,phenotype_file.csv,nested_str_list,list of files corresponding to each variable name listed in datafile_keys
 model,gaussian_test,str_list,list of 'models' in which MLE fitting happens separated by vertical bars ('|')
 parameter_list,mu;sigma,nested_str_list,list of parameters in each model of 'model list'; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list
 top_level_parameters,,nested_str_list,in the case of a model whose LL is estimated hierarchically (i.e. LL_calculator only fits a subset of the parameter list while internal functions fit the rest) this is a list of parameters in each model of 'model list' that is estimated at the topmost level of the model; parameters separated by semicolons and models are separated by vertical bars; models appear in same order as in model list. If same as parameters_by_model (ie LL calculation is not hierarchical) can leave blank
@@ -54,9 +54,3 @@ simulation_repeats,1000,int_list,number times data is simulated to calculate lik
 sim_mem,1750,float,memory (in Mb) needed to run a single simulation (not relevant on unix mode)
 sim_time,15,float,time (in mins) alotted for running single simulation (not relevant on unix mode)
 model_comparisons,,str,lists of sets of models to be compared; sets should be separated from each other by semicolons and models within a set should be separated from each other by colons. Parameter_names in one member of each set of models being compared must be a subset of the parameter names of the other member. Order of models in the set doesn't matter.
-,,,
-mutation_effect_estimation_specific_variables,,,
-starting_L,2,float,(For mutation effect estimation only) Size of x-axis (ln(mut effect)) used for initial MLE; centered on 0
-starting_gridpower,16,float,(For mutation effect estimation only) log2(number of gridpoints for pdf determination) used for initial MLE
-pdf_points,100,int,(For mutation effect estimation only) gridpoints in empirical pdf (for mut
-lambda_SNM,3.956,float,(For mutation effect estimation only) empirically determined mean number of SNMs per strain
