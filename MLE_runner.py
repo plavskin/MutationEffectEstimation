@@ -79,10 +79,6 @@ setup_file = Check_Input()
 
 initial_parameter_list = cluster_functions.parse_setup_file(setup_file)
 
-# path of file that determines whether MLE_runner already running
-currently_running_checkfile = os.path.join(initial_parameter_list['composite_data_path'],\
-	'MLE_running.txt')
-
 # Loop through all directories in composite_data_dir
 for experiment_folder_name in os.walk(initial_parameter_list['composite_data_path']).next()[1]:
 
@@ -94,8 +90,12 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_pat
 
 	# Only run MLE_runner if it's not already running and if this
 		# folder hasn't been processed yet
-	if not os.path.isfile(currently_running_checkfile) and \
-		not os.path.isfile(complete_checkfile):
+	# check if any current processes for this user include MLE_runner
+	code_run_counts = int(subprocess.check_output(
+			('ps aux | egrep ^' + initial_parameter_list['username'] + \
+				' | grep MLE_runner.py | grep -v "grep" | wc -l'), shell=True))
+	code_currently_running = code_run_counts > 1
+	if not code_currently_running and not os.path.isfile(complete_checkfile):
 
 		# If setup_file doesn't exist in current directory, copy it to
 			# experiment_path
@@ -109,9 +109,6 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_pat
 		# get general info necessary to run the rest of code
 		mle_parameters = mle_functions.MLEParameters(parameter_list)
 		sim_parameters = mle_sim_functions.SimParameters(parameter_list)
-
-		# create MLE_running.txt so no new instances of MLE_runner.py run
-		open(currently_running_checkfile,'w+').close()
 
 		# Get names of necessary folders, and, if this hasn't been done
 			# before, create those folders
@@ -215,12 +212,6 @@ for experiment_folder_name in os.walk(initial_parameter_list['composite_data_pat
 		rep_completeness = rep_completeness_tracker.get_completeness()
 		if rep_completeness:
 			open(complete_checkfile,'a').close()
-
-
-
-
-		# remove MLE_running.txt so MLE_runner.py can run again
-		os.remove(currently_running_checkfile)
 
 
 

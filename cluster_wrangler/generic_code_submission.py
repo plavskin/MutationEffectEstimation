@@ -130,9 +130,11 @@ def main():
 	setup_file = check_input()
 	initial_parameter_list = cluster_functions.parse_setup_file(setup_file)
 	# path of file that determines whether MLE_runner already running
-	currently_running_checkfile = \
-		os.path.join(initial_parameter_list['composite_data_path'],\
-			'code_running.txt')
+	# check if any current processes for this user include MLE_runner
+	code_run_counts = int(subprocess.check_output(
+			('ps aux | egrep ^' + initial_parameter_list['username'] + \
+				' | grep MLE_runner.py | grep -v "grep" | wc -l'), shell=True))
+	code_currently_running = code_run_counts > 1
 	# Loop through all directories in composite_data_dir
 	for experiment_folder_name in \
 		os.walk(initial_parameter_list['composite_data_path']).next()[1]:
@@ -143,10 +145,8 @@ def main():
 			os.path.join(experiment_path,'processing_complete.txt')
 		# Only run MLE_runner if it's not already running and if this
 			# folder hasn't been processed yet
-		if not os.path.isfile(currently_running_checkfile) and \
-			not os.path.isfile(complete_checkfile):
+		if not code_currently_running and not os.path.isfile(complete_checkfile):
 			# create MLE_running.txt so no new instances of MLE_runner.py run
-			open(currently_running_checkfile,'w+').close()	
 			# If setup_file doesn't exist in current directory, copy it to
 				# experiment_path
 			local_setup_file = os.path.join(experiment_path,'setup_file.csv')
@@ -180,6 +180,5 @@ def main():
 			experiment_completeness = code_completeness_tracker.get_completeness()
 			if experiment_completeness:
 				open(complete_checkfile,'w+').close()
-	os.remove(currently_running_checkfile)
 						
 main()
