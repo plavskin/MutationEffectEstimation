@@ -1,6 +1,8 @@
-function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_vals_partial,...
-    global_mle_parameter_names, global_fixed_parameter_indices,global_fixed_parameter_values,...
-    global_logspace_array, global_scaling_array, max_neg_LL_val, input_value_dict, pre_MLE_output_dict)
+function [neg_combined_LL,global_gradient_vector_partial] = ...
+    LL_calculator(param_vals_partial, global_mle_parameter_names, ...
+        global_fixed_parameter_indices,global_fixed_parameter_values, ...
+        global_logspace_array, global_scaling_array, max_neg_LL_val, ...
+        input_value_dict, pre_MLE_output_dict)
     % EP 17-11-07
 
     % Rescales parameters for feeding into likelihood function, and inverts
@@ -58,6 +60,33 @@ function [neg_combined_LL,global_gradient_vector_partial] = LL_calculator(param_
 
     if neg_combined_LL > max_neg_LL_val
         neg_combined_LL = max_neg_LL_val;
+    end
+
+    % if checkpointing, save checkpoint file with current unscaled
+        % parameter vals, assuming combined_LL is higher than previous
+        % saved LL
+    write_checkpoint = input_value_dict('write_checkpoint');
+    if write_checkpoint
+        checkpoint_file = input_value_dict('checkpoint_file');
+        % check what previous checkpoint_LL was, if it existed
+        if exist(checkpoint_file, 'file') == 2
+            checkpoint_table = readtable(checkpoint_file);
+            if combined_LL < checkpoint_table.LL(1)
+                write_checkpoint = false;
+            end
+        end
+        if write_checkpoint
+            start_time = input_value_dict('global_start_time');
+            current_runtime = toc(start_time);
+            previous_checkpoint_time = input_value_dict('checkpoint_time');
+            total_runtime = current_runtime + previous_checkpoint_time;
+            checkpoint_data = ...
+                num2cell([combined_LL, total_runtime, param_vals]');
+            checkpoint_table = table(checkpoint_data{:}, ...
+                'VariableNames', ...
+                ['LL', 'runtime_in_secs', global_mle_parameter_names]);
+            writetable(checkpoint_table, checkpoint_file);
+        end
     end
     
 end

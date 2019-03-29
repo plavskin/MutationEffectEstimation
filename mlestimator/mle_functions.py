@@ -184,8 +184,6 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 		return(self.current_option_dict)
 	def get_option(self, key):
 		return(self.current_option_dict[key])
-	def get_input_option(self, key):
-		return(self.input_val_dict[key])
 	def get_fitted_parameter_list(self, include_unfixed):
 		# get list of parameters to loop over for current model
 		parameters_to_return = \
@@ -287,8 +285,13 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			mle_parameters.get_option('output_identifier'), \
 			mle_parameters.get_option('fixed_parameter'))
 		self.output_filename = generate_filename(output_path, \
-			self.within_batch_counter_call, mle_parameters.get_option('output_identifier'), \
+			self.within_batch_counter_call, \
+			mle_parameters.get_option('output_identifier'), \
 			mle_parameters.get_option('fixed_parameter'), 'data')
+		self.checkpoint_filename = generate_filename(output_path, \
+				self.within_batch_counter_call, \
+				mle_parameters.get_option('output_identifier'), \
+				mle_parameters.get_option('fixed_parameter'), 'checkpoint')
 		# set up input_datafile_keys and input_datafile_paths
 			# attributes, which will be used by
 			# _create_code_run_input_lists
@@ -318,7 +321,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 			mle_param_dict = self.mle_parameters.get_current_option_dict() 
 			self.key_list = ['external_counter', 'combined_position_array', \
 				'output_file', 'pause_at_end', 'output_path', \
-				'output_file_label'] + list(mle_param_dict.keys()) + \
+				'output_file_label', 'checkpoint_file', 'write_checkpoint'] + \
+				list(mle_param_dict.keys()) + \
 				self.input_datafile_keys + self.additional_code_run_keys
 			self.value_list = [self.within_batch_counter_call, \
 				[self.within_batch_counter_call], \
@@ -327,7 +331,8 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 						# with the same value repeated
 				self.output_filename, \
 				self.cluster_parameters.get_input_option('pause_at_end'), \
-				self.output_path, self.output_file_label] + \
+				self.output_path, self.output_file_label, \
+				self.checkpoint_filename, True] + \
 				list(mle_param_dict.values()) + \
 				self.input_datafile_paths + self.additional_code_run_values
 		else:
@@ -507,9 +512,12 @@ class LLHolder(object):
 				str(current_pp), self.output_identifier, \
 				self.fixed_param, 'data')
 			if os.path.isfile(current_datafile):
-				current_data_df = pd.read_csv(current_datafile)
-				# add current_data_np to LL array and update max likelihood value
-				self._add_vals(current_data_df)
+				# check that file not empty (can result from errors in
+					# MLE code)
+				if not os.stat(current_datafile).st_size == 0:
+					current_data_df = pd.read_csv(current_datafile)
+					# add current_data_np to LL array and update max likelihood value
+					self._add_vals(current_data_df)
 	def _sort_by_profiled_param(self):
 		'''
 		Returns order of rows in self.LL_df sorted by the parameter
