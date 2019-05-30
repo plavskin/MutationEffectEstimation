@@ -160,8 +160,9 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 				str(self.current_option_dict['parameter_list']))
 		# identify list of parameters that are permanently fixed
 		permafixed_parameter_bool = \
-			[x in self.current_option_dict['permafixed_parameters'] \
-				for x in self.current_option_dict['parameter_list']]
+			np.array([x in self.current_option_dict['permafixed_parameters'] \
+				for x in self.current_option_dict['parameter_list']], \
+				dtype=bool)
 		self.current_option_dict['permafixed_parameter_bool'] = \
 			permafixed_parameter_bool
 		# for permafixed parameters, set lower and upper profile pt limits to starting_val
