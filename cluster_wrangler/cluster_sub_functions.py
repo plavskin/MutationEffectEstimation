@@ -306,11 +306,13 @@ class JobSubmissionManager(object):
 		error_status_dict['time_limit_check'] = \
 			'due to time' in latest_errorfile_contents or \
 			'job time limit' in latest_errorfile_contents or \
-			'step time limit' in latest_errorfile_contents
+			'step time limit' in latest_errorfile_contents or \
+			'out of time' in latest_errorfile_contents
 		error_status_dict['memory_limit_check'] = \
 			'due to memory' in latest_errorfile_contents or \
 			'job memory limit' in latest_errorfile_contents or \
-			'step memory limit' in latest_errorfile_contents
+			'step memory limit' in latest_errorfile_contents or \
+			'out of memory' in latest_errorfile_contents
 		error_status_dict['cluster_error_check'] = \
 			'bus error' in latest_errorfile_contents \
 			or 'fatal error on startup' in latest_errorfile_contents \
