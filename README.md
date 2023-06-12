@@ -6,6 +6,7 @@ This repository contains general code for running maximal likelihood parameter e
 ## Components and pipeline
 --------------------------
 This reporistory contains code to run maximum likelihood estimation (MLE) pipeline. This includes:
+
     * The [cluster_wrangler package](cluster_wrangler), for assigning, running, and tracking batch jobs on a cluster (currently runs on SLURM and, with highly limited functionality, on a personal computer with a unix-based OS such as a Mac)
     * The [mlestimator package](mlestimator) for running MLE components, including initial estimation, log-likelihood profile estimation, data simulation, and confidence interval estimation from log-likelihood profiles-based and simulation-based likelihood ratio tests.
     * [Test code](exponential_fam_LL_and_sim) for implementing the maximum likelihood estimation pipeline for numbers drawn from a normal, exponential, or gamma distribution.
