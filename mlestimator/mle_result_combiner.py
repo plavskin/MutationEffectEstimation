@@ -88,21 +88,24 @@ class CombinedResultWarning(object):
 
 
 class CombinedResultSummary(object):
-	# stores, and writes, summary of MLE results
-	# Only to be run after initial MLE across profile points complete!
-	# Loops through parameters within a model, checks max_LL in each
-	# Once all LL_profiles are complete, if max_LL in at least one
-		# LL_profile is not unfixed_LL, throws warning, recalculates
-		# LL_profiles with new max_LL
-	# Writes LL_profiles, gets lower and upper asymptotic CI
-	# If asymptotic CI identification is complete:
-	#	- identify position at which sims need to happen
-	#		- run sims
-	#			- get CIs from sims
-	# keep track of asymptotic and sim CIs using completeness tracker across parameters within model
-	# once CIs complete (either asymptotic only or asymptotic and sim, depending on settings),
-	#	create summary file
-	# keep track of summary files for each model; once those are complete, stop running current folder
+	'''
+	Stores, and writes, summary of MLE results
+	Only to be run after initial MLE across profile points complete!
+	Loops through parameters within a model, checks max_LL in each
+	Once all LL_profiles are complete, if max_LL in at least one
+	LL_profile is not unfixed_LL, throws warning, recalculates
+	LL_profiles with new max_LL
+	Writes LL_profiles, gets lower and upper asymptotic CI
+	If asymptotic CI identification is complete:
+		- identify position at which sims need to happen
+		- run sims
+		- get CIs from sims
+	Keep track of asymptotic and sim CIs using completeness tracker
+	across parameters within model
+	Once CIs complete (either asymptotic only or asymptotic and sim,
+	depending on settings), create summary file
+	Keep track of summary files for each model; once those are complete, stop running current folder
+	'''
 	def __init__(self, mle_folders, mle_parameters, cluster_parameters, \
 		cluster_folders, sim_parameters):
 		self.datafile_path_dict = \
@@ -171,9 +174,11 @@ class CombinedResultSummary(object):
 		self.true_max_param_df = ml_param_df
 		self.max_LL = ml_param_df.iloc[0]['LL']
 	def _check_and_update_ML(self, ml_param_df, fixed_param):
-		# checks whether ml_param_np_array contains a higher LL value
-			# that current self.max_LL; if so, update self.ML_params and
-			# self.max_LL, and add a warning to these combined results
+		'''
+		Checks whether ml_param_np_array contains a higher LL value
+		that current self.max_LL; if so, update self.ML_params and
+		self.max_LL, and add a warning to these combined results
+		'''
 		current_LL = ml_param_df.iloc[0]['LL']
 		if current_LL > self.max_LL:
 			if self.max_LL:

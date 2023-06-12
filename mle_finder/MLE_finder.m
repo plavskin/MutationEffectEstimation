@@ -15,13 +15,24 @@ function MLE_finder(key_list, value_list)
     ms_positions = input_value_dict('multistart_positions');
     global_mle_parameters = input_value_dict('top_level_parameters');
     parameter_list = input_value_dict('parameter_list');
+    gradient_specification = input_value_dict('gradient_specification');
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % To avoid overflow issues, set a max value that log likelihood can
         % be equal to throughout the MLE
-    max_neg_LL_val = 10^300;
-
-    % add max_neg_LL_val to input_value_dict
-    input_value_dict('max_neg_LL_val') = max_neg_LL_val;
+    if isKey(input_value_dict, 'max_neg_LL_val')
+        max_neg_LL_val = input_value_dict('max_neg_LL_val');
+    else
+        if gradient_specification
+            max_neg_LL_val = 10^300;
+        else
+            % without gradient_specification, matlab has numerical
+            % issues computing gradients when the minimum LL value
+            % is very low
+            max_neg_LL_val = 10^10;
+        end
+        % add max_neg_LL_val to input_value_dict
+        input_value_dict('max_neg_LL_val') = max_neg_LL_val;
+    end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % if doing MLE_search with one starting point, check whether there's a

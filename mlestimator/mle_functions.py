@@ -116,7 +116,7 @@ class MLEParameters(cluster_functions.InputParameterHolder):
 			'multistart_grid_parameters', 'logspace_profile_parameters', \
 			'scaling_array', 'x_tolerance', 'fun_tolerance', \
 			'LL_calculator', 'pre_MLE_function', 'post_MLE_function', \
-			'gradient_specification']
+			'gradient_specification', 'bound_abut_safe_parameters']
 		required_CI_key_list = ['profile_point_num_list', \
 			'profile_lower_limits', 'profile_upper_limits', 'CI_pval', \
 			'runtime_percentile']
@@ -343,8 +343,9 @@ class MLEstimation(cluster_functions.CodeSubmitter):
 
 class BoundAbuttingPointRemover(object):
 	"""
-	Identifies and removes points from LL_df in which at least one
-	parameter value abutts a parameter from a list of boundary values
+	Identifies and removes points from LL_df in which either at least
+	one or all the parameter values abutt a parameter from a list of
+	boundary values
 	"""
 	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
 		scaling_array, logspace_parameters, parameter_names, \
@@ -429,35 +430,37 @@ class BoundAbuttingPointRemoverParamAware(BoundAbuttingPointRemover):
 	"""
 	Identifies and removes points from LL_df in which at least one
 	parameter value abutts a parameter from a list of boundary values,
-	excluding the fixed parameter
+	excluding the 'safe' parameters
 	"""
 	def __init__(self, LL_df_prefilter, x_tolerance, bound_array, \
 		scaling_array, logspace_parameters, parameter_names_original, \
-		fixed_param, row_removal_criteria = 'any'):
+		bound_abut_safe_parameters, fixed_param, row_removal_criteria = 'any'):
 		self.fixed_param = fixed_param
-		# allow fixed_param to abut a boundary, so remove it from self.parameter_names and other related lists
+		self.bound_abut_safe_parameters = bound_abut_safe_parameters
+		# allow bound_abut_safe_parameters to abut a boundary, so remove them from
+		# self.parameter_names and other related lists
 		parameter_names_filtered = \
-			self._remove_fixed_param(parameter_names_original, \
+			self._remove_safe_parameters(parameter_names_original, \
 				parameter_names_original)
 		logspace_parameters_filtered = \
-			self._remove_fixed_param(logspace_parameters, logspace_parameters)
+			self._remove_safe_parameters(logspace_parameters, logspace_parameters)
 		bound_array_filtered = \
-			self._remove_fixed_param(parameter_names_original, bound_array)
+			self._remove_safe_parameters(parameter_names_original, bound_array)
 		scaling_array_filtered = \
-			self._remove_fixed_param(parameter_names_original, scaling_array)
+			self._remove_safe_parameters(parameter_names_original, scaling_array)
 		super(BoundAbuttingPointRemoverParamAware, \
 			self).__init__(LL_df_prefilter, x_tolerance, bound_array_filtered, \
 			scaling_array_filtered, logspace_parameters_filtered, \
 			parameter_names_filtered, row_removal_criteria)
-	def _remove_fixed_param(self, array_to_find_fixed_param_in, array_to_filter):
+	def _remove_safe_parameters(self, array_to_find_safe_parameters_in, array_to_filter):
 		'''
-		Removes indices corresponding to self.fixed_param in
-		array_to_find_fixed_param_in from array_to_filter
+		Removes indices corresponding to self.bound_abut_safe_parameters in
+		array_to_find_safe_parameters_in from array_to_filter
 		'''
 		filtered_array = []
 		for counter, value in enumerate(array_to_filter):
-			current_param = array_to_find_fixed_param_in[counter]
-			if current_param != self.fixed_param:
+			current_param = array_to_find_safe_parameters_in[counter]
+			if current_param not in self.bound_abut_safe_parameters:
 				filtered_array.append(value)
 		return(filtered_array)
 	def get_removed_param_vals(self):
@@ -480,7 +483,11 @@ class LLHolder(object):
 		self.mle_parameters = mle_parameters
 		self.profile_points = mle_parameters.get_option('profile_point_num')
 		self.output_identifier = mle_parameters.get_option('output_identifier')
-		self.fixed_param = mle_parameters.get_option('fixed_parameter')	
+		self.fixed_param = mle_parameters.get_option('fixed_parameter')
+		self.bound_abut_safe_parameters = \
+			copy.copy(mle_parameters.get_option('bound_abut_safe_parameters'))
+		if not self.fixed_param == 'unfixed':
+			self.bound_abut_safe_parameters.append(self.fixed_param)
 		self.datafile_path = datafile_path
 		self.warning_line = ''
 		self.LL_file = os.path.join(LL_list_folder, \
@@ -491,6 +498,7 @@ class LLHolder(object):
 				self.fixed_param]) + '.csv'))
 		self.LL_df = pd.DataFrame()
 		self.x_tolerance = mle_parameters.get_option('x_tolerance')
+		self.cdf_tolerance = 10^-10
 		self.parameter_max_vals = mle_parameters.get_option('max_parameter_vals')
 		self.parameter_min_vals = mle_parameters.get_option('min_parameter_vals')
 		self.scaling_array = mle_parameters.get_option('scaling_array')
@@ -516,7 +524,10 @@ class LLHolder(object):
 				# check that file not empty (can result from errors in
 					# MLE code)
 				if not os.stat(current_datafile).st_size == 0:
-					current_data_df = pd.read_csv(current_datafile)
+					try:
+						current_data_df = pd.read_csv(current_datafile)
+					except:
+						war.warn('issue with file '+str(current_datafile))
 					# add current_data_np to LL array and update max likelihood value
 					self._add_vals(current_data_df)
 	def _sort_by_profiled_param(self):
@@ -556,6 +567,7 @@ class LLHolder(object):
 			self._populate_LL_df()
 		self._sort_by_profiled_param()
 		self._remove_bound_abutting_points()
+		self._remove_duplicates()
 	def _remove_bound_abutting_points(self):
 		'''
 		Identifies points that abutt parameter_max_vals or
@@ -567,16 +579,21 @@ class LLHolder(object):
 				self.x_tolerance, \
 				self.parameter_min_vals, self.scaling_array, \
 				self.logspace_parameters, self.parameter_names, \
-				self.fixed_param)
+				self.bound_abut_safe_parameters, self.fixed_param)
 		LL_df_minfilter = bound_abutting_point_remover_min.get_LL_df()
 		min_removed_param_vals = \
 			bound_abutting_point_remover_min.get_removed_param_vals()
+#		print('##########################')
+#		print(self.parameter_max_vals)
+#		print(self.parameter_min_vals)
+#		print(self.parameter_names)
+#		print(min_removed_param_vals)
 		bound_abutting_point_remover_max = \
 			BoundAbuttingPointRemoverParamAware(LL_df_minfilter, \
 				self.x_tolerance, \
 				self.parameter_max_vals, self.scaling_array, \
 				self.logspace_parameters, self.parameter_names, \
-				self.fixed_param)
+				self.bound_abut_safe_parameters, self.fixed_param)
 		LL_df_cleaned = bound_abutting_point_remover_max.get_LL_df()
 		max_removed_param_vals = \
 			bound_abutting_point_remover_max.get_removed_param_vals()
@@ -584,6 +601,45 @@ class LLHolder(object):
 			'upper' : max_removed_param_vals}
 		self._check_bound_abutting_point_warning(self.fixed_param)
 		self.LL_df_cleaned = LL_df_cleaned
+	def _remove_duplicates(self):
+		'''
+		Identifies points with LL within provided fun_tolerance (or cdf
+		within cdf_tolerance set in this class) and all parameter values
+		within parameter tolerance of each other and removes them
+		'''
+		if not self.LL_df_cleaned.empty:
+			# identify rows with an LL or cdf value within fun_tolerance of
+		# another LL or cdf value
+			if 'LL' in self.LL_df_cleaned.columns:
+				current_tolerance = self.mle_parameters.get_option('fun_tolerance')
+				diff_list = self.LL_df_cleaned.LL.diff()
+			elif 'cdf_vals' in self.LL_df_cleaned.columns:
+				current_tolerance = self.cdf_tolerance
+				diff_list = self.LL_df_cleaned.cdf_vals.diff()
+			diff_indices_within_tolerance = \
+				[i for i, x in enumerate(diff_list) if abs(x) < current_tolerance]
+			diff_rownames_within_tolerance = \
+				self.LL_df_cleaned.iloc[diff_indices_within_tolerance].index.values
+			rows_to_remove_unfiltered = []
+			# loop through identified rows and add any rows in which every
+			# parameter value is within parameter tolerance of an identified
+			# row to rows_to_remove_unfiltered
+			for current_idx in diff_rownames_within_tolerance:
+				current_row_param_vals = \
+					self.LL_df_cleaned[self.parameter_names].loc[\
+						current_idx].values
+				current_row_abutting_point_remover = \
+					BoundAbuttingPointRemover(self.LL_df_cleaned, \
+						self.x_tolerance, current_row_param_vals, \
+						self.scaling_array, self.logspace_parameters, \
+						self.parameter_names, row_removal_criteria = 'all')
+				current_indices_to_remove = \
+					current_row_abutting_point_remover.get_removed_indices()
+				rows_to_remove_unfiltered.extend(current_indices_to_remove)
+			rows_to_remove = \
+				set(rows_to_remove_unfiltered) - \
+				set(diff_rownames_within_tolerance)
+			self.LL_df_cleaned = self.LL_df_cleaned.drop(rows_to_remove)
 	def _check_bound_abutting_point_warning(self, fixed_param):
 		for key, val in self.removed_param_vals.iteritems():
 			if not val.size == 0:
@@ -592,6 +648,7 @@ class LLHolder(object):
 					'datapoints for the following values of ' + \
 					fixed_param + 'were removed for abutting the ' + \
 					key + ' parameter bounds: ' + current_list_as_str
+#				print(current_warning_string)
 				self.warning_line = self.warning_line + current_warning_string
 	def run_LL_list_compilation(self):
 		''' Compiles and writes LL_df '''
@@ -603,7 +660,6 @@ class LLHolder(object):
 	def get_LL_file(self):
 		''' Returns the filepath containing the LL list '''
 		return(self.LL_file)
-
 
 class LLProfile(LLHolder):
 	# Gets, holds, and updates log likelihood profile
@@ -629,7 +685,8 @@ class LLProfile(LLHolder):
 		# id row of LL_df corresponding to max LL
 		if not self.LL_df.empty:
 			if 'LL' in self.LL_df.columns:
-				ml_param_df = self.LL_df.iloc[[self.LL_df['LL'].idxmax()]]
+				ml_param_df = self.LL_df.loc[[self.LL_df['LL'].idxmax()]]
+#				print(ml_param_df)
 					# idxmax OK here because indices are reset during appending
 				# set this row to be the ML parameters
 			elif 'cdf_vals' in self.LL_df.columns:
@@ -650,6 +707,7 @@ class LLProfile(LLHolder):
 			self._add_vals(self.additional_param_df)
 		self._sort_by_profiled_param()
 		self._remove_bound_abutting_points()
+		self._remove_duplicates()
 	def run_LL_list_compilation(self):
 		'''
 		Compiles and writes LL_df;

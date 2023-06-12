@@ -2,9 +2,9 @@ variable name,value,type,explanation
 ,,,
 pathnames_and_user_info,,,
 username,username_here,str,username on cluster
-composite_data_path,~/Documents/MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
-pipeline_path,~/Documents/MutationEffectEstimation,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
-temp_storage_folder,~/Documents/MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
+composite_data_path,MutationEffectEstimation/composite_data,str,absolute path to directory that holds all output (and initially input) data for each experiment
+pipeline_path,MutationEffectEstimation,str,absolute path to directory in home directory that contains all pipeline code (not necessarily including user-supplied code)
+temp_storage_folder,MutationEffectEstimation/temp_data,str,absolute path to directory in which temporary output files are placed before being compiled into results
 user_email,email@uni.edu,str,email of user who will receive job notifications from slurm (not relevant on unix mode)
 ,,,
 job_submission_variables,,,
@@ -30,6 +30,7 @@ max_parameter_vals,10;100,nested_float_list,list of upper bound values for each 
 multistart_positions,1,int_list,number of positions per dimension at which to start multistart (if 0 run fglobalsearch) separated by vertical bars ('|') for each model
 multistart_grid_parameters,mu;sigma,nested_str_list,list of parameters across which multistart selects grid points
 logspace_profile_parameters,sigma,nested_str_list,parameters whose profiles (and MLE runs!) should be done in log rather than in linear space
+bound_abut_safe_parameters,,nested_str_list,parameters which are allowed to abut bounds without being excluded for log likelihood profiles
 scaling_array,0.16;0.25,nested_float_list,values that scale the approximate CI of each parameter to a consistent value (e.g. 1); for parameters estimated in logspace the scaling occurs after converting the parameter to logspace; so the distance between the natural log of the CI bounds should be scaled to the consistent value
 x_tolerance,0.001,float_list,tolerance on ML-identified values in scaled and if needed log-transformed parameter space
 fun_tolerance,0.01,float_list,tolerance on ML-identified LL or gradient
@@ -40,7 +41,7 @@ simulator,sim_gaussian_test,str_list,list of function/module names that simulate
 pre_MLE_function,pre_MLE_gaussian_test,str_list,list of function/module names that perform pre-MLE-fitting functions for every model separated by '|'; if none leave blank
 post_MLE_function,,str_list,list of function/module names that perform post-MLE-fitting functions for every model separated by '|'; if none leave blank
 gradient_specification,TRUE,bool_list,list of bools specifying whether or not LL_calculator returns a negative LL gradient for a given model
-model_code_location,~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim|~/Documents/MutationEffectEstimation/exponential_fam_LL_and_sim,str_list,absolute path to code that performs LL calculation simulation and any other necessary functions for every model; models separated by '|'
+model_code_location,MutationEffectEstimation/exponential_fam_LL_and_sim|MutationEffectEstimation/exponential_fam_LL_and_sim,str_list,absolute path to code that performs LL calculation simulation and any other necessary functions for every model; models separated by '|'
 module,matlab,str,language in which LL calculation etc code is written (currently available: 'matlab'; later will include support for 'python')
 ,,,
 log_likelihood_profile_and_CI_variables,,,

@@ -67,6 +67,10 @@ function [neg_combined_LL,global_gradient_vector_partial] = ...
         % saved LL
     write_checkpoint = input_value_dict('write_checkpoint');
     if write_checkpoint
+
+%        global_mle_parameter_names(~global_fixed_parameter_indices)
+%        global_gradient_vector_partial
+
         checkpoint_file = input_value_dict('checkpoint_file');
         % check what previous checkpoint_LL was, if it existed
         if exist(checkpoint_file, 'file') == 2

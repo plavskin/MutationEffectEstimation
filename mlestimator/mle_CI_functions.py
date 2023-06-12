@@ -285,8 +285,10 @@ class OneSidedCIBound(object):
 			number_profile_points = len(CI_bound_proximal_indices)
 			if number_profile_points == 2:
 				self.code_name = 'Linear_Bound_Finder'
-			if number_profile_points > 2:
+			elif number_profile_points > 2:
 				self.code_name = 'Quadratic_Bound_Finder'
+			else:
+				self.code_name = ''
 		# note appropriate warnings
 		self.warning.set_points_to_create_CI(number_profile_points)
 		if np.max(self.one_sided_LL_df_filtered['cdf_vals']) < self.cdf_bound:

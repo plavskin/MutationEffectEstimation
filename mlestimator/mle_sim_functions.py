@@ -1368,7 +1368,7 @@ class OneSidedSimProfiler(object):
 					self.fixed_param_dict['H0'], 'data')
 				if not os.path.isfile(output_file):
 					_write_fixed_pt_output(self.fixed_param_dict['H0'], \
-						self.fixed_param_mle, numpy.nan, output_file)
+						self.fixed_param_mle, np.nan, output_file)
 			self.side_completeness = True
 		else:
 			self._select_first_point()

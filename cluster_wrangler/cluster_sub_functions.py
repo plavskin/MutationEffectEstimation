@@ -318,7 +318,8 @@ class JobSubmissionManager(object):
 			or 'fatal error on startup' in latest_errorfile_contents \
 			or 'reload' in latest_errorfile_contents \
 			or 'exception' in latest_errorfile_contents \
-			or 'died by signal' in latest_errorfile_contents
+			or 'died by signal' in latest_errorfile_contents \
+			or 'bad bundle' in latest_errorfile_contents
 		error_status_dict['unidentified_error_check'] = \
 			len(latest_errorfile_contents) > self.empty_errorfile_size and \
 			not any([error_status_dict['time_limit_check'], \
@@ -580,11 +581,13 @@ class SlurmManager(JobSubmissionManager):
 		application you need to use
 		"""
 		try:
-			module_output = subprocess.check_output('module avail', shell=True)
+			module_output = subprocess.check_output(
+				'module avail 2>&1 | grep ' + self.job_parameters.module, shell=True
+				)
 		except subprocess.CalledProcessError:
 			module_output = ''
-		relevant_module_list = re.findall(' (' + self.job_parameters.module + \
-			os.sep + '.+?)\\n', module_output)
+		relevant_module_list = re.findall('\\s+(' + self.job_parameters.module + \
+			os.sep + '.+?)\\s+', module_output)
 		# latest module is the last one in the sorted list
 		relevant_module_list.sort()
 		latest_module_path_list = re.findall('(' + self.job_parameters.module + \

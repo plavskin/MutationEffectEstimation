@@ -98,11 +98,11 @@ class Parameter(object):
 		elif self.type == "int_list":
 			self.value = [int(i) for i in self.value.split("|")]
 		elif self.type == "bool":
-			self.value = bool(self.value)
+			self.value = bool(self.value.lower() == 'true')
 		elif self.type == "nested_bool_list":
-			self.value = [[bool(j) for j in i.split(";")] for i in self.value.split("|")]
+			self.value = [[bool(j.lower() == 'true') for j in i.split(";")] for i in self.value.split("|")]
 		elif self.type == "bool_list":
-			self.value = [bool(i) for i in self.value.split("|")]
+			self.value = [bool(i.lower() == 'true') for i in self.value.split("|")]
 		else:
 			raise ValueError("invalid data type: " + self.type)
 
