@@ -10,6 +10,12 @@ This reporistory contains code to run maximum likelihood estimation (MLE) pipeli
     * The [mlestimator package](mlestimator) for running MLE components, including initial estimation, log-likelihood profile estimation, data simulation, and confidence interval estimation from log-likelihood profiles-based and simulation-based likelihood ratio tests.
     * [Test code](exponential_fam_LL_and_sim) for implementing the maximum likelihood estimation pipeline for numbers drawn from a normal, exponential, or gamma distribution.
 
+## Function
+-----------
+In short, this repository can be used for ML parameter estimation as long as a likelihood function is provided as matlab code; the inputs of the code should include a vector of parameter values, and two map objects: `input_value_dict`, which can contain parameters specified in the setup file (although these can also be modified by upstream code, e.g. names of parameters, for an example see [setup_file_gauss_unix.csv](setup_file_gauss_unix.csv)), and `pre_MLE_output_dict`, which should contain any objects set at the beginning of the run (e.g. the loaded in object that contains the data).
+
+The optimization steps themselves are run through the [`MLE_finder`](mle_finder/MLE_finder.m) function; the optimization can optionally include constraint functions, functions that specify the gradient of the likelihood, functions that pre- or post-process data and/or results, and functions that simulate data from a set of parameters to allow for simulation-based confidence interval estimation.
+
 ## Implementation
 -----------------
 While mlestimator and cluster_wrangler are written in python 2.7, all maximum likelihood estimation functions themselves run in matlab, and require the Optimization toolkit.
