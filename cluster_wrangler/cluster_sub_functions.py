@@ -312,7 +312,8 @@ class JobSubmissionManager(object):
 			'due to memory' in latest_errorfile_contents or \
 			'job memory limit' in latest_errorfile_contents or \
 			'step memory limit' in latest_errorfile_contents or \
-			'out of memory' in latest_errorfile_contents
+			'out of memory' in latest_errorfile_contents or \
+			'oom_kill' in latest_errorfile_contents
 		error_status_dict['cluster_error_check'] = \
 			'bus error' in latest_errorfile_contents \
 			or 'fatal error on startup' in latest_errorfile_contents \

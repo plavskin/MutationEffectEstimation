@@ -88,7 +88,7 @@ class CIBoundEstimator(cluster_functions.CodeSubmitter):
 		parallel_processors = 1
 		output_extension = 'csv'
 		initial_sub_time = 5
-		initial_sub_mem = 1024
+		initial_sub_mem = 4096
 		output_folder = mle_folders.get_path('CI_bound_path')
 		output_file_label = CI_bound_name
 		code_path = mle_folders.get_path('CI_finder_folder')
